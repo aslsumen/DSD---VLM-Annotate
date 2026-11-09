@@ -1,0 +1,6 @@
+# Dev profile for an 8 GB GPU: weights spill to CPU RAM. Slow; correctness only, not an MVP gate.
+runtime:
+  profile: dev_low_vram
+  backend: videojev
+  device_map: auto
+  max_memory: {0: 6GiB, cpu: 9GiB}

@@ -1,0 +1,8 @@
+# Reference GPU (e.g. 24 GB+): full VideoJev, no memory cap.
+runtime: {profile: reference_gpu, backend: videojev, device_map: auto, attn_implementation: flash_attention_2}
+model: {id: ZhuYuhan/VideoJev-4B, revision: b614f1a6248ba1f169cd3bec9e4392758b566e5d}
+coarse: {window_seconds: 30, stride_seconds: 20, fps: 0.5, max_frames: 16, grounding_threshold: 0.25, context_tokens: 8192, min_candidate_seconds: 0.5}
+refine: {enabled: true, fps: 1.0, max_frames: 32, window_seconds: 30, expand_min_seconds: 5, max_span_seconds: 180}
+fusion: {grid_seconds: 0.5, smooth_cells: 3, high: 0.25, low: 0.15, edge_weight_floor: 0.05, sparse_spacing_sec: 2.5, min_event_score: 0.9}
+export: {cut_clips: true, pre_roll: 0.5, post_roll: 0.5, crf: 20, preset: fast}
+retry: {max_attempts: 3, oom_ladder: [32, 24, 16, 12, 8, 4]}

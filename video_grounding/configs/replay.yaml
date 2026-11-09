@@ -1,0 +1,5 @@
+# Re-run fusion/export from a previous job's window_predictions.jsonl; no model calls.
+runtime:
+  profile: replay
+  backend: replay
+  replay_path: runs/demo/window_predictions.jsonl
