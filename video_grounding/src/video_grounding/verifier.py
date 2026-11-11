@@ -1,26 +1,22 @@
-"""Stage V: after refine, Gemini checks each event clip ("does this event happen here?") before export.
+"""Stage V: after refine, Gemini Decision 1 checks each event clip ("does this event happen here?").
 
 The API key comes from the GEMINI_API_KEY environment variable or a `.env` file
 (the current directory first, then the video_grounding project root). The key is never written to config or outputs.
 """
 from __future__ import annotations
 
-import json
+import base64
 import os
 import tempfile
+import time
 from pathlib import Path
 
 from .models import VideoInfo
 from .settings import Verify
 
 _ENV_FILES = (Path.cwd() / ".env", Path(__file__).resolve().parents[2] / ".env")
-_INLINE_LIMIT = 20 * 1024 * 1024  # Gemini inline request cap
-_PROMPT = ('Watch this video clip. Does the following event visibly happen in it?\n'
-           'Event: "{query}"\n'
-           'Set present=true only if you can see it happen. confidence is 0-1. reason is one short sentence.')
-_SCHEMA = {"type": "object", "properties": {"present": {"type": "boolean"}, "confidence": {"type": "number"},
-                                            "reason": {"type": "string"}},
-           "required": ["present", "confidence", "reason"]}
+_INLINE_LIMIT = 20 * 1024 * 1024  # inline request cap
+_QUESTION = 'Does the following event visibly happen in this video clip? Event: "{query}"'
 
 
 def api_key() -> str:
@@ -36,18 +32,15 @@ def api_key() -> str:
 
 
 class GeminiVerifier:
+    """Gemini Decision 1: one forward pass scores a yes/no question, returning calibrated P(true)."""
+
     def __init__(self, cfg: Verify):
         from google import genai  # lazy: optional extra `gemini`
-        from google.genai import types
 
         self.cfg = cfg
-        # SDK retries 429/5xx with backoff, so free-tier rate limits slow the stage down instead of failing it
-        self.client = genai.Client(api_key=api_key(), http_options=types.HttpOptions(
-            retry_options=types.HttpRetryOptions(attempts=6)))
+        self.client = genai.Client(api_key=api_key())
 
     def verify(self, video: str, info: VideoInfo, start_sec: float, end_sec: float, query: str) -> dict:
-        from google.genai import types
-
         from . import cutter
 
         with tempfile.TemporaryDirectory() as d:
@@ -58,12 +51,17 @@ class GeminiVerifier:
         # ponytail: inline only; a clip over 20 MB stays "not_verified". Switch to the Files API if that happens often.
         if len(data) > _INLINE_LIMIT:
             raise ValueError(f"clip {len(data) / 1e6:.1f} MB exceeds the inline limit; lower verify.max_height")
-        video_part = types.Part(inline_data=types.Blob(data=data, mime_type="video/mp4"),
-                                video_metadata=types.VideoMetadata(fps=self.cfg.fps))
-        resp = self.client.models.generate_content(
-            model=self.cfg.model, contents=[video_part, _PROMPT.format(query=query)],
-            config=types.GenerateContentConfig(response_mime_type="application/json",
-                                               response_json_schema=_SCHEMA, temperature=0))
-        out = resp.parsed if isinstance(resp.parsed, dict) else json.loads(resp.text)
-        return {"present": bool(out["present"]), "confidence": float(out["confidence"]),
-                "reason": str(out.get("reason", "")), "model": self.cfg.model}
+        video_in = {"type": "video", "data": base64.b64encode(data).decode(), "mime_type": "video/mp4",
+                    "processing": {"type": "static", "fps": self.cfg.fps}}
+        q = {"type": "noul", "instructions": _QUESTION.format(query=query)}
+        for attempt in range(5):  # per-minute rate limits clear within a few minutes; a daily cap still raises
+            try:
+                r = self.client.decisions.create(model=f"models/{self.cfg.model}", api_version="v1beta",
+                                                 input=[video_in], questions={"q": q})
+                break
+            except Exception as exc:
+                if getattr(exc, "status_code", None) != 429 or attempt == 4:
+                    raise
+                time.sleep(15 * 2 ** attempt)
+        p = float(r.answers["q"].noul)
+        return {"present": p >= 0.5, "p_present": p, "model": self.cfg.model}

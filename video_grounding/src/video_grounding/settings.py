@@ -51,7 +51,7 @@ class Refine(_Section):
 class Verify(_Section):
     """Stage V: Gemini confirms each event clip after refine. Needs GEMINI_API_KEY (see verifier.py)."""
     enabled: bool = False
-    model: str = "gemini-3.6-flash"
+    model: str = "gemini-decision-1"
     fps: float = 2.0
     max_height: int = 480
 

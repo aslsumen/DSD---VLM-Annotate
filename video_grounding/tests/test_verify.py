@@ -18,7 +18,7 @@ class FakeVerifier:
         if 880 < start < 900 and not self.failed:
             self.failed = True
             raise RuntimeError("429")
-        return {"present": not 290 < start < 310, "confidence": 0.9, "reason": "fake", "model": "fake"}
+        return {"present": not 290 < start < 310, "p_present": 0.9, "model": "fake"}
 
 
 def _by_start(doc):

@@ -51,8 +51,11 @@ Spec: `SPEC_ZeroShot_Video_Event_Grounding_MVP_v1.1`.
 ## Verify (Stage V, `verifier.py`)
 - Runs after refine and before export when `verify.enabled` (on in `default.yaml` and `rtx3070.yaml`;
   the class default is off). Each event's clip span (`clip_start_sec..clip_end_sec`) is cut at
-  `verify.max_height` (default 480) and resampled to `verify.fps`, sent inline to Gemini (`verify.model`, default `gemini-3.6-flash`,
-  sampled at `verify.fps`, default 2.0) with the query text. Gemini returns structured JSON `{present, confidence, reason}`.
+  `verify.max_height` (default 480) and resampled to `verify.fps` (default 2.0), then sent inline to the Gemini
+  Decisions API (`verify.model`, default `gemini-decision-1`, endpoint `v1beta/decisions`) as one yes/no question
+  built from the query text. The model scores it in one forward pass, with no generated text, and returns a calibrated
+  `P(true)`. The verdict is `{present: p_present >= 0.5, p_present, model}`. A 429 response is retried for about 4 minutes
+  to wait out per-minute limits.
 - Key: `GEMINI_API_KEY` env var or `video_grounding/.env` (template `.env.example`, gitignored).
   A missing key fails the job before scanning starts. Install with `uv sync --extra gemini`.
 - Verdicts are cached in the `verdicts` table, keyed by `(query_id, clip_start_us, clip_end_us, model)`.

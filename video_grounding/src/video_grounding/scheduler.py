@@ -172,7 +172,7 @@ def _verify(job: _Job) -> None:
                 v = job.verifier.verify(job.video, job.info, e.clip_start_sec, e.clip_end_sec, q.text)
             except Exception as exc:  # stays unverified: export flags it "not_verified", resume retries it
                 print(f"verify {e.event_id} failed: {exc}", file=sys.stderr)
-                if getattr(exc, "code", None) == 429:  # quota still exhausted after the SDK's retries
+                if 429 in (getattr(exc, "code", None), getattr(exc, "status_code", None)):  # quota still exhausted after the SDK's retries
                     print("verify stopped: Gemini quota exhausted; resume the job later", file=sys.stderr)
                     return
                 continue

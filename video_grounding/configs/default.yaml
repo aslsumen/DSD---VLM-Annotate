@@ -6,4 +6,4 @@ refine: {enabled: true, fps: 1.0, max_frames: 32, window_seconds: 30, expand_min
 fusion: {grid_seconds: 0.5, smooth_cells: 3, high: 0.25, low: 0.15, edge_weight_floor: 0.05, sparse_spacing_sec: 2.5, min_event_score: 0.9}
 export: {cut_clips: true, pre_roll: 0.5, post_roll: 0.5, crf: 20, preset: fast}
 retry: {max_attempts: 3, oom_ladder: [32, 24, 16, 12, 8, 4]}
-verify: {enabled: true, model: gemini-3.6-flash, fps: 2.0, max_height: 480}
+verify: {enabled: true, model: gemini-decision-1, fps: 2.0, max_height: 480}
