@@ -48,6 +48,21 @@ Spec: `SPEC_ZeroShot_Video_Event_Grounding_MVP_v1.1`.
   are dropped before refinement and export. events.json lists each query's events by descending
   `raw_score_max`, so reviewers see the likely ones first.
 
+## Verify (Stage V, `verifier.py`)
+- Runs after refine and before export when `verify.enabled` (on in `default.yaml` and `rtx3070.yaml`;
+  the class default is off). Each event's clip span (`clip_start_sec..clip_end_sec`) is cut at
+  `verify.max_height` (default 480), sent inline to Gemini (`verify.model`, default `gemini-3.6-flash`,
+  sampled at `verify.fps`, default 2.0) with the query text. Gemini returns structured JSON `{present, confidence, reason}`.
+- Key: `GEMINI_API_KEY` env var or `video_grounding/.env` (template `.env.example`, gitignored).
+  A missing key fails the job before scanning starts. Install with `uv sync --extra gemini`.
+- Verdicts are cached in the `verdicts` table, keyed by `(query_id, clip_start_us, clip_end_us, model)`.
+  Resume and `export` reuse them and make no API calls. `verify` is excluded from `config_hash`, so
+  changing it never blocks a resume or changes event ids. To verify a finished job, enable `verify`
+  in its `config.yaml` and resume the job.
+- Events are flagged, never dropped. `verdict` holds the Gemini result. `present=false` adds
+  `verifier_rejected` to `review_reasons`. A call that fails after the SDK retries (429/5xx), or a clip
+  over 20 MB, leaves `verdict: null` with `not_verified`. Both set `needs_review`, and a resume retries the failed calls.
+
 ## Module ownership and signatures
 
 `media` agent:
@@ -77,8 +92,8 @@ Spec: `SPEC_ZeroShot_Video_Event_Grounding_MVP_v1.1`.
 
 ## Job directory (`--out`)
 ```
-job.sqlite                 # jobs / windows / predictions / events / artifacts (source of truth)
-config.yaml                # resolved settings snapshot; config_hash = sha256 of canonical JSON of the resolved settings (settings.config_hash)
+job.sqlite                 # jobs / windows / predictions / events / artifacts / verdicts (source of truth)
+config.yaml                # resolved settings snapshot; config_hash = sha256 of canonical JSON of the resolved settings minus `verify` (settings.config_hash)
 windows/                   # cached window clips (deletable)
 window_predictions.jsonl   # regenerated from SQLite; SPEC 8.2 fields
 events.json                # SPEC 8.1 schema + coverage_gaps + per-query warnings
@@ -108,7 +123,7 @@ re-queues unfinished work (a failed one writes `error.txt` and stays failed unti
 | `GET /v1/datasets/{id}` | `{dataset_id, state: queued\|running\|completed\|failed, error, stats}` |
 | `GET /v1/datasets/{id}/manifest`, `.../clips/{name}` | `dataset.json`, clip mp4 (`name` = the file stem under `annotations[].clip`) |
 
-State mapping to the backend's Search states: `queued` -> queued; `created, probing, scanning, refining, exporting` -> running;
+State mapping to the backend's Search states: `queued` -> queued; `created, probing, scanning, refining, verifying, exporting` -> running;
 `completed` -> done; `failed, paused` -> failed-retryable. A job with an `error.txt` reports `failed`.
 
 `dataset.json`: `{dataset, created_at, model, model_revision, videos:[{video, job_id, duration_sec, scan_complete}],

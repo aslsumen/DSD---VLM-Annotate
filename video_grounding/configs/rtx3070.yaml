@@ -4,3 +4,4 @@ runtime:
   backend: videojev
   device_map: auto
   max_memory: {0: 6GiB, cpu: 9GiB}
+verify: {enabled: true}

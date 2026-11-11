@@ -20,6 +20,7 @@ create table if not exists windows(key text primary key, job_id text, query_id t
 create table if not exists predictions(key text primary key, json text);
 create table if not exists events(event_id text primary key, query_id text, json text);
 create table if not exists artifacts(path text primary key, kind text, sha256 text);
+create table if not exists verdicts(key text primary key, json text);
 """
 DONE = ("succeeded", "permanent_failed")
 
@@ -176,6 +177,16 @@ def write_predictions_jsonl(conn, path: str | Path, backend: str) -> None:
                    "model_id": res.model_id if res else None, "max_frames": r["max_frames"], "oom_log": r["oom_log"]}
             f.write(json.dumps(rec) + "\n")
     os.replace(tmp, path)
+
+
+def get_verdict(conn, key: str) -> dict | None:
+    row = conn.execute("select json from verdicts where key=?", (key,)).fetchone()
+    return json.loads(row[0]) if row else None
+
+
+def save_verdict(conn, key: str, verdict: dict) -> None:
+    with conn:
+        conn.execute("insert or replace into verdicts values(?,?)", (key, json.dumps(verdict)))
 
 
 def save_events(conn, events: list) -> None:

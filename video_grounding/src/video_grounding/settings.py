@@ -48,6 +48,14 @@ class Refine(_Section):
     max_span_seconds: float = 180
 
 
+class Verify(_Section):
+    """Stage V: Gemini confirms each event clip after refine. Needs GEMINI_API_KEY (see verifier.py)."""
+    enabled: bool = False
+    model: str = "gemini-3.6-flash"
+    fps: float = 2.0
+    max_height: int = 480
+
+
 class Fusion(_Section):
     grid_seconds: float = 0.5
     smooth_cells: int = 3
@@ -78,6 +86,7 @@ class Settings(_Section):
     model: ModelCfg = ModelCfg()
     coarse: Coarse = Coarse()
     refine: Refine = Refine()
+    verify: Verify = Verify()
     fusion: Fusion = Fusion()
     export: Export = Export()
     retry: Retry = Retry()
@@ -93,5 +102,6 @@ def dump_settings(s: Settings) -> str:
 
 def config_hash(s: Settings) -> str:
     # mode="json" stringifies dict keys, so {0: "6GiB", "cpu": ..} sorts without a TypeError
-    canon = json.dumps(s.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+    # verify only adds verdicts on top of events: changing it must not block resume or change event ids
+    canon = json.dumps(s.model_dump(mode="json", exclude={"verify"}), sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canon.encode()).hexdigest()

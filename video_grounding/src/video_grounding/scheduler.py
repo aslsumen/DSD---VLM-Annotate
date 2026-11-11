@@ -38,6 +38,7 @@ class _Job:
     revision: str
     video: str
     backend: object = None
+    verifier: object = None
     timings: dict = field(default_factory=dict)
 
 
@@ -153,6 +154,28 @@ def _refine(job: _Job) -> None:
             _ground_all(job, _refine_windows(job, tiles), [q])
 
 
+def _verdict_key(e, model: str) -> str:
+    return f"{e.query_id}|{round(e.clip_start_sec * 1e6)}|{round(e.clip_end_sec * 1e6)}|{model}"
+
+
+def _verify(job: _Job) -> None:
+    """Stage V: ask Gemini whether each event clip really shows the query. Verdicts are cached in SQLite."""
+    if not job.settings.verify.enabled:
+        return
+    P.set_job_state(job.conn, job.job_id, "verifying")
+    for q in job.queries:
+        for e in _events(job, q, None, job.settings):
+            key = _verdict_key(e, job.settings.verify.model)
+            if P.get_verdict(job.conn, key) is not None:
+                continue
+            try:
+                v = job.verifier.verify(job.video, job.info, e.clip_start_sec, e.clip_end_sec, q.text)
+            except Exception as exc:  # stays unverified: export flags it "not_verified", resume retries it
+                print(f"verify {e.event_id} failed: {exc}", file=sys.stderr)
+                continue
+            P.save_verdict(job.conn, key, v)
+
+
 def _export(job: _Job, settings: Settings | None = None) -> dict:
     """Re-fuse stored predictions and write every output. Makes no model calls."""
     P.set_job_state(job.conn, job.job_id, "exporting")
@@ -162,6 +185,12 @@ def _export(job: _Job, settings: Settings | None = None) -> dict:
     all_events, qdocs = [], []
     for q in job.queries:
         evs = sorted(_events(job, q, None, st), key=lambda e: -e.raw_score_max)  # reviewers see likely ones first
+        if st.verify.enabled:  # rejected events are flagged, not dropped: the reviewer decides
+            for e in evs:
+                e.verdict = P.get_verdict(job.conn, _verdict_key(e, st.verify.model))
+                if e.verdict is None or not e.verdict["present"]:
+                    e.needs_review = True
+                    e.review_reasons.append("not_verified" if e.verdict is None else "verifier_rejected")
         if st.export.cut_clips:
             from . import cutter
 
@@ -201,8 +230,12 @@ def _export(job: _Job, settings: Settings | None = None) -> dict:
 def _continue(job: _Job, keep_loaded: bool = False) -> dict:
     P.reset_running(job.conn, job.job_id)
     try:
+        if job.settings.verify.enabled and job.verifier is None:  # fail on a missing key before hours of scanning
+            from .verifier import GeminiVerifier
+
+            job.verifier = GeminiVerifier(job.settings.verify)
         job.backend.load()
-        for name, fn in (("scan_s", _scan), ("refine_s", _refine)):
+        for name, fn in (("scan_s", _scan), ("refine_s", _refine), ("verify_s", _verify)):
             t0 = time.perf_counter()
             fn(job)
             job.timings[name] = round(time.perf_counter() - t0, 3)
@@ -220,7 +253,7 @@ def _continue(job: _Job, keep_loaded: bool = False) -> dict:
 
 def run_scan(video: str, queries: list[Query], settings: Settings, out_dir: str | Path, *,
              video_info: VideoInfo | None = None, backend=None, job_id: str | None = None,
-             keep_loaded: bool = False) -> dict:
+             keep_loaded: bool = False, verifier=None) -> dict:
     out = Path(out_dir)
     if (out / "job.sqlite").exists():
         raise FileExistsError(f"{out} already holds a job; use resume")
@@ -235,7 +268,8 @@ def run_scan(video: str, queries: list[Query], settings: Settings, out_dir: str 
         video_info = probe.probe_video(video)
     chash = config_hash(settings)
     P.create_job(conn, job_id, video, video_info, chash, backend.model_revision, queries)
-    job = _Job(out, conn, job_id, video_info, settings, chash, queries, backend.model_revision, video, backend)
+    job = _Job(out, conn, job_id, video_info, settings, chash, queries, backend.model_revision, video, backend,
+               verifier)
     return _continue(job, keep_loaded)
 
 
@@ -261,8 +295,10 @@ def _open(out_dir: str | Path, backend=None, video_info: VideoInfo | None = None
 
 
 def resume(out_dir: str | Path, *, backend=None, video_info: VideoInfo | None = None,
-           keep_loaded: bool = False) -> dict:
-    return _continue(_open(out_dir, backend, video_info), keep_loaded)
+           keep_loaded: bool = False, verifier=None) -> dict:
+    job = _open(out_dir, backend, video_info)
+    job.verifier = verifier
+    return _continue(job, keep_loaded)
 
 
 def export(out_dir: str | Path, *, high: float | None = None, low: float | None = None) -> dict:

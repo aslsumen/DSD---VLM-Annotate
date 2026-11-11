@@ -92,6 +92,7 @@ class Event:
     alignment_status: str
     evidence_window_ids: list[str]
     clip_path: str | None = None
+    verdict: dict | None = None  # Gemini {present, confidence, reason, model} when verify is enabled
 
 
 def stable_event_id(query_id: str, start_sec: float, end_sec: float,
