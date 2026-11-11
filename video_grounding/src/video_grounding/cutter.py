@@ -70,12 +70,15 @@ def _encode(cmd: list[str], out_path: str) -> str:
 
 
 def cut_window_clip(src: str, start_sec: float, end_sec: float, out_path: str,
-                    info: VideoInfo, max_height: int = 720) -> float:
-    """Video-only re-encode of global [start, end]; returns the measured global time of its first frame."""
+                    info: VideoInfo, max_height: int = 720, fps: float | None = None) -> float:
+    """Video-only re-encode of global [start, end]; returns the measured global time of its first frame.
+    fps resamples the output (verify clips: Gemini samples at that rate anyway, so the extra frames are only bytes)."""
     start = max(0.0, start_sec)
     if end_sec <= start:
         raise CutError(f"empty window [{start_sec}, {end_sec}]")
     scale = f"scale=-2:trunc(min({int(max_height)}\\,ih)/2)*2"  # ih is post-autorotate (display) height
+    if fps:
+        scale = f"fps={fps},{scale}"
     cmd = ["ffmpeg", "-v", "error", "-ss", f"{_seek_sec(src, start, info):.6f}", "-i", src,
            "-t", f"{end_sec - start:.6f}", "-map", "0:v:0", "-an", "-vf", scale,
            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-pix_fmt", "yuv420p",

@@ -172,6 +172,9 @@ def _verify(job: _Job) -> None:
                 v = job.verifier.verify(job.video, job.info, e.clip_start_sec, e.clip_end_sec, q.text)
             except Exception as exc:  # stays unverified: export flags it "not_verified", resume retries it
                 print(f"verify {e.event_id} failed: {exc}", file=sys.stderr)
+                if getattr(exc, "code", None) == 429:  # quota still exhausted after the SDK's retries
+                    print("verify stopped: Gemini quota exhausted; resume the job later", file=sys.stderr)
+                    return
                 continue
             P.save_verdict(job.conn, key, v)
 
@@ -182,15 +185,17 @@ def _export(job: _Job, settings: Settings | None = None) -> dict:
     st = settings or job.settings
     t0 = time.perf_counter()
     gaps = P.coverage_gaps(job.conn)
-    all_events, qdocs = [], []
+    all_events, rejected, qdocs = [], [], []
     for q in job.queries:
         evs = sorted(_events(job, q, None, st), key=lambda e: -e.raw_score_max)  # reviewers see likely ones first
-        if st.verify.enabled:  # rejected events are flagged, not dropped: the reviewer decides
+        if st.verify.enabled:  # Gemini only removes refined events; unverified ones stay for the reviewer
             for e in evs:
                 e.verdict = P.get_verdict(job.conn, _verdict_key(e, st.verify.model))
-                if e.verdict is None or not e.verdict["present"]:
+                if e.verdict is None:
                     e.needs_review = True
-                    e.review_reasons.append("not_verified" if e.verdict is None else "verifier_rejected")
+                    e.review_reasons.append("not_verified")
+            rejected += [e for e in evs if e.verdict and not e.verdict["present"]]
+            evs = [e for e in evs if not (e.verdict and not e.verdict["present"])]
         if st.export.cut_clips:
             from . import cutter
 
@@ -212,6 +217,8 @@ def _export(job: _Job, settings: Settings | None = None) -> dict:
            "backend": st.runtime.backend, "model_id": P.first_model_id(job.conn) or st.model.id,
            "model_revision": job.revision, "scan_complete": not gaps, "queries": qdocs,
            "events": [e.__dict__ for e in all_events], "coverage_gaps": gaps}
+    if st.verify.enabled:
+        doc["rejected_events"] = [e.__dict__ for e in rejected]  # audit trail; no clips are cut for these
     _write_json(job.out / "events.json", doc)
     P.write_predictions_jsonl(job.conn, job.out / "window_predictions.jsonl", st.runtime.backend)
     for name, kind in (("events.json", "events"), ("window_predictions.jsonl", "predictions")):

@@ -52,7 +52,8 @@ class GeminiVerifier:
 
         with tempfile.TemporaryDirectory() as d:
             clip = Path(d) / "clip.mp4"
-            cutter.cut_window_clip(video, start_sec, end_sec, str(clip), info, max_height=self.cfg.max_height)
+            cutter.cut_window_clip(video, start_sec, end_sec, str(clip), info, max_height=self.cfg.max_height,
+                                   fps=self.cfg.fps)
             data = clip.read_bytes()
         # ponytail: inline only; a clip over 20 MB stays "not_verified". Switch to the Files API if that happens often.
         if len(data) > _INLINE_LIMIT:

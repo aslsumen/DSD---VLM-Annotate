@@ -51,7 +51,7 @@ Spec: `SPEC_ZeroShot_Video_Event_Grounding_MVP_v1.1`.
 ## Verify (Stage V, `verifier.py`)
 - Runs after refine and before export when `verify.enabled` (on in `default.yaml` and `rtx3070.yaml`;
   the class default is off). Each event's clip span (`clip_start_sec..clip_end_sec`) is cut at
-  `verify.max_height` (default 480), sent inline to Gemini (`verify.model`, default `gemini-3.6-flash`,
+  `verify.max_height` (default 480) and resampled to `verify.fps`, sent inline to Gemini (`verify.model`, default `gemini-3.6-flash`,
   sampled at `verify.fps`, default 2.0) with the query text. Gemini returns structured JSON `{present, confidence, reason}`.
 - Key: `GEMINI_API_KEY` env var or `video_grounding/.env` (template `.env.example`, gitignored).
   A missing key fails the job before scanning starts. Install with `uv sync --extra gemini`.
@@ -59,9 +59,11 @@ Spec: `SPEC_ZeroShot_Video_Event_Grounding_MVP_v1.1`.
   Resume and `export` reuse them and make no API calls. `verify` is excluded from `config_hash`, so
   changing it never blocks a resume or changes event ids. To verify a finished job, enable `verify`
   in its `config.yaml` and resume the job.
-- Events are flagged, never dropped. `verdict` holds the Gemini result. `present=false` adds
-  `verifier_rejected` to `review_reasons`. A call that fails after the SDK retries (429/5xx), or a clip
-  over 20 MB, leaves `verdict: null` with `not_verified`. Both set `needs_review`, and a resume retries the failed calls.
+- Gemini only removes refined events: `present=false` moves the event from `events` to
+  `rejected_events` in events.json (audit trail, no clip cut). `verdict` holds the Gemini result.
+  A call that fails after the SDK retries (5xx, per-minute 429), or a clip over 20 MB, keeps the event
+  with `verdict: null`, `needs_review` and `not_verified`; a resume retries it. A 429 that outlasts the
+  retries (daily quota) stops the stage, so the remaining events stay `not_verified` until a later resume.
 
 ## Module ownership and signatures
 

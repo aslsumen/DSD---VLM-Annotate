@@ -25,19 +25,35 @@ def _by_start(doc):
     return {round(e["event_start_sec"] / 100) * 100: e for e in doc["events"]}
 
 
-def test_verify_flags_and_caches(tmp_path):
+def test_verify_excludes_and_caches(tmp_path):
     st = make_settings(verify={"enabled": True})
     assert config_hash(st) == config_hash(make_settings())  # verify settings never block resume
     fake = FakeVerifier()
     doc = run_scan("v.mp4", [Query("q", "x")], st, tmp_path, video_info=make_info(1800.0),
                    backend=SyntheticBackend({"q": GT}), verifier=fake)
     evs = _by_start(doc)
-    assert len(evs) == 3 and len(fake.calls) == 3
-    assert evs[100]["verdict"]["present"] and "verifier_rejected" not in evs[100]["review_reasons"]
-    assert "verifier_rejected" in evs[300]["review_reasons"] and evs[300]["needs_review"]
-    assert evs[900]["verdict"] is None and "not_verified" in evs[900]["review_reasons"]
+    assert sorted(evs) == [100, 900] and len(fake.calls) == 3  # rejected 300 s event is excluded
+    assert [round(e["event_start_sec"], -2) for e in doc["rejected_events"]] == [300]
+    assert evs[100]["verdict"]["present"] and "not_verified" not in evs[100]["review_reasons"]
+    assert evs[900]["verdict"] is None and "not_verified" in evs[900]["review_reasons"] and evs[900]["needs_review"]
 
     doc = resume(tmp_path, backend=SyntheticBackend({"q": GT}), video_info=make_info(1800.0), verifier=fake)
     assert len(fake.calls) == 4  # only the failed event is retried
     assert _by_start(doc)[900]["verdict"]["present"]
     assert export(tmp_path)["events"][0]["verdict"] is not None and len(fake.calls) == 4  # export: no API calls
+
+
+class QuotaError(Exception):
+    code = 429
+
+
+def test_quota_stops_stage(tmp_path):
+    class Exhausted(FakeVerifier):
+        def verify(self, *a):
+            self.calls.append(a[2])
+            raise QuotaError("RESOURCE_EXHAUSTED")
+    fake = Exhausted()
+    doc = run_scan("v.mp4", [Query("q", "x")], make_settings(verify={"enabled": True}), tmp_path,
+                   video_info=make_info(1800.0), backend=SyntheticBackend({"q": GT}), verifier=fake)
+    assert len(fake.calls) == 1 and len(doc["events"]) == 3  # one call, then stop; nothing dropped
+    assert all("not_verified" in e["review_reasons"] for e in doc["events"])
