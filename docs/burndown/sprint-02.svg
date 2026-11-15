@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="560" viewBox="0 0 960 560" font-family="Segoe UI, Arial, sans-serif">
+<rect width="960" height="560" fill="#ffffff"/>
+<text x="80" y="32" font-size="20" font-weight="700" fill="#111827">Sprint 2 burndown — VLM Annotate (provisional, 85 SP)</text>
+<text x="80" y="50" font-size="12" fill="#6b7280">2026-11-02 → 2026-11-15 · actual reflects the 2026-11-05 harness session, not team velocity</text>
+<line x1="80" y1="480.0" x2="920" y2="480.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70" y="484.0" font-size="11" fill="#6b7280" text-anchor="end">0</text>
+<line x1="80" y1="428.8" x2="920" y2="428.8" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70" y="432.8" font-size="11" fill="#6b7280" text-anchor="end">10</text>
+<line x1="80" y1="377.6" x2="920" y2="377.6" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70" y="381.6" font-size="11" fill="#6b7280" text-anchor="end">20</text>
+<line x1="80" y1="326.3" x2="920" y2="326.3" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70" y="330.3" font-size="11" fill="#6b7280" text-anchor="end">30</text>
+<line x1="80" y1="275.1" x2="920" y2="275.1" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70" y="279.1" font-size="11" fill="#6b7280" text-anchor="end">40</text>
+<line x1="80" y1="223.9" x2="920" y2="223.9" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70" y="227.9" font-size="11" fill="#6b7280" text-anchor="end">50</text>
+<line x1="80" y1="172.7" x2="920" y2="172.7" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70" y="176.7" font-size="11" fill="#6b7280" text-anchor="end">60</text>
+<line x1="80" y1="121.5" x2="920" y2="121.5" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70" y="125.5" font-size="11" fill="#6b7280" text-anchor="end">70</text>
+<line x1="80" y1="70.2" x2="920" y2="70.2" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70" y="74.2" font-size="11" fill="#6b7280" text-anchor="end">80</text>
+<text x="24" y="270.0" font-size="12" fill="#374151" transform="rotate(-90 24 270.0)" text-anchor="middle">remaining story points</text>
+<line x1="80.0" y1="480" x2="80.0" y2="486" stroke="#9ca3af"/>
+<text x="80.0" y="502" font-size="10" fill="#374151" text-anchor="middle">02 Nov</text>
+<line x1="209.2" y1="480" x2="209.2" y2="486" stroke="#9ca3af"/>
+<text x="209.2" y="502" font-size="10" fill="#374151" text-anchor="middle">04 Nov</text>
+<line x1="338.5" y1="480" x2="338.5" y2="486" stroke="#9ca3af"/>
+<text x="338.5" y="502" font-size="10" fill="#374151" text-anchor="middle">06 Nov</text>
+<line x1="467.7" y1="480" x2="467.7" y2="486" stroke="#9ca3af"/>
+<text x="467.7" y="502" font-size="10" fill="#374151" text-anchor="middle">08 Nov</text>
+<line x1="596.9" y1="480" x2="596.9" y2="486" stroke="#9ca3af"/>
+<text x="596.9" y="502" font-size="10" fill="#374151" text-anchor="middle">10 Nov</text>
+<line x1="726.2" y1="480" x2="726.2" y2="486" stroke="#9ca3af"/>
+<text x="726.2" y="502" font-size="10" fill="#374151" text-anchor="middle">12 Nov</text>
+<line x1="855.4" y1="480" x2="855.4" y2="486" stroke="#9ca3af"/>
+<text x="855.4" y="502" font-size="10" fill="#374151" text-anchor="middle">14 Nov</text>
+<rect x="370.8" y="60" width="64.6" height="420" fill="#f3f4f6"/>
+<rect x="435.4" y="60" width="64.6" height="420" fill="#f3f4f6"/>
+<rect x="823.1" y="60" width="64.6" height="420" fill="#f3f4f6"/>
+<rect x="887.7" y="60" width="64.6" height="420" fill="#f3f4f6"/>
+<polyline points="80.0,60.0 144.6,92.3 209.2,124.6 273.8,156.9 338.5,189.2 403.1,221.5 467.7,253.8 532.3,286.2 596.9,318.5 661.5,350.8 726.2,383.1 790.8,415.4 855.4,447.7 920.0,480.0" fill="none" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 5"/>
+<polyline points="80.0,60.0 144.6,60.0 209.2,60.0 273.8,439.0 920.0,454.4" fill="none" stroke="#1d4ed8" stroke-width="3"/>
+<circle cx="80.0" cy="60.0" r="5" fill="#1d4ed8"/>
+<circle cx="144.6" cy="60.0" r="5" fill="#1d4ed8"/>
+<circle cx="209.2" cy="60.0" r="5" fill="#1d4ed8"/>
+<circle cx="273.8" cy="439.0" r="5" fill="#1d4ed8"/>
+<circle cx="920.0" cy="454.4" r="5" fill="#1d4ed8"/>
+<text x="930.0" y="458.4" font-size="12" font-weight="700" fill="#1d4ed8">5 SP</text>
+<line x1="80" y1="532" x2="108" y2="532" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 5"/><text x="116" y="536" font-size="12" fill="#374151">ideal</text>
+<line x1="190" y1="532" x2="218" y2="532" stroke="#1d4ed8" stroke-width="3"/><text x="226" y="536" font-size="12" fill="#374151">actual</text>
+<rect x="300" y="524" width="16" height="16" fill="#f3f4f6"/><text x="324" y="536" font-size="12" fill="#374151">weekend / no work assumed</text>
+</svg>

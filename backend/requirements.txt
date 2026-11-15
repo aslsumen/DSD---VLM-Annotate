@@ -1,0 +1,16 @@
+# Runtime dependencies for the VLM Annotate backend.
+# Exact resolved versions are pinned in requirements.lock.txt (generated with `pip freeze`).
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30,<1.0
+pydantic>=2.9,<3.0
+pydantic-settings>=2.4,<3.0
+SQLAlchemy>=2.0.36,<3.0
+alembic>=1.13,<2.0
+python-multipart>=0.0.9
+imageio-ffmpeg>=0.5,<1.0
+
+# Development / test-only (also see pyproject optional-dependencies)
+pytest>=8.3,<9.0
+pytest-cov>=5.0,<7.0
+httpx>=0.27,<1.0
+ruff>=0.6,<1.0
