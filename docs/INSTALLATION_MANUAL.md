@@ -109,6 +109,7 @@ Environment variables (prefix `VLM_`) or a `.env` file at the repository root:
 | `VLM_MAX_CANDIDATES_PER_JOB` | `12` | Candidate cap |
 | `VLM_WORKER_MAX_ATTEMPTS` | `3` | Retry budget |
 | `VLM_WORKER_RETRY_BACKOFF_SECONDS` | `5` | Linear backoff base |
+| `VLM_WORKER_HEARTBEAT_SECONDS` | `30` | Worker heartbeat interval; a running job is reclaimed after 3 missed beats. Only changes how fast a crashed job is retried |
 | `VLM_CORS_ORIGINS` | localhost:5173/4173 | JSON list for the dev frontend |
 | `VLM_FFMPEG_BINARY` | *(auto)* | Override the ffmpeg executable |
 | `VLM_AUTO_CREATE_SCHEMA` | `true` | Dev convenience; use Alembic in production |
@@ -141,7 +142,7 @@ python scripts/smoke_videojev.py --base-url http://127.0.0.1:8000 --action "pers
 
 ```powershell
 # automated checks
-.\.venv\Scripts\python.exe -m pytest backend -q            # expect 69 passed
+.\.venv\Scripts\python.exe -m pytest backend -q            # expect 80 passed
 .\.venv\Scripts\python.exe scripts\smoke_e2e.py            # expect 26/26 checks
 
 # ffmpeg diagnostics
@@ -173,6 +174,7 @@ without `data/storage/` has no videos or clips. Restore by copying it back befor
 | `415 UNRECOGNISED_CONTAINER` | Wrong extension or non-video bytes | Use mp4/mov/m4v/webm/mkv; do not rename a file's extension |
 | `413 UPLOAD_TOO_LARGE` | Above `VLM_MAX_UPLOAD_BYTES` | Raise the limit or compress the video |
 | Job stays `queued` | Worker not running | Start `python -m app.worker --loop` |
+| Job `running` but nothing happens | Worker died mid-job | Restart the worker: after 3 missed heartbeats (`VLM_WORKER_HEARTBEAT_SECONDS`) the job is requeued with `WORKER_LOST`; or cancel it in the UI |
 | Job `failed` with `FFMPEG_NOT_FOUND` | No ffmpeg binary | `pip install imageio-ffmpeg` or set `VLM_FFMPEG_BINARY` |
 | `401 UNAUTHENTICATED` in UI | `VLM_API_TOKEN` set but no token entered | Paste the token in the UI / send the header |
 | `CORS` error in dev | Frontend port not allowed | Add it to `VLM_CORS_ORIGINS` |

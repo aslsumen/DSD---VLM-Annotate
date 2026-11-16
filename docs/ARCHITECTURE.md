@@ -73,6 +73,19 @@ flowchart LR
 ```
 
 - One API process + one worker process; queue in the database (`UPDATE … WHERE status='queued'`), no Redis.
+- **Heartbeat lease** (ADR-0001 amendment). A worker owns a job while `status='running' AND attempts=<value it
+  claimed with>` (`attempts` is the fencing token). Every commit of a job (progress, finish, failure) first runs
+  a conditional `UPDATE … SET updated_at` on that predicate; zero rows means the job was canceled or reclaimed,
+  so the worker rolls back, drops its result and moves on. A daemon thread in the worker also touches
+  `updated_at` every `VLM_WORKER_HEARTBEAT_SECONDS`, because the VLM engine can be silent for minutes (model
+  load, offloaded windows). Before each claim the worker **reaps** running jobs whose `updated_at` is older
+  than 3 beats: requeued with `error_code=WORKER_LOST`, or failed (export included) when attempts are
+  exhausted, so a job that kills the worker every time cannot loop forever. The `videojev` adapter then
+  resumes from its per-job engine dir.
+- **Cancel** applies to queued and running jobs. A running worker notices at its next progress tick (one engine
+  window), so cancel latency is one window, and its late result is never written. A linked export fails with
+  "canceled".
+- Known limit: `updated_at` is stamped with worker clocks, so several worker hosts need synchronized clocks.
 - SQLite with WAL; Alembic migration verified. PostgreSQL-compatible models but untested.
 - Local storage behind a `StorageBackend` protocol; generated keys, traversal guard.
 - Optional single bearer token enforced in middleware; **no users/roles/datasets**.
@@ -83,7 +96,7 @@ flowchart LR
   per worker. `POST /projects/{id}/actions/{id}/jobs` queues one job per video.
 - Export is a ZIP with `manifest.json` + `labels.csv` + clips (not OpenLABEL JSON).
 
-**Tests:** 69 backend (pytest), 21 UI (vitest), real-ffmpeg smoke 26/26; real-model `scripts/smoke_videojev.py` (GPU host).
+**Tests:** 80 backend (pytest), 21 UI (vitest), real-ffmpeg smoke 26/26; real-model `scripts/smoke_videojev.py` (GPU host).
 
 ## 4. Gap and migration plan
 

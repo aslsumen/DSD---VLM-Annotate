@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     worker_poll_interval_seconds: float = 1.0
     worker_max_attempts: int = 3
     worker_retry_backoff_seconds: float = 5.0
+    # A running job is touched every beat and counts as stale after 3 missed beats.  This only
+    # changes how fast a crashed job is retried, never results.
+    worker_heartbeat_seconds: float = 30.0
     ffmpeg_binary: str | None = None
 
     @field_validator("data_dir", mode="before")
