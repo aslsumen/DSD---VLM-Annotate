@@ -43,7 +43,7 @@ class VideoJevBackend:
         self._key = self._features = self._record = None  # last window's encoded features
 
     def load(self) -> None:
-        if self._model is not None:  # the server keeps the model loaded across jobs
+        if self._model is not None:  # the backend worker keeps the model loaded across jobs
             return
         import torch
         from transformers import AutoModel, AutoProcessor

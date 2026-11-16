@@ -103,7 +103,7 @@ Scheduling and data pipeline:
 ```
 job.sqlite                 # jobs / windows / predictions / events / artifacts / verdicts (source of truth)
 config.yaml                # resolved settings snapshot; config_hash = sha256 of canonical JSON of the resolved settings minus `verify` (settings.config_hash)
-windows/                   # cached window clips (deletable)
+windows/                   # temp window clip, deleted once the window is grounded
 window_predictions.jsonl   # regenerated from SQLite; SPEC 8.2 fields
 events.json                # SPEC 8.1 schema + coverage_gaps + per-query warnings
 clips/<event_id>.mp4

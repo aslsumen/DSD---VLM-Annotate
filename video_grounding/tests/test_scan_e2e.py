@@ -1,5 +1,7 @@
 import json
+from pathlib import Path
 
+from _media import make_video, needs_ffmpeg
 from conftest import make_info, make_settings
 from video_grounding.adapters.base import SyntheticBackend
 from video_grounding.evaluation import evaluate
@@ -22,3 +24,18 @@ def test_30min_scan(tmp_path):
     assert (tmp_path / "events.json").exists() and (tmp_path / "manifest.json").exists()
     assert any(json.loads(x)["sampling_profile"] == "refine"
                for x in (tmp_path / "window_predictions.jsonl").read_text().splitlines())
+
+
+@needs_ffmpeg
+def test_window_clips_are_deleted_after_grounding(tmp_path):
+    class ClipBackend(SyntheticBackend):
+        needs_clip = True
+
+        def ground(self, window, query_id, query):
+            assert Path(window.clip_path).is_file()
+            return super().ground(window, query_id, query)
+
+    src = make_video(tmp_path / "src.mp4", dur=70)
+    run_scan(src, [Query("q", "x")], make_settings(), tmp_path / "job", backend=ClipBackend({"q": [(20, 26)]}))
+    assert not any((tmp_path / "job" / "windows").iterdir())
+    assert Path(src).is_file()
