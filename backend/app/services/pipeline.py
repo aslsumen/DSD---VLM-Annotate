@@ -774,3 +774,16 @@ def cancel_job(session: Session, job: ProcessingJob) -> ProcessingJob:
     session.commit()
     session.refresh(job)
     return job
+
+
+__all__ = [
+    "cancel_job",
+    "claim_next_job",
+    "enqueue_candidate_job",
+    "enqueue_export_job",
+    "execute_job",
+    "fail_job_now",
+    "heartbeat",
+    "reap_stale_jobs",
+    "retry_job",
+]

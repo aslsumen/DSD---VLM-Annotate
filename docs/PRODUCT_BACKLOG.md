@@ -55,7 +55,7 @@ not person-hours. Team velocity is unknown until Sprint 2 closes, so all sizing 
 | PB-25 | E6 | Real-footage evaluation set + metrics | M | 8 | Not started | 3 | Recall@IoU etc. |
 | PB-26 | E6 | Model selection ADR with measured evidence | M | 3 | Not started | 3 | Replaces provisional ADR-0004 |
 | PB-27 | E7 | Retention policy + purge job for old exports | S | 5 | Not started | 4 | `R-06` |
-| PB-28 | E7 | Stale running-job reaper | S | 3 | Not started | 4 | `R-07` |
+| PB-28 | E7 | Stale running-job reaper | S | 3 | Done | 4 | `R-07` |
 | PB-29 | E7 | Structured logging + request ids | C | 3 | Not started | 4 | |
 | PB-30 | E7 | Docker/compose packaging | S | 5 | Not started | 4 | Deployment docs |
 | PB-31 | E8 | Living Scrum artifacts + supervisor access | M | 3 | In progress | 2 | Human action needed |
