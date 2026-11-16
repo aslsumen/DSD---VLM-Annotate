@@ -112,10 +112,22 @@ Not called by the browser. Worker → engine:
 |---|---|
 | Projects/actions | `POST/GET /api/v1/projects`, `GET/PATCH/DELETE /api/v1/projects/{id}`, `POST/GET /api/v1/projects/{id}/actions` |
 | Videos | `POST/GET /api/v1/projects/{id}/videos`, `GET/DELETE /api/v1/videos/{id}`, `GET /api/v1/videos/{id}/stream` |
-| Jobs | `POST /api/v1/videos/{id}/jobs`, `GET /api/v1/jobs`, `GET /api/v1/jobs/{id}`, retry/cancel, `GET /api/v1/jobs/{id}/candidates` |
+| Jobs | `POST /api/v1/videos/{id}/jobs`, `POST /api/v1/projects/{id}/actions/{action_id}/jobs` (batch), `GET /api/v1/jobs` (filters `project_id`, `video_id`, `action_id`, `status`, `limit`), `GET /api/v1/jobs/{id}`, retry/cancel, `GET /api/v1/jobs/{id}/candidates` |
 | Review | `GET /api/v1/projects/{id}/candidates`, `GET /api/v1/candidates/{id}`, `PUT/DELETE /api/v1/candidates/{id}/annotation`, `GET /api/v1/candidates/{id}/clip` |
 | Export | `POST/GET /api/v1/projects/{id}/exports`, `GET/DELETE /api/v1/exports/{id}`, `GET /api/v1/exports/{id}/download` |
 | System | `GET /api/v1/health`, `/api/v1/adapters`, `/api/v1/system/media`, `/api/docs` |
+
+**Batch jobs.** `POST /api/v1/projects/{project_id}/actions/{action_id}/jobs` with body
+`{"video_ids": [1, 2] | null, "adapter": "videojev" | null, "params": {}}` queues one job per video and returns
+`202` with a list of `JobOut`. `video_ids` omitted/null means every `ready` video in the project; duplicates are
+ignored. Errors: `404` unknown project/action/video, `409 PROJECT_MISMATCH` (action or video in another
+project), `409 VIDEO_NOT_READY` (a listed video is not ready). An optional `Idempotency-Key` header is applied
+per video as `<key>:<video_id>`, so repeating the request returns the same jobs.
+
+**Exhaustive adapters.** An adapter that reports `exhaustive` (currently `videojev`) returns every event it
+finds: the `max_candidates_per_job` cap does not apply, candidates are ranked by score descending, and zero
+events is a successful job with an empty candidate list (the action does not occur in that video). Other
+adapters keep the cap (earliest 12 by start time) and fail a job that yields no candidates.
 
 Behavioural guarantees of that API (timestamps, unreviewed semantics, error envelope, range streaming) are
 tested by 56 pytest tests and are the part to carry into the new contract.

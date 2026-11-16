@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Header, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..deps import get_db, get_project_or_404, storage_dep
+from ..adapters.registry import get_adapter
+from ..config import Settings
+from ..deps import get_db, get_project_or_404, get_video_or_404, settings_dep, storage_dep
 from ..errors import ApiError
 from ..models import (
     ActionDefinition,
@@ -19,16 +21,20 @@ from ..models import (
     Project,
     Verdict,
     Video,
+    VideoStatus,
 )
 from ..schemas import (
     ActionCreate,
     ActionOut,
     ActionUpdate,
+    BatchJobCreate,
+    JobOut,
     ProjectCreate,
     ProjectOut,
     ProjectStats,
     ProjectUpdate,
 )
+from ..services.pipeline import enqueue_candidate_job
 from ..services.storage import LocalStorage
 
 router = APIRouter(tags=["projects"])
@@ -243,6 +249,64 @@ def list_actions(project_id: int, session: Session = Depends(get_db)) -> list[Ac
             .order_by(ActionDefinition.id.asc())
         )
     )
+
+
+@router.post(
+    "/projects/{project_id}/actions/{action_id}/jobs",
+    response_model=list[JobOut],
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def create_action_jobs(
+    project_id: int,
+    action_id: int,
+    payload: BatchJobCreate,
+    session: Session = Depends(get_db),
+    settings: Settings = Depends(settings_dep),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> list[ProcessingJob]:
+    """Queue one candidate job per video: all ready videos, or the listed ones."""
+    get_project_or_404(session, project_id)
+    action = session.get(ActionDefinition, action_id)
+    if action is None:
+        raise ApiError(404, "ACTION_NOT_FOUND", f"action {action_id} does not exist")
+    if action.project_id != project_id:
+        raise ApiError(409, "PROJECT_MISMATCH", "action belongs to a different project")
+
+    if payload.video_ids is None:
+        videos = list(
+            session.scalars(
+                select(Video)
+                .where(Video.project_id == project_id, Video.status == VideoStatus.ready)
+                .order_by(Video.id)
+            )
+        )
+    else:
+        videos = []
+        for video_id in dict.fromkeys(payload.video_ids):  # de-duplicate, keep order
+            video = get_video_or_404(session, video_id)
+            if video.project_id != project_id:
+                raise ApiError(409, "PROJECT_MISMATCH", f"video {video_id} is in another project")
+            if video.status != VideoStatus.ready:
+                raise ApiError(409, "VIDEO_NOT_READY", f"video {video_id} is not ready")
+            videos.append(video)
+
+    adapter = get_adapter(payload.adapter, settings)
+    jobs = [
+        enqueue_candidate_job(
+            session,
+            video=video,
+            action=action,
+            adapter_name=adapter.name,
+            params=payload.params,
+            idempotency_key=f"{idempotency_key}:{video.id}" if idempotency_key else None,
+            max_attempts=settings.worker_max_attempts,
+        )
+        for video in videos
+    ]
+    session.commit()
+    for job in jobs:
+        session.refresh(job)
+    return jobs
 
 
 @router.patch("/actions/{action_id}", response_model=ActionOut)

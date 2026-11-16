@@ -19,6 +19,7 @@ def list_jobs(
     session: Session = Depends(get_db),
     project_id: int | None = Query(default=None),
     video_id: int | None = Query(default=None),
+    action_id: int | None = Query(default=None),
     status_filter: JobStatus | None = Query(default=None, alias="status"),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> list[ProcessingJob]:
@@ -28,6 +29,8 @@ def list_jobs(
         statement = statement.where(ProcessingJob.project_id == project_id)
     if video_id is not None:
         statement = statement.where(ProcessingJob.video_id == video_id)
+    if action_id is not None:
+        statement = statement.where(ProcessingJob.action_id == action_id)
     if status_filter is not None:
         statement = statement.where(ProcessingJob.status == status_filter)
     return list(session.scalars(statement))

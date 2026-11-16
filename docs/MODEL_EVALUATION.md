@@ -68,6 +68,16 @@ validated. That is acceptable for a first MVP but must be measured, not assumed.
 **Blocking question for the customer (13 Nov):** may videos that show faces be sent to Gemini? Until answered,
 use public/team footage for API experiments and keep the self-hosted path for customer data.
 
+### 5.1 Update 2026-11-16: VideoJev-4B integrated as the `videojev` adapter
+
+[ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md) plugs the `video_grounding/` engine into
+the job queue. Why VideoJev-4B: it is a temporal-grounding model with a score curve, and it runs on an 8 GB
+laptop GPU with CPU offload. Evidence, Charades-STA test subset (300 videos / 822 queries), before verification:
+recall 0.690, precision 0.768, R1@0.3/0.5/0.7 = 0.683/0.460/0.215, mIoU 0.437, about 1.3x video duration
+processing time on an RTX 3070 Laptop 8 GB (details: `video_grounding/docs/EVALUATION.md`). These numbers use
+`min_event_score` 0.9; a re-run with the new default 0.5 is in progress (offline estimate: recall 0.771).
+Gemini verification stays off by default. The Qwen2.5-VL comparator row above is not implemented.
+
 ## 6. Gemini API operations and security
 
 - **Key handling:** the key arrived through a one-time secure link (24 h). It must live only in the backend
