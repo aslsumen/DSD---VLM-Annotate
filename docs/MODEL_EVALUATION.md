@@ -1,11 +1,11 @@
 # Model and Test-Data Evaluation
 
 **Status:** v1.2 working note · **Date:** 2026-11-12 · **Owner:** ML/adapter workstream (role placeholder)
-**Real inference on project videos:** **NOT RUN** — the repository still uses the labelled mock adapter.
+**Real inference:** VideoJev-4B was measured on Charades-STA only (2026-11-16, §5.1, §8). The real-model smoke on the project laptop and any run on project videos are **NOT RUN**; `mock` is still the default adapter.
 
 > This document separates three things that are easy to confuse: what a model *claims*, what we have
 > *verified in a primary source*, and what we have *measured ourselves*. Only the last one is evidence of
-> quality, and we have none yet.
+> quality. Our own measurements so far are Charades-STA runs of the VideoJev engine (§5.1).
 
 > **As-built detail for the implemented prototype:** [docs/as-built/IMPLEMENTED_BASELINE_2026-11-05.md](as-built/IMPLEMENTED_BASELINE_2026-11-05.md).
 
@@ -32,9 +32,9 @@
 
 | Option | Licence | Temporal grounding evidence | Fit | Status |
 |---|---|---|---|---|
-| **Gemini API** (Flash-class model) | Commercial API terms; customer-provided key | Not verified for temporal grounding; prompt/schema must be tested | No local GPU needed; quota-bound | **Candidate for first real detector** |
-| **VideoJev-4B** (MCG-NJU, Qwen3.5-4B base) | Apache-2.0 per team design | Team design says it returns a **per-frame-pair probability curve** plus one interval — suited to windowed fusion | 4 B; needs ~8–16 GB depending on quantisation | **Reference self-hosted candidate; card to verify** |
-| Qwen2.5-VL-7B / 3B | 7B Apache-2.0; **3B `qwen-research`** | Card claims segment pinning, mRoPE absolute time, Charades-STA mIoU 43.6 (row malformed); fps passed to processor | 7B no; 3B yes | Fallback/comparator |
+| **Gemini API** (Flash-class model) | Commercial API terms; customer-provided key | Not verified for temporal grounding; prompt/schema must be tested | No local GPU needed; quota-bound | Optional verify stage in the engine, off in the product adapter (2026-11-16, §5.1); not the first detector |
+| **VideoJev-4B** (MCG-NJU, Qwen3.5-4B base) | Apache-2.0 per team design | Team design says it returns a **per-frame-pair probability curve** plus one interval — suited to windowed fusion | 4 B; needs ~8–16 GB depending on quantisation | **Integrated as the `videojev` adapter (ADR-0007); measured on Charades-STA, below SPEC targets** |
+| Qwen2.5-VL-7B / 3B | 7B Apache-2.0; **3B `qwen-research`** | Card claims segment pinning, mRoPE absolute time, Charades-STA mIoU 43.6 (row malformed); fps passed to processor | 7B no; 3B yes | Stub only (superseded as first real model by ADR-0007) |
 | SmolVLM2-2.2B | Apache-2.0 | No grounding claim; card documents **5.2 GB** video inference | Yes | Presence-classifier fallback |
 | InternVL3.x / LLaVA-Video / VideoLLaMA3 | Apache/MIT mix | No temporal-grounding claim | Mostly no | Describe-only; not timestamp sources |
 
@@ -59,10 +59,10 @@ validated. That is acceptable for a first MVP but must be measured, not assumed.
 
 | Layer | Decision | Rationale |
 |---|---|---|
-| Sprint 2 prototype | **Mock adapter only**, labelled | Pipeline and review correctness first |
-| First real detector (Sprint 3) | **Gemini API** behind the `GroundingBackend` interface, on **non-sensitive test videos only** | No GPU dependency, fastest path to measured KPIs; key already provided |
-| Self-hosted target (Sprint 3–4) | **VideoJev-4B** quantised on the 12 GB laptop (or 24 GB GPU if granted), for customer footage and privacy | Apache-2.0, score curve, offline (ENG-12) |
-| Comparator | Qwen2.5-VL-3B or SmolVLM2 windowed presence | Licence/feasibility fallback |
+| Sprint 2 prototype | **Mock adapter only**, labelled (still the default adapter) | Pipeline and review correctness first |
+| First real detector (Sprint 3) | ~~Gemini API~~ **Superseded 2026-11-16:** VideoJev-4B via the `videojev` adapter (§5.1). Gemini remains an optional engine verify stage, off in the adapter | The self-hosted engine was built and measured first; no footage leaves the machine |
+| Self-hosted target (Sprint 3–4) | **VideoJev-4B**; runs on the 8 GB RTX 3070 laptop with CPU offload (slow), no quantisation used; 12 GB laptop or 24 GB GPU if granted | Apache-2.0, score curve, offline (ENG-12) |
+| Comparator | Qwen2.5-VL-3B or SmolVLM2 windowed presence (not planned; stub only) | Licence/feasibility fallback |
 | Forbidden | Sending face-containing customer footage to any API without written approval | NFR-8 |
 
 **Blocking question for the customer (13 Nov):** may videos that show faces be sent to Gemini? Until answered,
@@ -75,8 +75,11 @@ the job queue. Why VideoJev-4B: it is a temporal-grounding model with a score cu
 laptop GPU with CPU offload. Evidence, Charades-STA test subset (300 videos / 822 queries), before verification:
 recall 0.690, precision 0.768, R1@0.3/0.5/0.7 = 0.683/0.460/0.215, mIoU 0.437, about 1.3x video duration
 processing time on an RTX 3070 Laptop 8 GB (details: `video_grounding/docs/EVALUATION.md`). These numbers use
-`min_event_score` 0.9; a re-run with the new default 0.5 is in progress (offline estimate: recall 0.771).
-Gemini verification stays off by default. The Qwen2.5-VL comparator row above is not implemented.
+`min_event_score` 0.9; the default is now 0.5 (lowered 2026-11-16). Re-fusing the stored predictions at 0.5 gives
+recall 0.771, precision 0.738 (EVALUATION.md); a validation run at 0.5 is in progress. All three SPEC targets are
+missed on Charades-STA at 0.9. <!-- m05 numbers: add the 0.5 validation-run results here when available -->
+Gemini verification is off in the product adapter: on Charades-STA it removed 37 of 171 false events and cost recall.
+The Qwen2.5-VL comparator row above is not implemented (stub only).
 
 ## 6. Gemini API operations and security
 
@@ -106,7 +109,11 @@ Gemini verification stays off by default. The Qwen2.5-VL comparator row above is
 development-only and results cannot be redistributed; MEVA (CC-BY-4.0) is the safest for demos. The customer's
 own footage (with permission) is the only fully realistic test for their domains.
 
-## 8. Evaluation protocol (not yet executed)
+## 8. Evaluation protocol
+
+Charades-STA (300 videos, 822 queries) has been run with `video-grounding eval` (§5.1; results in
+`video_grounding/docs/EVALUATION.md`). The table below is the protocol for project footage and is **not yet
+executed**.
 
 | Item | Definition |
 |---|---|
@@ -120,9 +127,9 @@ own footage (with permission) is the only fully realistic test for their domains
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| No written approval for cloud API on face videos | Blocks API detector | Use test footage; self-hosted VideoJev for customer data |
-| Gemini timestamps are guesses, not grounding | Bad candidates | Measure on Charades-STA; validate JSON; keep human review mandatory |
-| VideoJev-4B does not fit 12 GB / card facts wrong | Rework | Verify card + quantised run in Sprint 3; Qwen3B/SmolVLM2 fallback |
+| No written approval for cloud API on face videos | Blocks the Gemini verify stage only (off in the adapter); detection is self-hosted | Keep verify off; self-hosted VideoJev for customer data |
+| Gemini timestamps are guesses, not grounding | Bad candidates | Gemini is used only as yes/no verify, not for timestamps; measured on Charades-STA; human review mandatory |
+| VideoJev-4B misses KPI targets on product footage | Rework | Charades-STA already misses SPEC targets (EVALUATION.md); product-footage run pending; human review mandatory |
 | Test-dataset licences non-commercial | Cannot publish results | Clarify with customer; use MEVA for demos |
 | Key expiry/leak | Operational and security incident | Secure channel, env vars, rotation, never commit |
 | KPI targets unconfirmed | Cannot declare success | Confirm on 13 Nov |

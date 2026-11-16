@@ -3,10 +3,16 @@
 **Type:** living artifact · **Owner:** Scrum Master (role placeholder) · **Created:** 2026-11-15 (draft)
 **Sprint goal:** *By 2026-11-29, a user can sign in with a global role, see only assigned datasets, run one
 prompt over all videos of a dataset, review candidates across videos, and export OpenLABEL-based JSON — with a
-real detector (Gemini or self-hosted) measured on a public test set.*
+real detector (self-hosted VideoJev-4B; Gemini as an optional verify stage) measured on a public test set.*
 
 **Capacity:** still **UNKNOWN** (no declared availability). Estimates are provisional story points, not hours.
 Target 80–85 % of declared capacity once the table is filled.
+
+> **Status note 2026-11-16 (detector work):** the plan above is unchanged. The real detector is VideoJev-4B
+> through the `videojev` adapter ([ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md)), not
+> Gemini; Gemini exists only as an optional engine verify stage, off in the adapter. S3-11 is superseded,
+> S3-12 is done (Charades-STA only), S3-13 is partly done (engine `eval` CLI). Charades-STA results miss the
+> SPEC targets (`video_grounding/docs/EVALUATION.md`); the real-model smoke on the RTX 3070 laptop is pending.
 
 ## 1. Committed scope (Must)
 
@@ -22,9 +28,9 @@ Target 80–85 % of declared capacity once the table is filled.
 | S3-08 | UI: datasets list/detail, upload, search launch, search history | DS-1…3, PR-1 | 8 | Frontend | Reuse upload component |
 | S3-09 | Cross-video review list, accepted/rejected vocabulary, review flags | REV-1…4 | 5 | Frontend | Pagination |
 | S3-10 | OpenLABEL-based JSON export (multi-interval) + async job | EXP-1 | 8 | Backend | Schema confirmed with customer |
-| S3-11 | Gemini adapter: `GroundingBackend`, quota guard, retry, JSON validation | DET-1, NFR-6 | 8 | ML | Test footage only until approval |
-| S3-12 | Test-data ingestion (Charades-STA subset) + licence check | NFR-5 | 5 | ML | Non-commercial caveat |
-| S3-13 | KPI harness: recall, R@IoU, complete clip, boundary adjustment | NFR-5 | 5 | ML | First measurements |
+| S3-11 | Gemini adapter: `GroundingBackend`, quota guard, retry, JSON validation | DET-1, NFR-6 | 8 | ML | **Superseded 2026-11-16** by the `videojev` adapter (ADR-0007). Gemini is only the engine's optional verify stage (off in the adapter); privacy approval R-20 matters only if verify is on |
+| S3-12 | Test-data ingestion (Charades-STA subset) + licence check | NFR-5 | 5 | ML | Done 2026-11-16 (Charades-STA only). Non-commercial caveat |
+| S3-13 | KPI harness: recall, R@IoU, complete clip, boundary adjustment | NFR-5 | 5 | ML | First measurements done 2026-11-16 (engine `eval` CLI, Charades-STA); reviewer boundary-adjustment KPI not built |
 | S3-14 | Alpha deck + evidence + upload checklist | D-19 | 5 | Scrum Master | Upload 2026-11-30 |
 | S3-15 | Carry-over: validate a real 10–30 min video | NFR-4 | 3 | QA | From Sprint 2 |
 | S3-16 | Integration tests: auth, permissions, dataset scoping | NFR-11…14 | 5 | QA | Security-critical |
@@ -42,9 +48,9 @@ the detector or JSON schema is blocked.
 | Wed 18 Nov | RBAC middleware; dataset entity migration | two roles enforced |
 | Thu 19 Nov | Search entity + fan-out; UI login | sign-in works end-to-end |
 | Fri 20 Nov | Invitations; dataset UI; real-video validation | invite → sign-in works |
-| Mon 23 Nov | JSON export v1; Gemini adapter spike | first JSON export |
+| Mon 23 Nov | JSON export v1; real-model smoke on the 8 GB laptop (replaces the Gemini adapter spike) | first JSON export |
 | Tue 24 Nov | Cross-video review; review flags | one list across videos |
-| Wed 25 Nov | Gemini measurement on Charades-STA; KPI harness | first KPI numbers |
+| Wed 25 Nov | KPI harness; product-footage run (Charades-STA already measured 2026-11-16) | KPI numbers on product footage |
 | Thu 26 Nov | Integration tests; fix defects | tests green |
 | Fri 27 Nov | Alpha deck draft; limitations documented | deck source ready |
 | Sat 28 Nov | **No work assumed** | — |
@@ -57,7 +63,7 @@ the detector or JSON schema is blocked.
 - [ ] Search over all videos of a dataset returns candidates
 - [ ] Review across videos with accept/reject and final timestamps
 - [ ] JSON export with intervals and provenance
-- [ ] Real detector measured on a public test set (or documented blocker)
+- [ ] Real detector measured on a public test set (or documented blocker) — VideoJev-4B measured on Charades-STA 2026-11-16, below SPEC targets
 - [ ] Alpha deck ready for upload by 2026-11-30 23:59
 - [ ] Limitations explicit; no fabricated metrics
 
@@ -66,14 +72,14 @@ the detector or JSON schema is blocked.
 | Dependency | Owner | Needed by |
 |---|---|---|
 | Client answers: privacy, reviewer, dataset meaning, JSON fields | Product Owner | 2026-11-17 |
-| Gemini key status + privacy approval | Backend owner | 2026-11-18 |
-| Compute decision (12 GB laptop / GPU / API) | Architect + supervisors | 2026-11-19 |
+| Privacy approval for Gemini (only if verify is turned on; not needed for the self-hosted detector) | Backend owner | 2026-11-18 |
+| Compute decision (12 GB laptop / GPU / API); VideoJev-4B already runs on an 8 GB laptop with offload, slowly | Architect + supervisors | 2026-11-19 |
 | Team capacity and roles | Scrum Master | 2026-11-16 |
 | Official guidelines files (401 wall) | Team member with AAI | 2026-11-16 |
 | Customer's OpenLABEL example | Product Owner | 2026-11-18 |
 
 ## 5. Notes
 
-- Mock stays the CI default even after Gemini is integrated: tests must run without network or GPU.
+- Mock stays the CI default even with the `videojev` adapter integrated: tests must run without network or GPU.
 - Every delivered PDF must be generated from repository Markdown (Sprint 2 retro action A-6).
 - Do not start optional features (summaries, semantic search, multi-model UI) before the Alpha gate.

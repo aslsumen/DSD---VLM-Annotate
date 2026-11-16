@@ -12,7 +12,7 @@ VLM Annotate 的零样本事件定位引擎：输入视频和事件描述，输�
 ```
 
 - **VideoJev-4B**：定位一个或多个事件时间段。支持多提示词、断点恢复和显存不足时降帧重试。
-- **Gemini**：已经集成。对精筛后的候选片段进行 yes/no 核验；当前适配器调用 Decisions API，配置模型为 `gemini-decision-1`。否定结果进入审计记录；核验失败的候选保留并标记待人工复核（复核在后端完成）。
+- **Gemini 核验（可选）**：在精筛之后、导出之前对候选片段做 yes/no 核验，调用 Decisions API，配置模型为 `gemini-decision-1`。否定结果进入审计记录；核验失败的候选保留并标记待人工复核。`default.yaml` 和 `rtx3070.yaml` 默认开启，但**产品适配器中关闭**（`verify.enabled=false`）：在 Charades-STA 上它只剔除了 171 个错误事件中的 37 个，并损失召回（见 [评测记录](docs/EVALUATION.md)）；由人工复核代替，素材也不出本机。
 - Qwen3-VL-4B 独立核验实验不属于当前产品流程，无须下载其模型。VideoJev 自身使用的处理器与依赖仍需保留。
 
 ## 文档导航

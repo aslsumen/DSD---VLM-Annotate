@@ -2,9 +2,12 @@
 
 **Applies to:** Sprint 2 vertical slice (2026-11-05) · **UI:** desktop and mobile browser
 
-> **Current limitation — read before demoing.** Candidate intervals are produced by the **mock adapter**:
-> a deterministic generator that does *not* look at the video pixels. The UI shows a MOCK banner on such
-> jobs and the exported manifest marks them. Real VLM inference is scheduled for the Alpha sprint.
+> **Current limitation — read before demoing.** By default, candidate intervals are produced by the **mock
+> adapter**: a deterministic generator that does *not* look at the video pixels. The UI shows a MOCK banner on
+> such jobs and the exported manifest marks them. A real detector, the `videojev` adapter (VideoJev-4B), is
+> available on a worker configured with a GPU ([INSTALLATION_MANUAL.md](INSTALLATION_MANUAL.md) §5.1). It is
+> integrated, but not yet validated on product footage, and it is slow on an 8 GB laptop (about 1.3x the video
+> duration on Charades-STA, 2026-11-16). With it, review every candidate: quality on public data is below target.
 
 ## 1. What you can do
 
@@ -87,7 +90,7 @@ Open **Review** for a succeeded job.
 The counter shows how many candidates remain unreviewed. **An unreviewed candidate is not a negative**; it is
 simply not part of a verified dataset yet.
 
-If the job used the mock adapter, a banner states that no pixels were analysed.
+If the job used the mock adapter, a banner states that no pixels were analysed. Jobs from the `videojev` adapter have no such banner; their candidates may be zero for a video (the action does not occur) or many (all events are kept, best score first).
 
 ## 8. Export a dataset
 
@@ -109,7 +112,8 @@ include unreviewed items.
 
 | Limitation | Effect | Planned |
 |---|---|---|
-| Mock candidate generation | Intervals are plausible but arbitrary | Real VLM in Alpha (Sprint 3) |
+| Mock candidate generation (default adapter) | Intervals are plausible but arbitrary | Use the `videojev` adapter on a GPU worker; real-model smoke and product-footage validation pending |
+| Real detector quality | Below target on Charades-STA (recall 0.690 vs 0.85 target; short events missed most) | Human review of every candidate; validation on product footage |
 | Single worker | One long job delays others | Parallel workers with PostgreSQL (later) |
 | No multi-user accounts | One shared optional token | Deferred (OPT-06) |
 | No bulk review | One label at a time | Deferred (OPT-05) |

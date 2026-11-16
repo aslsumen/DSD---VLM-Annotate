@@ -25,7 +25,7 @@ flowchart LR
     API["FastAPI backend<br/>auth/RBAC · uploads · searches · exports"]
     Q[("Redis<br/>Celery broker")]
     W["Celery workers<br/>1 job per video"]
-    E["Detection engine service<br/>VideoJev-4B / Gemini adapter"]
+    E["Detection engine (library)<br/>VideoJev-4B, optional Gemini verify"]
     DB[("PostgreSQL<br/>users · datasets · searches · candidates")]
     S[("Object storage<br/>videos · clips · exports")]
     M["Email service<br/>invitations · resets"]
@@ -34,7 +34,7 @@ flowchart LR
     API --> DB
     API -- "enqueue" --> Q
     Q --> W
-    W -- "HTTP job" --> E
+    W -- "in-process call" --> E
     W --> DB
     W --> S
     API -- "signed URLs" --> S
@@ -46,13 +46,14 @@ flowchart LR
 | SPA | Sign-in, invitation acceptance, dataset pages, upload with progress, search launch, cross-video review, export, user management |
 | API | Authentication, RBAC + dataset scoping, upload registration, search/export job creation, polling, signed media links |
 | Queue/workers | Fan out one detection job per video; aggregate search state; persist candidates; cut preview clips |
-| Detection engine | Windowed grounding, fusion, completeness flags, clip export, resume, KPI computation |
+| Detection engine | `video_grounding/` library: windowed grounding, fusion, completeness flags, resume, optional clip export and Gemini verify, KPI evaluation CLI. Runs in the worker process; no HTTP server |
 | PostgreSQL | Metadata, users, assignments, searches, candidates, review state |
 | Object storage | Source videos, preview clips, JSON/clip export artifacts |
 | Email | Invitations (48 h single-use) and password resets |
 
 **Deployment:** Docker Compose on a single host (API, workers, Redis, PostgreSQL, MinIO, engine with GPU
-profile, web build). The engine can also run on a separate GPU machine.
+profile, web build). The engine is a library loaded by the GPU worker; splitting it into a separate service is
+not built (see §4).
 
 ## 3. Current repository (verified 2026-11-12)
 
@@ -96,7 +97,7 @@ flowchart LR
   per worker. `POST /projects/{id}/actions/{id}/jobs` queues one job per video.
 - Export is a ZIP with `manifest.json` + `labels.csv` + clips (not OpenLABEL JSON).
 
-**Tests:** 80 backend (pytest), 21 UI (vitest), real-ffmpeg smoke 26/26; real-model `scripts/smoke_videojev.py` (GPU host).
+**Tests:** 80 backend (pytest), 21 UI (vitest), real-ffmpeg smoke 26/26; adapter tests use a fake engine (`backend/tests/test_videojev.py`), the engine has its own tests (`video_grounding/tests`); real-model `scripts/smoke_videojev.py` on the RTX 3070 laptop is pending (2026-11-16).
 
 ## 4. Gap and migration plan
 
@@ -117,8 +118,8 @@ flowchart LR
 
 1. `POST /api/datasets/{id}/searches` validates access and creates `Search(status=queued)`.
 2. API enqueues one job per video (Celery) and returns `202 {search_id}`.
-3. A worker posts each video to the engine (`POST /v1/jobs`), polls, receives events, writes candidates and
-   preview clips.
+3. A worker calls the engine in-process for each video (`videojev` adapter; progress callback updates the job),
+   receives events, writes candidates and cuts preview clips.
 4. Search state aggregates child jobs; partial failures are reported per video (NFR-9).
 5. The client polls `GET /api/searches/{id}`.
 
@@ -141,7 +142,7 @@ download URL.
 | Engine unavailable / model OOM | Job retried with fewer frames (ENG-11); after retries, per-video failure reported; search completes partially |
 | Window failure | Window marked coverage gap; search flags it (ENG-4) |
 | Worker crash | Job journal resumes finished windows (ENG-9); search can be retried |
-| API rate limit (Gemini 429) | Exponential backoff with a daily budget guard |
+| API rate limit (Gemini 429) | Only if engine verify is on (off in the `videojev` adapter); exponential backoff with a daily budget guard |
 | Upload invalid | 4xx with error envelope; file not retained |
 | Session expiry during review | Client keeps unsaved edits and replays after re-authentication (NFR-13) |
 

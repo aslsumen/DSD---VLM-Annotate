@@ -40,7 +40,7 @@ npm run build          # then reload http://127.0.0.1:8000
 ## Verify the build
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest backend -q                 # 56 tests
+.\.venv\Scripts\python.exe -m pytest backend -q                 # 80 tests
 .\.venv\Scripts\python.exe -m ruff check backend\app backend\tests
 .\.venv\Scripts\python.exe scripts\smoke_e2e.py                 # real ffmpeg, 26/26 checks
 cd frontend; npm run build; npm test
@@ -59,7 +59,7 @@ cd frontend; npm run build; npm test
 | Dataset export: manifest, labels.csv, clips, provenance | Working, tested |
 | Responsive web UI | Working — build + 21 unit tests + a headless-Chrome end-to-end pass (reported, not committed as a test) |
 | **Real VLM inference** | **Integrated, not yet validated on product footage** — `videojev` adapter (VideoJev-4B, worker GPU); mock stays the default |
-| 10–30 minute real footage validation | Not yet (planned 2026-11-13) |
+| 10–30 minute real footage validation | Not yet; real-model smoke on the 8 GB laptop pending (2026-11-16) |
 
 ## Repository map
 
@@ -70,7 +70,7 @@ backend/
     services/          storage, media (ffmpeg), pipeline (queue/export)
     adapters/          VLMAdapter boundary: mock, videojev (real), Qwen2.5-VL (stub)
   alembic/             database migrations (initial schema verified)
-  tests/               56 pytest tests
+  tests/               80 pytest tests
 frontend/              React + TypeScript + Vite UI
 video_grounding/       zero-shot grounding engine (VideoJev-4B), see video_grounding/README.md
 presentations/         versioned decks (PPTX + editable Markdown source)
@@ -78,13 +78,13 @@ presentations/         versioned decks (PPTX + editable Markdown source)
   deckbuild.py         renders content -> Markdown + PPTX
 docs/
   course/              calendar, deliverables register, guidelines checklist
-  decisions/           ADRs 0001–0006
+  decisions/           ADRs 0001–0007
   weekly-reports/      week-by-week factual reports
   sprint-reviews/      review + retrospective sources
   evidence/            real smoke-test JSON evidence
   *.md                 requirements, design, architecture, API, schema,
                        model evaluation, test plan, manuals, risks, backlogs
-scripts/               smoke_e2e.py, render_burndown.py
+scripts/               smoke_e2e.py, smoke_videojev.py (real model, GPU host), render_burndown.py
 ```
 
 ## Design in one minute
@@ -107,9 +107,9 @@ Read more: [Architecture](docs/ARCHITECTURE.md) · [Design Description](docs/DES
 ## Status
 
 Sprint 2 closed on **2026-11-15**. The increment is a runnable, tested **technical prototype** with mock
-candidates — accounts, global roles, datasets, searches and OpenLABEL JSON are the Sprint 3 scope. Real
-inference runs through the `videojev` adapter (VideoJev-4B, measured on Charades-STA only; see
-[MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md)).
+candidates — accounts, global roles, datasets, searches and OpenLABEL JSON are the Sprint 3 scope. The
+real detector is the opt-in `videojev` adapter (VideoJev-4B; measured on Charades-STA only, below the SPEC targets;
+see [MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md)).
 
 Course artifacts are tracked in [docs/course/DSD_DELIVERABLES_REGISTER.md](docs/course/DSD_DELIVERABLES_REGISTER.md).
 Known gap: the official `Guidelines (SCRUM, Presentations)` files are behind a FER login wall, so decks are
