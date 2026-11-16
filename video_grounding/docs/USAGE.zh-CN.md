@@ -126,6 +126,8 @@ Gemini 接收重编码后的事件片段（含前后留白），不是 VideoJev 
 
 真值标注格式为 `{"events":[{"query_id":"open_door","start_sec":12.5,"end_sec":18.0}]}`，时间使用原视频秒数。`eval` 输出时间 IoU 召回。
 
+准确率基准脚本在 `scripts/` 下：`composite_bench.py`（留出的 YouCook2 与 BDD-X 复合视频，主要准确率检查）和 `charades_sta.py`（仅作参考：VideoJev 的训练数据包含 Charades-STA）。方法与结果见 [EVALUATION.md](EVALUATION.md)。
+
 ## 输出、保留与清理
 
 | 文件 | 用途 |

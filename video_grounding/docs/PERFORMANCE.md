@@ -6,7 +6,7 @@ to CPU). Sampling is the `default.yaml` setting: coarse 1 fps / 32 frames, refin
 These numbers measure the offloaded 8 GB setup, not a reference GPU; CPU offload sets the speed, and a
 16 GB+ GPU with `reference_gpu` (no offload) would remove it (not measured).
 
-## Current: Charades-STA scan (2026-11-16)
+## Current: Charades-STA scan (2026-11-16, reference set)
 300 videos, 822 queries (2.7 per video), 2.5 h of video, 0 failed videos, `min_event_score` 0.5,
 verify on (method and results in [EVALUATION.md](EVALUATION.md)).
 

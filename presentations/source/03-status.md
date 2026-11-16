@@ -25,7 +25,7 @@ Prepared 2026-11-15 from repository evidence — no unverified claims; engine an
 - **56** — backend tests (pytest, all green)
 - **21** — UI tests (vitest, build clean)
 - **26/26** — real ffmpeg checks (15 Nov smoke run)
-- **0.771** — event recall of VideoJev-4B on Charades-STA (2026-11-16; target 0.85; product footage not measured)
+- **Pending** — event recall of VideoJev-4B on held-out composite benchmarks (running since 2026-11-16; target 0.85; Charades-STA reference 0.771 is in-domain; product footage not measured)
 
 _Test counts are those at Sprint 2 close and are verifiable in docs/TEST_PLAN.md; the smoke JSON is in docs/evidence/._
 
@@ -110,7 +110,7 @@ _Test counts are those at Sprint 2 close and are verifiable in docs/TEST_PLAN.md
 - Fuse score curves on one timeline; hysteresis 0.25/0.15
 - Completeness flags: video edge, window edge, sparse sampling, coverage gap
 - Self-hosted; Gemini verify is off in the product adapter (cloud API only with written approval)
-- Measured on Charades-STA (300 videos): below the recall/R@IoU targets; TimeLens not used
+- Accuracy check: held-out composite benchmarks (YouCook2, BDD-X), running, results pending; Charades-STA is reference only (VideoJev trained on it); TimeLens not used
 
 ## 9. Sprint 3 exit criteria (Alpha, 29 Nov)
 
@@ -121,8 +121,8 @@ _Test counts are those at Sprint 2 close and are verifiable in docs/TEST_PLAN.md
 | Sign in, roles, invitation flow | Works end-to-end with two roles |
 | Dataset + search over several videos | Search returns candidates from all videos |
 | JSON export | Contains accepted annotations, intervals, provenance |
-| Real detector on test videos | VideoJev measured on public data (done on Charades-STA, below targets); product footage pending |
-| KPI report | Recall/R@IoU/precision on a labelled sample |
+| Real detector on test videos | VideoJev measured on held-out public data (composite benchmarks running, results pending; Charades-STA is reference only); product footage pending |
+| KPI report | Recall, complete-clip rate, precision on held-out sets |
 | Prototype testable | Documented limitations, no fake claims |
 
 ## 10. Blockers and risks

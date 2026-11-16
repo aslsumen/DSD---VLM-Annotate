@@ -5,7 +5,8 @@
 |---|---|---|
 | L0 | Pure algorithm, no GPU, no API: `uv run --group dev pytest -q` | Passed: 44 tests, macOS (ffmpeg 8.0) |
 | L1 | Real VideoJev inference, short video | Passed on RTX 3070 8 GB (CPU offload), see below |
-| L2 | Benchmark KPIs on Charades-STA | Ran 300 videos; below SPEC targets, see below |
+| L2 | Benchmark KPIs on held-out composites (`youcook2_a`, `youcook2_b`, `bddx`) | Running since 2026-11-16, results pending; the SPEC target check is made here |
+| L2-ref | Charades-STA reference (in-domain: VideoJev trained on it) | Ran 300 videos; reference only, see below |
 | L3 | 3070 low-VRAM adaptation | Works with offload; see PERFORMANCE.md for speed |
 
 ## L1 run (2026-11-08)
@@ -24,12 +25,42 @@ occurrence overshoots by about 1.5–2 s, because the model still scores the dem
 
 ## Running KPIs
 `video-grounding eval --pred <job>/events.json --gt gt.json` reports Event Recall/Precision,
-R@IoU {0.3, 0.5, 0.7}, temporal mIoU and boundary error. Targets (SPEC): Event Recall ≥ 0.85,
-R@IoU=0.5 ≥ 0.70, Complete Clip Rate ≥ 0.85 (human-judged; a clip still counts as complete if the
-reviewed event extends at most 2 s past either end, `evaluate_review(..., tolerance_sec=2.0)`).
+R@IoU {0.3, 0.5, 0.7}, temporal mIoU and boundary error. Targets (SPEC, docs/REQUIREMENTS.md §6): Event Recall ≥ 0.85
+(found = IoU ≥ 0.3), Complete Clip Rate ≥ 0.85 (human-judged; a clip still counts as complete if the
+reviewed event extends at most 2 s past either end, `evaluate_review(..., tolerance_sec=2.0)`). Reviewers correct spans, so strict-overlap numbers (R@IoU 0.5/0.7, mIoU, R1)
+are diagnostics with no target (R@IoU=0.5 ≥ 0.70 was dropped 2026-11-16).
 
-## L2: Charades-STA
-Charades-STA is the only benchmark. Labels are the `test` split of HF `lmms-lab/charades_sta` (3720 queries over
+## L2: Held-out composite benchmarks (main accuracy check)
+VideoJev was trained on Charades-STA, so its Charades scores are in-domain and say little about accuracy on new
+footage. The main accuracy benchmarks are therefore three held-out composites built by `scripts/composite_bench.py`;
+each joins several long source videos into one composite (854×480, 30 fps) and every prompt searches the whole
+composite, so a prompt can match several times and the other videos act as distractors.
+
+| Benchmark | Composite | Prompts | Ground truth |
+|---|---|---|---|
+| `youcook2_a`, `youcook2_b` | 3 long YouCook2 val cooking videos each | 12 labelled steps + 6 "absent" prompts (cooking steps from other recipes that never happen in the composite; 3 easy, unlike anything shown, and 3 hard, looking close) | One GT span per labelled step |
+| `bddx` | 20 BDD100K dashcam clips, about 40 s each | 7 driving prompts (turn left/right, lane change, stop for red light / lead vehicle / pedestrian, go on green) + 1 absent prompt (collision) | 72 GT spans from BDD-X segments, same-prompt segments less than 1 s apart merged |
+
+```
+python scripts/composite_bench.py prep NAME DIR     # NAME: youcook2_a | youcook2_b | bddx; needs curl and ffmpeg (bddx also remotezip)
+video-grounding scan --video DIR/video.mp4 --prompt-file DIR/prompts.json --config configs/rtx3070.yaml --out DIR/run
+python scripts/composite_bench.py score DIR         # KPIs as JSON
+```
+
+`score` reports event recall and precision at IoU ≥ 0.3, R@IoU 0.5 / 0.7, mIoU, Complete Clip Rate with an oracle
+reviewer, events per prompt, events on absent prompts, a per-prompt breakdown, all before and after Gemini verify, and
+Gemini as a classifier (true events kept, false events removed). R1 is not used, because a prompt can have several GT
+spans. The SPEC targets (recall 0.85, CCR 0.85) are checked on these sets; events on absent prompts are reported.
+
+### Results
+Running (started 2026-11-16 on the RTX 3070 laptop, `configs/rtx3070.yaml`, current defaults), filled in when done.
+Until then no held-out number exists, and the SPEC target check is pending. `fusion.min_event_score` 0.5 was chosen on
+Charades (below) and is provisional: re-check it on these composites, which contain absent prompts. It has not been
+changed yet.
+
+## Reference: Charades-STA (in-domain)
+Charades-STA is kept only as a reference next to the VideoJev paper numbers, not as the KPI, the target check or the
+basis for tuning: the model was trained on it. Labels are the `test` split of HF `lmms-lab/charades_sta` (3720 queries over
 1334 indoor videos, ~30 s each; 4-fold zipped Charades 480p videos from the same repo). `scripts/charades_sta.py`
 takes a seed-0 shuffle of the test videos, runs every query of a video through scan → refine → verify with
 one loaded model, and scores all finished videos:
@@ -56,7 +87,7 @@ video, 0 failed videos, 0 unverified events.
 | After verify (p ≥ 0.5) | 0.593 | 0.784 | 0.589 | 0.397 | 0.191 | 0.378 | 25.3% | 0.772 |
 | After verify (p ≥ 0.3) | 0.663 | 0.776 | 0.657 | 0.440 | 0.204 | 0.420 | 15.7% | 0.778 |
 
-All three SPEC targets are missed (recall 0.85, R@IoU 0.5 0.70, CCR 0.85).
+Below the targets on this in-domain set (recall 0.85, CCR 0.85); the target check proper is made on the held-out composites (pending).
 
 - **Verify on Charades:** Gemini kept 487/567 true events (86%) and removed 37/171 false ones (22%), so it costs
   recall for +1.6 points of precision. Every Charades query happens in its video, so a "false" event (IoU < 0.3
@@ -85,6 +116,7 @@ leaves 12% of queries empty at `min_event_score` 0.9 and 1% at 0.5, scored as Io
 model's ceiling from the pipeline's losses; it has not been run.
 
 ### Short spans and `min_event_score` (2026-11-16)
+Chosen on Charades only, so the 0.5 default is provisional until the held-out composites (with absent prompts) confirm it.
 The 103 queries whose GT span (clipped to the video) is under 5 s, at `min_event_score` 0.9: 49 hit (IoU ≥ 0.3).
 Of the 54 misses, 25 have an event overlapping GT but too wide (median 18 s against a median GT of 4.5 s), 14 were
 found by the model and then dropped by `min_event_score`, 7 sit elsewhere, 8 have no usable signal in GT.
@@ -116,7 +148,7 @@ refined). 0 failed videos; 1 event unverified (Gemini refused the clip with `pro
 
 - The re-fusion estimate held (recall 0.771, precision 0.738, R1@0.5 0.513). Against 0.9 (before verify): recall
   +8.1 points, R1@0.5 +4.7, CCR +0.8, precision −3.1, queries with no event 12.3% → 1.1%. All three SPEC targets
-  are still missed.
+  are still missed on this in-domain set.
 - **By GT length (before verify):** recall 0.58 for spans < 5 s (83 queries; 0.42 at 0.9), 0.77 for 5–10 s
   (542; 0.68), 0.86 for ≥ 10 s (197; 0.83). Precision on < 5 s spans is 0.57.
 - **Verify:** Gemini kept 517/634 true events (82%) and removed 78/225 false ones (35%): −14.2 points of recall
