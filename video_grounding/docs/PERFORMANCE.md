@@ -7,19 +7,21 @@ These numbers measure the offloaded 8 GB setup, not a reference GPU; CPU offload
 16 GB+ GPU with `reference_gpu` (no offload) would remove it (not measured).
 
 ## Current: Charades-STA scan (2026-11-16)
-300 videos, 822 queries, 2.5 h of video, 0 failed videos; `min_event_score` was 0.9 at the time of the
-run and verify was on (method and results in [EVALUATION.md](EVALUATION.md)).
+300 videos, 822 queries (2.7 per video), 2.5 h of video, 0 failed videos, `min_event_score` 0.5,
+verify on (method and results in [EVALUATION.md](EVALUATION.md)).
 
 | Stage | Seconds per ~30 s video |
 |---|---|
-| Coarse scan | 8.8 |
-| Refine | 9.2 |
-| Gemini verify | 2.9 |
-| Export | 1.3 |
-| **Total** | **22.6 (1.3× real time)** |
+| Coarse scan | 8.9 |
+| Refine | 10.9 |
+| Gemini verify | 3.8 |
+| Export | 1.5 |
+| **Total** | **25.0 (about 0.84× the video duration)** |
 
 The product adapter turns verify and clip export off, so its per-video time is the scan and refine
-part only. A product-footage timing on this host is not measured yet (`scripts/smoke_videojev.py` is
+part only: 19.8 s, about 0.66× the video duration. Videos longer than Charades' ~30 s are not
+measured; coarse windows grow linearly with length, refine with the number of kept events. At
+`min_event_score` 0.9 the same run took 22.6 s (refine 9.2 s, fewer events kept). A product-footage timing on this host is not measured yet (`scripts/smoke_videojev.py` is
 pending). Going from the old sampling (0.5 fps / 16 frames coarse, 1 fps / 32 frames refine) to the
 current one raised scan + refine from 14.8 s to 21.4 s per video on a 56-video subset (EVALUATION.md).
 

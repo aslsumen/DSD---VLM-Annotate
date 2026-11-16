@@ -25,7 +25,7 @@ Prepared 2026-11-15 from repository evidence — no unverified claims; engine an
 - **56** — backend tests (pytest, all green)
 - **21** — UI tests (vitest, build clean)
 - **26/26** — real ffmpeg checks (15 Nov smoke run)
-- **0.690** — event recall of VideoJev-4B on Charades-STA (2026-11-16; target 0.85); nothing measured on product footage yet
+- **0.771** — event recall of VideoJev-4B on Charades-STA (2026-11-16; target 0.85; product footage not measured)
 
 _Test counts are those at Sprint 2 close and are verifiable in docs/TEST_PLAN.md; the smoke JSON is in docs/evidence/._
 
@@ -134,7 +134,7 @@ _Test counts are those at Sprint 2 close and are verifiable in docs/TEST_PLAN.md
 | No privacy approval for Gemini on face videos | Gemini verify is off in the adapter; detection is self-hosted |
 | Gemini key expired/leaked | Matters only if verify is on; env var only |
 | OpenLABEL example still missing | Send schema proposal by 17 Nov; confirm before coding |
-| 12 GB vs 24 GB VRAM | VideoJev-4B runs on an 8 GB laptop with CPU offload, about 1.3x video duration; slow |
+| 12 GB vs 24 GB VRAM | VideoJev-4B runs on an 8 GB laptop with CPU offload, about 0.66× the video duration |
 | No capacity data | Fill table before Sprint 3 planning |
 
 ## 11. Decisions and dates

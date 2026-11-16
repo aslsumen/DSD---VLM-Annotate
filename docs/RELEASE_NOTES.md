@@ -22,9 +22,10 @@ Development snapshot after v0.2.0-dev; not a course release.
 ### Known limitations
 
 - Real-model smoke on the RTX 3070 laptop is pending; not validated on product footage.
-- Measured on Charades-STA only, below the SPEC targets (recall 0.690 vs 0.85 at `min_event_score` 0.9;
-  `video_grounding/docs/EVALUATION.md`). Validation at 0.5 in progress. <!-- m05 numbers: add here -->
-- About 1.3x the video duration on an 8 GB laptop with CPU offload.
+- Measured on Charades-STA only, below the SPEC targets (recall 0.771 vs 0.85, R1@0.5 0.507 vs 0.70 at
+  `min_event_score` 0.5; `video_grounding/docs/EVALUATION.md`).
+- About 0.66× the video duration on an 8 GB laptop with CPU offload (Charades-STA, ~30 s videos; longer
+  videos not measured).
 
 ## v0.2.0-dev — Sprint 2 vertical slice (2026-11-05)
 
