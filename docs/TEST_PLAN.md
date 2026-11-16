@@ -16,7 +16,7 @@
 | Acceptance | Course acceptance test cases | see Acceptance Test Plan (Dec) | Sprint 6 |
 
 **Out of scope for this plan:** load/performance testing, penetration testing, multi-browser matrix,
-real-model accuracy (handled by the model evaluation protocol), accessibility certification.
+real-model accuracy (handled by the model evaluation protocol and `video_grounding/docs/EVALUATION.md`), accessibility certification.
 
 ## 2. How to run
 
@@ -39,6 +39,8 @@ cd frontend; npm ci; npm run build; npm test
 | End-to-end flow | `backend/tests/test_flow.py` | FR-08, FR-14…FR-26 | 6 |
 | Worker/retry | `backend/tests/test_worker.py` | FR-09…FR-13 | 9 |
 | Security/adapters | `backend/tests/test_security.py` | FR-28, FR-21, adapter gating | 4 |
+| VideoJev adapter | `backend/tests/test_videojev.py` (fake engine, no torch) | exhaustive pipeline, batch endpoint, resume, cancel | added 2026-11-16 |
+| Heartbeat lease | `backend/tests/test_lease.py` | PB-28 / R-07 | added 2026-11-16 |
 | Frontend unit | `frontend/src/lib/format.test.ts` | timestamp formatting | see frontend report |
 
 ## 4. Coverage of the riskiest behaviours
@@ -70,6 +72,8 @@ cd frontend; npm ci; npm run build; npm test
 | Live server probe | `uvicorn` on :8010 | **PASS** — `/health` ok, `/` 200 HTML, `/api/v1/projects` 200, `/api/docs` 200 |
 | **Re-verification at Sprint 2 close (2026-11-15)** | pytest, `npm test`, smoke | **PASS** — 56 backend, 21 UI, 26/26 smoke; evidence `docs/evidence/smoke-e2e-20261115-180704.json` |
 
+> Results above are the Sprint 2 baseline (2026-11-05/15). Since then the backend suite grew to 80 tests (`test_videojev.py`, `test_lease.py`; 2026-11-16, not re-run for this document). The engine has its own suite (`video_grounding/tests`, 44 tests on macOS at the last count in `EVALUATION.md`).
+
 > Warnings are reported, not hidden: `StarletteDeprecationWarning: Using httpx with starlette.testclient is
 > deprecated` comes from FastAPI 0.162 / Starlette 1.10 and does not affect application behaviour.
 
@@ -86,7 +90,7 @@ video playback (`<video>` cannot send the bearer header — R-18).
 | No real 10–30 min video processed | NFR-02 claims unproven | S2-17 by 2026-11-13 |
 | Browser E2E is not committed as a repeatable test | Regressions can slip | Add Playwright in Sprint 4 (PB-42) |
 | Retry/cancel/zip-download not browser-tested | Lower confidence in edge paths | Manual pass before 2026-11-15 gate |
-| Real VLM inference untested | Core value unproven | Sprint 3 Alpha gate, measured evidence |
+| Real-model run on the project laptop and on product footage not done | Core value unproven on product data. 2026-11-16: `videojev` adapter integrated, adapter tests use a fake engine; the engine was measured on Charades-STA only (below KPI targets, `video_grounding/docs/EVALUATION.md`); `scripts/smoke_videojev.py` on the RTX 3070 laptop pending | Sprint 3 Alpha gate, measured evidence |
 | No load/concurrency test | Single-worker assumption undocumented | Documented; revisit with Postgres |
 | Postgres untested | Portability claim | Add CI job when deployment needs it |
 | Token mode breaks media playback (R-18) | Cannot deploy protected | Signed media URLs (PB-41) before any protected deployment |

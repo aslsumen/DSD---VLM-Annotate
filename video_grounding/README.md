@@ -12,7 +12,7 @@ Video + prompts → probe → VideoJev coarse scan → candidate fusion → Vide
 ```
 
 - **VideoJev-4B** locates one or more event intervals. Supports multiple prompts, resumable jobs, and frame-count downgrades after GPU out-of-memory errors.
-- **Gemini is integrated**, after refinement and before export. The current adapter uses the Decisions API with `gemini-decision-1`. Negative verdicts go into an audit list; candidates that could not be verified are kept and flagged for human review (done in the backend).
+- **Gemini verification is optional.** It runs after refinement and before export, using the Decisions API with `gemini-decision-1`. Negative verdicts go into an audit list; candidates that could not be verified are kept and flagged for human review. It is on in `default.yaml` and `rtx3070.yaml` but **off in the product adapter** (`verify.enabled=false`): on Charades-STA it removed 37 of 171 false events and cost recall (see [Evaluation](docs/EVALUATION.md)); the human reviewer takes its place and no footage leaves the machine.
 - The standalone Qwen3-VL-4B verifier experiment is not part of the current pipeline; its model is not required. VideoJev's own processor and dependencies are still required.
 
 ## Documentation

@@ -3,8 +3,9 @@
 Use this for the Requirements & Design presentation (2026-11-10) and any supervisor demo. It assumes the
 Windows setup from [INSTALLATION_MANUAL.md](INSTALLATION_MANUAL.md).
 
-> The current build uses the **mock adapter**. Say so at the start. The demo proves the pipeline, the review
-> contract and the export — not model accuracy.
+> The default build uses the **mock adapter**. Say so at the start. The demo proves the pipeline, the review
+> contract and the export — not model accuracy. The real `videojev` adapter (VideoJev-4B) is available on a GPU
+> worker (see "Real model path" below) but is not validated on product footage; do not claim accuracy.
 
 ## 1. Pre-flight (10 minutes before)
 
@@ -48,6 +49,13 @@ Checklist:
 9. Open the ZIP: `manifest.json` (proposal/preview/corrected/final), `labels.csv`, a clip that plays.
    Show `provenance.mock = true`.
 
+### Real model path (optional, GPU worker)
+
+Start the worker as in [INSTALLATION_MANUAL.md](INSTALLATION_MANUAL.md) §5.1 (`VLM_VLM_ADAPTER=videojev`,
+`VLM_VIDEOJEV_CONFIG=video_grounding/configs/rtx3070.yaml` on an 8 GB laptop), then run steps 1-9 with a short clip.
+Expect minutes per video on 8 GB, no MOCK banner, `provenance.mock = false`, and 0..n candidates per video. Run it
+once before presenting; the real-model smoke (`scripts/smoke_videojev.py`) is still pending on the project laptop.
+
 ## 3. Plan B — prepared fallback
 
 If the live flow fails (worker crash, ffmpeg issue, browser problem):
@@ -82,7 +90,7 @@ Fill with real names only when the team supplies them:
 
 ## 6. Questions to expect
 
-- *"Is that a real model?"* → No; mock, labelled. Real inference is the Alpha gate with a measured plan.
-- *"Why 8 GB?"* → The dev laptop's GPU; 7B bf16 does not fit, hence windowing/3B/SmolVLM2.
+- *"Is that a real model?"* → Not in the mock demo (labelled). A real model, VideoJev-4B, is integrated as the `videojev` adapter and was measured on a public benchmark (Charades-STA) only, below target; validation on product footage is pending.
+- *"Why 8 GB?"* → The dev laptop's GPU; VideoJev-4B runs on it with CPU offload (slow, about 1.3x the video duration); 7B bf16 does not fit.
 - *"What if the model is wrong?"* → A human labels every candidate; the proposal is preserved separately.
 - *"Can two reviewers work at once?"* → Yes at the API level; the queue is single-worker today.

@@ -82,7 +82,11 @@ raw model output remains in `original_*`.
 Status: `queued | running | done | failed`. The artifact is the OpenLABEL-based JSON proposed in
 `DESIGN_DESCRIPTION.md` §9 (pending customer confirmation), optionally with clips.
 
-## 6. Engine service (internal, GPU host)
+## 6. Engine service (internal, GPU host) — not built
+
+> **Status 2026-11-16:** this HTTP service is not built and is no longer planned. The engine (`video_grounding/`) is a
+> library the worker calls in-process through the `videojev` adapter ([ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md));
+> its HTTP server was removed. The table is the earlier target design only.
 
 Not called by the browser. Worker → engine:
 
@@ -136,4 +140,4 @@ events is a successful job with an empty candidate list (the action does not occ
 adapters keep the cap (earliest 12 by start time) and fail a job that yields no candidates.
 
 Behavioural guarantees of that API (timestamps, unreviewed semantics, error envelope, range streaming) are
-tested by 56 pytest tests and are the part to carry into the new contract.
+tested by the pytest suite (56 tests at Sprint 2 close) and are the part to carry into the new contract.
