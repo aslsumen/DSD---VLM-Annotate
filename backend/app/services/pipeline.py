@@ -268,6 +268,7 @@ def _run_candidate_job(
         video.status = VideoStatus.ready
 
     duration = float(video.duration_seconds)
+    job.adapter_version = adapter.version
     job.progress = 0.05
     job.updated_at = _now()
     session.commit()

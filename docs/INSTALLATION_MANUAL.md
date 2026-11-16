@@ -131,11 +131,17 @@ Engine state per job is kept in
 `data/storage/engine/job-<id>/` and reused on retry; delete a job's directory to force a rescan. Gemini
 verification is off by default.
 
+To check a GPU host end to end with the real model (API and worker running, several minutes per video):
+
+```bash
+python scripts/smoke_videojev.py --base-url http://127.0.0.1:8000 --action "person opens a door" a.mp4 b.mp4
+```
+
 ## 6. Verify the installation
 
 ```powershell
 # automated checks
-.\.venv\Scripts\python.exe -m pytest backend -q            # expect 56 passed
+.\.venv\Scripts\python.exe -m pytest backend -q            # expect 69 passed
 .\.venv\Scripts\python.exe scripts\smoke_e2e.py            # expect 26/26 checks
 
 # ffmpeg diagnostics

@@ -122,7 +122,8 @@ Not called by the browser. Worker → engine:
 `202` with a list of `JobOut`. `video_ids` omitted/null means every `ready` video in the project; duplicates are
 ignored. Errors: `404` unknown project/action/video, `409 PROJECT_MISMATCH` (action or video in another
 project), `409 VIDEO_NOT_READY` (a listed video is not ready). An optional `Idempotency-Key` header is applied
-per video as `<key>:<video_id>`, so repeating the request returns the same jobs.
+per video as `<key>:<video_id>`, so repeating the request returns the same jobs. Keys longer than 100
+characters are rejected with `422` on both job endpoints (the column is 128 wide).
 
 **Exhaustive adapters.** An adapter that reports `exhaustive` (currently `videojev`) returns every event it
 finds: the `max_candidates_per_job` cap does not apply, candidates are ranked by score descending, and zero
