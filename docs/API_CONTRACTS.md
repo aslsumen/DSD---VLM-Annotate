@@ -1,0 +1,121 @@
+# API Contracts — v1.2 target
+
+**Date:** 2026-11-12 · **Base URL:** `/api` (target) · **Auth:** session/JWT (decision pending)
+**Implemented API today:** `/api/v1` with a different domain (see §9). The target below is what the MVP needs.
+
+> **As-built detail for the implemented prototype:** [docs/as-built/IMPLEMENTED_BASELINE_2026-11-05.md](as-built/IMPLEMENTED_BASELINE_2026-11-05.md).
+
+## 1. Conventions
+
+- JSON bodies; UTF-8; ISO-8601 UTC timestamps.
+- **Time unit:** seconds, relative to the source video, half-open `[start, end)`; UI displays `mm:ss`.
+- **Long operations return `202`** plus an id; clients poll the status endpoint.
+- **Pagination envelope** for lists:
+  ```json
+  {"items": [...], "total_items": 100, "current_page": 1, "page_size": 20}
+  ```
+- **Error envelope:** `{"code": "SNAKE_CASE", "message": "human readable", "details": {...}}`
+  with stable codes (`UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_ERROR`, `CONFLICT`,
+  `RATE_LIMITED`, `INTERNAL_ERROR`).
+- **Authorization:** every route checks the global role and dataset scope. Annotators can only read assigned
+  datasets and review their candidates; Dataset Administrators additionally manage their own datasets, upload,
+  define prompts, launch searches, invite users within their scope and export; Administrators can do everything.
+- **Media:** never public. The API issues short-lived signed URLs for playback/download.
+
+## 2. Authentication and accounts
+
+| Method | Endpoint | Body | Success | Notes |
+|---|---|---|---|---|
+| POST | `/api/auth/login` | `{email, password}` | 200 + session/token | Neutral error for unknown email or wrong password; 5 failures/15 min → 15 min block (NFR-14) |
+| POST | `/api/auth/logout` | — | 204 | Revokes the server-side session (NFR-12) |
+| POST | `/api/auth/refresh` | refresh token/cookie | 200 | Rotation; only while active (NFR-13) |
+| POST | `/api/auth/password-reset` | `{email}` | 202 | Always 202 (does not reveal account existence) |
+| POST | `/api/auth/password-reset/confirm` | `{token, password}` | 204 | Single-use token |
+| GET | `/api/me` | — | 200 `{id, email, full_name, role, organization, datasets[]}` | Used by route guards |
+| POST | `/api/users/invitations` | `{email, full_name, role, organization?, dataset_ids?}` | 201 `{id, expires_at}` | Admin, or Dataset Admin for datasets they manage (CE-2) |
+| POST | `/api/users/invitations/accept` | `{token, password, full_name?}` | 201 + session | Single-use, 48 h (NFR-11) |
+| GET | `/api/users` | `?role=&page=` | 200 paginated | Admin sees all; Dataset Admin sees annotators |
+| PATCH | `/api/users/{id}` | `{role?, status?, dataset_ids?}` | 200 | Role change, deactivation (USR-7), dataset assignment |
+
+## 3. Datasets and videos
+
+| Method | Endpoint | Body | Success |
+|---|---|---|---|
+| POST | `/api/datasets` | `{name, use_case}` | 201 `Dataset` |
+| GET | `/api/datasets` | `?page=` | 200 paginated (assigned only) |
+| GET | `/api/datasets/{id}` | — | 200 `{dataset, videos[], searches[]}` |
+| PATCH | `/api/datasets/{id}` | `{name?, use_case?, assigned_user_ids?}` | 200 |
+| DELETE | `/api/datasets/{id}` | — | 204 (cascade videos/searches/candidates/assignments) |
+| POST | `/api/datasets/{id}/videos` | multipart `file` (MP4, 720p/1080p, ≤5 min MVP / ≤30 min Should) | 201 `Video(status=ready)` after probe |
+| GET | `/api/datasets/{id}/videos` | `?page=` | 200 paginated |
+| GET | `/api/videos/{id}/playback-url` | — | 200 `{url, expires_at}` signed, short-lived |
+| GET | `/api/videos/{id}/stream` | `Range` | 200/206 (only if signed URL mode not used) |
+
+## 4. Searches and candidates
+
+| Method | Endpoint | Body | Success |
+|---|---|---|---|
+| POST | `/api/datasets/{id}/searches` | `{prompt, model_config_id?}` | **202** `{search_id}` |
+| GET | `/api/searches/{id}` | — | 200 `{id, status, progress, video_results[], error}` |
+| GET | `/api/datasets/{id}/searches` | `?page=` | 200 paginated (history/reuse) |
+| GET | `/api/searches/{id}/candidates` | `?video_id=&review_status=&min_confidence=&page=` | 200 paginated, all videos in one list |
+| GET | `/api/candidates/{id}` | — | 200 `Candidate` |
+| PATCH | `/api/candidates/{id}` | `{start_s?, end_s?, review_status, note?}` | 200 `Candidate` |
+
+**Search status:** `queued | running | done | failed`.
+**Candidate:** `{id, search_id, video_id, original_start_s, original_end_s, start_s, end_s, confidence,
+preview_url, review_status, reviewer_email, reviewed_at, needs_review, review_reasons[]}`.
+**Review status:** `pending | accepted | rejected`. Unreviewed (`pending`) is never exported as a negative.
+
+Validation: `0 ≤ start_s < end_s ≤ video.duration_s`; adjusted boundaries stored in `start_s`/`end_s`,
+raw model output remains in `original_*`.
+
+## 5. Export
+
+| Method | Endpoint | Body | Success |
+|---|---|---|---|
+| POST | `/api/exports` | `{dataset_id, search_id?, include_rejected?}` | **202** `{export_id}` |
+| GET | `/api/exports/{id}` | — | 200 `{status, item_count, size_bytes, download_url?}` |
+| GET | `/api/exports` | `?dataset_id=&page=` | 200 paginated history |
+| DELETE | `/api/exports/{id}` | — | 204 (not while running) |
+
+Status: `queued | running | done | failed`. The artifact is the OpenLABEL-based JSON proposed in
+`DESIGN_DESCRIPTION.md` §9 (pending customer confirmation), optionally with clips.
+
+## 6. Engine service (internal, GPU host)
+
+Not called by the browser. Worker → engine:
+
+| Method | Endpoint | Body/Result |
+|---|---|---|
+| POST | `/v1/jobs` | `{video, prompts:[{query_id,text}]}` → 202 `{job_id}` |
+| GET | `/v1/jobs/{id}` | `{state, progress, error, n_events}` |
+| GET | `/v1/jobs/{id}/events` | event list with times, flags, scores |
+| GET | `/v1/jobs/{id}/clips/{event_id}` | MP4 preview |
+| POST | `/v1/jobs/{id}/reviews` | review decisions for KPI computation |
+| POST | `/v1/jobs/{id}/retry` | resume a failed job |
+| GET | `/v1/health` | `{model_id, model_loaded, queue_length}` |
+
+## 7. Health and operations
+
+`GET /api/health` → `{status, version, database, engine, queue}` (liveness/readiness for NFR-10).
+
+## 8. Compatibility and versioning
+
+- Target paths are `/api/...`; the implemented API is `/api/v1/...`. During migration, `/api/v1` is frozen and
+  the new contract is added behind `/api/v2` or directly under `/api` with a version header. Decide in Sprint 3.
+- Additive fields are allowed; enum changes require a version bump; OpenAPI is generated from Pydantic models.
+
+## 9. Implemented API today (frozen reference)
+
+| Area | Endpoints |
+|---|---|
+| Projects/actions | `POST/GET /api/v1/projects`, `GET/PATCH/DELETE /api/v1/projects/{id}`, `POST/GET /api/v1/projects/{id}/actions` |
+| Videos | `POST/GET /api/v1/projects/{id}/videos`, `GET/DELETE /api/v1/videos/{id}`, `GET /api/v1/videos/{id}/stream` |
+| Jobs | `POST /api/v1/videos/{id}/jobs`, `GET /api/v1/jobs`, `GET /api/v1/jobs/{id}`, retry/cancel, `GET /api/v1/jobs/{id}/candidates` |
+| Review | `GET /api/v1/projects/{id}/candidates`, `GET /api/v1/candidates/{id}`, `PUT/DELETE /api/v1/candidates/{id}/annotation`, `GET /api/v1/candidates/{id}/clip` |
+| Export | `POST/GET /api/v1/projects/{id}/exports`, `GET/DELETE /api/v1/exports/{id}`, `GET /api/v1/exports/{id}/download` |
+| System | `GET /api/v1/health`, `/api/v1/adapters`, `/api/v1/system/media`, `/api/docs` |
+
+Behavioural guarantees of that API (timestamps, unreviewed semantics, error envelope, range streaming) are
+tested by 56 pytest tests and are the part to carry into the new contract.

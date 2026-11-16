@@ -1,10 +1,8 @@
-# DSD — VLM Annotate
+# 视频事件定位引擎
 
 [English](README.md) | 简体中文
 
-基于自然语言的视频事件定位与标注后端。输入视频和事件描述，输出事件时间段、可播放片段及核验信息；支持人工复核后构建数据集。
-
-当前工程实现位于 [`video_grounding/`](video_grounding/)。它提供 Python CLI 和 HTTP API，可作为完整标注系统的推理服务；本仓库不包含完整业务前端、用户权限或对象存储服务。
+VLM Annotate 的零样本事件定位引擎：输入视频和事件描述，输出事件时间段和片段。产品后端（`../backend`）通过 `videojev` 适配器调用它；这里的 CLI 用于调试和评测。
 
 ## 当前处理流程
 
@@ -23,14 +21,14 @@
 
 | 文档 | 面向读者 / 内容 |
 |---|---|
-| [使用与部署](video_grounding/docs/USAGE.zh-CN.md) | 环境安装、配置、CLI、服务启动、恢复和排障 |
-| [HTTP 对接协议](video_grounding/docs/API.zh-CN.md) | 完整系统集成、请求响应、状态与错误、事件和数据集字段 |
-| [内部工程契约](video_grounding/docs/CONTRACTS.md) | 时间语义、模型适配器、融合、持久化与模块接口 |
-| [兼容性记录](video_grounding/docs/COMPATIBILITY.md) | 已验证 GPU、依赖组合及平台问题 |
-| [评测记录](video_grounding/docs/EVALUATION.md) | 测试方法、真实数据实验与已知质量局限 |
-| [性能记录](video_grounding/docs/PERFORMANCE.md) | 已测耗时、显存、CPU offload 情况 |
+| [使用与部署](docs/USAGE.zh-CN.md) | 环境安装、配置、CLI、服务启动、恢复和排障 |
+| [HTTP 对接协议](docs/API.zh-CN.md) | 完整系统集成、请求响应、状态与错误、事件和数据集字段 |
+| [内部工程契约](docs/CONTRACTS.md) | 时间语义、模型适配器、融合、持久化与模块接口 |
+| [兼容性记录](docs/COMPATIBILITY.md) | 已验证 GPU、依赖组合及平台问题 |
+| [评测记录](docs/EVALUATION.md) | 测试方法、真实数据实验与已知质量局限 |
+| [性能记录](docs/PERFORMANCE.md) | 已测耗时、显存、CPU offload 情况 |
 
-API 的在线请求结构以服务的 `/openapi.json` 为准，交互页面为 `/docs`。响应字段和业务语义见 [API.md](video_grounding/docs/API.zh-CN.md)。
+API 的在线请求结构以服务的 `/openapi.json` 为准，交互页面为 `/docs`。响应字段和业务语义见 [API.md](docs/API.zh-CN.md)。
 
 ## 快速开始
 
@@ -40,7 +38,7 @@ API 的在线请求结构以服务的 `/openapi.json` 为准，交互页面为 `
 cd video_grounding
 ```
 
-1. 按 [兼容性安装说明](video_grounding/docs/COMPATIBILITY.md#install) 安装 GPU 依赖、匹配的 FlashAttention/causal-conv1d，以及 ffmpeg/ffprobe。
+1. 按 [兼容性安装说明](docs/COMPATIBILITY.md#install) 安装 GPU 依赖、匹配的 FlashAttention/causal-conv1d，以及 ffmpeg/ffprobe。
 2. 安装 HTTP 服务依赖，并配置 Gemini 密钥：
 
    ```bash
@@ -84,4 +82,4 @@ uv sync --group dev
 uv run pytest
 ```
 
-测试覆盖合成/回放后端、时间映射、恢复、融合、接口及模拟 Gemini 核验；通过这些测试不等同于真实 GPU 或线上 Gemini 可用性验证。真实模型和 API 联调步骤见 [使用说明](video_grounding/docs/USAGE.zh-CN.md#验证与排障)。
+测试覆盖合成/回放后端、时间映射、恢复、融合、接口及模拟 Gemini 核验；通过这些测试不等同于真实 GPU 或线上 Gemini 可用性验证。真实模型和 API 联调步骤见 [使用说明](docs/USAGE.zh-CN.md#验证与排障)。

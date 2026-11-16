@@ -1,87 +1,143 @@
-# DSD — VLM Annotate
+# VLM Annotate
 
-English | [简体中文](README.zh-CN.md)
+**Human-verified temporal action datasets from long videos.**
 
-A natural-language video event grounding and annotation backend. Given a video and event descriptions, it produces event timestamps, playable clips, and verification results. Human reviewers can accept, reject, or adjust events before compiling a dataset.
+A reviewer creates a project, describes an action in natural language, uploads a 10–30 minute single-view RGB
+video, and starts an asynchronous VLM job. The system proposes timestamped candidate clips; a human marks each
+one **true positive** or **false positive** — or leaves it **unreviewed**. The export is a ZIP with labels,
+playable clips and auditable provenance.
 
-The implementation lives in [`video_grounding/`](video_grounding/). It exposes a Python CLI and an HTTP API for integration into a larger annotation system. This repository does not provide a complete business frontend, user authorization, or an object storage service.
+> **AI proposes. Humans decide.** The product never invents a label, and an unreviewed candidate can never
+> silently become a negative.
 
-## Current pipeline
+**Course:** Distributed Software Development (DSD) 2026/2027 · **Customer:** Gordan Kreković / Visage
+Technologies · **Status:** Sprint 2 vertical slice (2026-11-05) — see [Status](#status).
+
+---
+
+## Quick start (Windows, verified)
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements.lock.txt
+Copy-Item .env.example .env
+
+cd backend
+..\.venv\Scripts\python.exe -m alembic upgrade head
+..\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000     # terminal 1
+..\.venv\Scripts\python.exe -m app.worker --loop                   # terminal 2
+
+cd ..\frontend
+npm ci
+npm run build          # then reload http://127.0.0.1:8000
+# or: npm run dev      # http://127.0.0.1:5173 with API proxy
+```
+
+- App: <http://127.0.0.1:8000> · API docs: <http://127.0.0.1:8000/api/docs>
+- Health: <http://127.0.0.1:8000/api/v1/health>
+- Detailed setup, configuration and troubleshooting: [docs/INSTALLATION_MANUAL.md](docs/INSTALLATION_MANUAL.md)
+
+## Verify the build
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend -q                 # 56 tests
+.\.venv\Scripts\python.exe -m ruff check backend\app backend\tests
+.\.venv\Scripts\python.exe scripts\smoke_e2e.py                 # real ffmpeg, 26/26 checks
+cd frontend; npm run build; npm test
+```
+
+## What works today
+
+| Capability | State |
+|---|---|
+| Projects, action definitions, natural-language prompts | Working, tested |
+| Video upload with limits, signature validation, ffmpeg probe | Working, tested |
+| Range streaming for source video and clips | Working, tested |
+| Asynchronous jobs: queue, worker, progress, retries, cancel, idempotency | Working, tested |
+| Candidate intervals with proposal/preview separation | Working, tested |
+| True/false-positive review, corrections, explicit unreviewed | Working (API), UI in progress |
+| Dataset export: manifest, labels.csv, clips, provenance | Working, tested |
+| Responsive web UI | Working — build + 21 unit tests + a headless-Chrome end-to-end pass (reported, not committed as a test) |
+| **Real VLM inference** | **Not yet** — deterministic mock adapter, clearly labelled |
+| 10–30 minute real footage validation | Not yet (planned 2026-11-13) |
+
+## Repository map
 
 ```text
-Video + prompts → probe → VideoJev coarse scan → candidate fusion → VideoJev refinement
-                → Gemini verification (optional) → event and clip export
-                → human review and boundary adjustment → reviewed dataset
+backend/
+  app/                 FastAPI app, models, services, adapters, worker
+    api/               REST routers (projects, videos, jobs, candidates, exports)
+    services/          storage, media (ffmpeg), pipeline (queue/export)
+    adapters/          VLMAdapter boundary: mock (working) + Qwen2.5-VL (stub)
+  alembic/             database migrations (initial schema verified)
+  tests/               56 pytest tests
+frontend/              React + TypeScript + Vite UI
+video_grounding/       zero-shot grounding engine (VideoJev-4B), see video_grounding/README.md
+presentations/         versioned decks (PPTX + editable Markdown source)
+  content/             deck content as Python data
+  deckbuild.py         renders content -> Markdown + PPTX
+docs/
+  course/              calendar, deliverables register, guidelines checklist
+  decisions/           ADRs 0001–0006
+  weekly-reports/      week-by-week factual reports
+  sprint-reviews/      review + retrospective sources
+  evidence/            real smoke-test JSON evidence
+  *.md                 requirements, design, architecture, API, schema,
+                       model evaluation, test plan, manuals, risks, backlogs
+scripts/               smoke_e2e.py, render_burndown.py
 ```
 
-- **VideoJev-4B** locates one or more event intervals. Supports multiple prompts, resumable jobs, and frame-count downgrades after GPU out-of-memory errors.
-- **Gemini is integrated**, after refinement and before export. The current adapter uses the Decisions API with `gemini-decision-1`. Negative verdicts go into an audit list; candidates that could not be verified remain available for human review.
-- **Human review** accepts, rejects, or adjusts event boundaries. Only reviewed events enter datasets.
-- The standalone Qwen3-VL-4B verifier experiment is not part of the current pipeline; its model is not required. VideoJev's own processor and dependencies are still required.
+## Design in one minute
 
-## Documentation
+- **API enqueues, worker executes.** `POST /videos/{id}/jobs` writes a row and returns `202`; a separate
+  process claims it with an atomic conditional update. Inference never blocks a request.
+- **Time is explicit.** All intervals are seconds relative to the source video, half-open `[start, end)`;
+  proposal, preview and human correction are stored separately.
+- **Unreviewed is structural.** No `is_negative` column exists; a label is an annotation row created by a
+  person.
+- **The model is replaceable.** One `VLMAdapter` interface; the mock is the CI default, Qwen2.5-VL is the
+  planned Alpha adapter.
+- **Provenance travels with the data.** Adapter name/version, mock flag, clamping flag and source checksum are
+  in every export.
 
-| Document | Audience and contents |
+Read more: [Architecture](docs/ARCHITECTURE.md) · [Design Description](docs/DESIGN_DESCRIPTION.md) ·
+[API contracts](docs/API_CONTRACTS.md) · [Database schema](docs/DATABASE_SCHEMA.md) ·
+[Model evaluation](docs/MODEL_EVALUATION.md) · [Dataset format](docs/DATASET_FORMAT.md).
+
+## Status
+
+Sprint 2 closed on **2026-11-15**. The increment is a runnable, tested **technical prototype** with mock
+candidates — accounts, global roles, datasets, searches and OpenLABEL JSON are the Sprint 3 scope. Real
+inference is planned behind one adapter (Gemini first, VideoJev-4B self-hosted second) and has not been
+measured yet ([MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md)).
+
+Course artifacts are tracked in [docs/course/DSD_DELIVERABLES_REGISTER.md](docs/course/DSD_DELIVERABLES_REGISTER.md).
+Known gap: the official `Guidelines (SCRUM, Presentations)` files are behind a FER login wall, so decks are
+provisional ([checklist](docs/course/OFFICIAL_GUIDELINES_CHECKLIST.md)).
+
+## Documentation index
+
+| Need | Document |
 |---|---|
-| [Usage and deployment](video_grounding/docs/USAGE.md) | Installation, configuration, CLI, service operation, recovery, troubleshooting |
-| [HTTP API integration](video_grounding/docs/API.md) | Requests, responses, states, errors, events, reviews, and datasets |
-| [Internal engineering contracts](video_grounding/docs/CONTRACTS.md) | Time semantics, model adapter, fusion, persistence, and module interfaces |
-| [Compatibility](video_grounding/docs/COMPATIBILITY.md) | Verified GPU/dependency combinations and platform issues |
-| [Evaluation](video_grounding/docs/EVALUATION.md) | Test methods, dataset experiments, and quality limitations |
-| [Performance](video_grounding/docs/PERFORMANCE.md) | Measured latency, memory use, and CPU offload |
+| Install / configure / troubleshoot | [INSTALLATION_MANUAL.md](docs/INSTALLATION_MANUAL.md) |
+| Use the product | [USER_MANUAL.md](docs/USER_MANUAL.md) |
+| Requirements (28 FR, 14 NFR) | [REQUIREMENTS.md](docs/REQUIREMENTS.md) |
+| Tests and actual results | [TEST_PLAN.md](docs/TEST_PLAN.md) |
+| Risks | [RISK_REGISTER.md](docs/RISK_REGISTER.md) |
+| Backlog / sprint plan / burndown | [PRODUCT_BACKLOG.md](docs/PRODUCT_BACKLOG.md), [SPRINT_BACKLOG.md](docs/SPRINT_BACKLOG.md), [SPRINT_BURNDOWN.md](docs/SPRINT_BURNDOWN.md) |
+| **Customer decisions (latest emails)** | [CUSTOMER_DECISIONS.md](docs/customer/CUSTOMER_DECISIONS.md) |
+| **Client meeting brief (13 Nov 2026)** | [CLIENT_MEETING_BRIEF_2026-11-13.md](docs/CLIENT_MEETING_BRIEF_2026-11-13.md) · [DOCX](docs/CLIENT_MEETING_BRIEF_2026-11-13.docx) · [PDF](docs/CLIENT_MEETING_BRIEF_2026-11-13.pdf) |
+| **As-built prototype baseline (2026-11-05)** | [IMPLEMENTED_BASELINE_2026-11-05.md](docs/as-built/IMPLEMENTED_BASELINE_2026-11-05.md) |
+| Weekly reports | [week-01](docs/weekly-reports/week-01.md), [week-02](docs/weekly-reports/week-02.md) |
+| Decisions | [docs/decisions/](docs/decisions/) |
+| Decks and upload checklist | [presentations/README.md](presentations/README.md) |
 
-The running service exposes request schemas at `/openapi.json` and interactive documentation at `/docs`. See [API.md](video_grounding/docs/API.md) for response fields and application semantics.
+## Data and privacy
 
-## Quick start
+Never commit footage, credentials or `.env`. Uploads live under `data/storage/` (git-ignored) behind generated
+keys; deleting a project or video removes its media. Model weights are not committed.
 
-Run the following commands from the package directory:
+## Licence
 
-```bash
-cd video_grounding
-```
-
-1. Follow the [compatibility installation instructions](video_grounding/docs/COMPATIBILITY.md#install) to install GPU dependencies, matching FlashAttention/causal-conv1d, and ffmpeg/ffprobe.
-2. Install service dependencies and configure the Gemini key:
-
-   ```bash
-   uv pip install -p .venv/bin/python -e '.[server,gemini]'
-   cp .env.example .env
-   # Edit .env and set GEMINI_API_KEY. Do not commit the key.
-   ```
-
-3. Create a machine-specific configuration:
-
-   ```bash
-   cp configs/rtx3070.yaml configs/local.yaml
-   # Set model.local_path and runtime.max_memory for your machine.
-   # Use default.yaml for a larger GPU; set verify.enabled: false to disable Gemini.
-   ```
-
-4. Run a job, or start the service:
-
-   ```bash
-   .venv/bin/video-grounding scan --video /data/demo.mp4 \
-     --prompt 'A person opens a door' --config configs/local.yaml --out runs/demo
-
-   .venv/bin/video-grounding serve --config configs/local.yaml \
-     --jobs-root /data/grounding --media-root /data/videos \
-     --host 127.0.0.1 --port 8800
-   ```
-
-Results are written to `runs/demo/events.json`, with exported clips under `clips/`. Use a separate directory for each new job; use `resume` to continue an existing one.
-
-## Integrating into a complete system
-
-The business backend submits a video path or HTTP(S) URL **accessible to the inference host** to `POST /v1/jobs`, stores the returned `job_id`, and polls its state. After completion, it retrieves events and clips, submits human reviews, and creates a dataset. Browsers must not depend on server-local file paths.
-
-Each service process executes inference and dataset tasks serially. The surrounding system owns authentication, tenant isolation, uploads, URL access controls, request deduplication, notifications, and object storage. Deploy behind a controlled gateway or on a trusted network.
-
-## Development checks
-
-```bash
-cd video_grounding
-uv sync --group dev
-uv run pytest
-```
-
-Tests cover synthetic/replay backends, time mapping, recovery, fusion, API behavior, and mocked Gemini verification. Passing them does not establish real GPU or live Gemini availability. See [Usage](video_grounding/docs/USAGE.md#validation-and-troubleshooting) for integration checks.
+Course project; source is for the DSD team and supervisors. Model licences differ per checkpoint — see
+[MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md) §3 before distributing any weights.
