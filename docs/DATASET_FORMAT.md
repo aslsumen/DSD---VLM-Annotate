@@ -75,6 +75,7 @@ vlm-annotate-project-<id>-<YYYYMMDD-HHMMSS>.zip
 | `final` | Interval a consumer should train/evaluate on |
 | `clip.status` | `ready` / `failed` / `pending`; `file` is `null` if no clip was copied |
 | `provenance.mock` | **`true` means the intervals are not model predictions** |
+| `job.adapter_name` / `job.adapter_version` | `videojev` / `videojev-4b-<engine version>` for real-model items. The manifest does not record the engine config, model revision, `min_event_score` or sampling; keep those with the deployment (`VLM_VIDEOJEV_CONFIG`). Candidates from `videojev` are `proposal` intervals with `score` = the engine's peak score; they are still unreviewed model output, not ground truth |
 | `provenance.proposal_clamped` | The model returned out-of-range boundaries that were clamped |
 | `video.checksum_sha256` | SHA-256 of the uploaded source file, for traceability |
 
@@ -109,7 +110,7 @@ the dataset so the rules cannot be lost.
 2. For every item: `0 ≤ final.start < final.end ≤ video.duration_seconds`.
 3. `final` equals `corrected` when `corrected` is non-null, otherwise `proposal`.
 4. Every non-null `clip.file` exists in the archive and decodes.
-5. If `provenance.mock` is true, do not present the dataset as model-labelled ground truth.
+5. If `provenance.mock` is true, do not present the dataset as model-labelled ground truth. Real-adapter items are model proposals until a reviewer has labelled them.
 
 ## 7. Versioning
 

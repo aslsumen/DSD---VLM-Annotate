@@ -1,5 +1,34 @@
 # Release Notes
 
+## Unreleased — `backend` branch (2026-11-16)
+
+Development snapshot after v0.2.0-dev; not a course release.
+
+### Added
+
+- **`videojev` adapter** — runs the `video_grounding/` engine (VideoJev-4B) inside the worker
+  ([ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md)). Opt-in with `VLM_VLM_ADAPTER=videojev` on a
+  GPU worker; `mock` stays the default. Exhaustive: all events kept, zero events is success. Resumes from a per-job
+  engine directory on retry; Gemini verify and engine clip cutting are always off.
+- **Batch job endpoint** `POST /projects/{id}/actions/{action_id}/jobs` (one job per video).
+- **Heartbeat lease** — crashed workers' jobs are requeued as `WORKER_LOST` (ADR-0001 amendment); running jobs can
+  be cancelled.
+- `scripts/smoke_videojev.py` for an end-to-end check on a GPU host.
+
+### Changed
+
+- Engine default `fusion.min_event_score` 0.9 to 0.5.
+
+### Known limitations
+
+- Real-model smoke on the RTX 3070 laptop is pending; not validated on product footage.
+- Measured on Charades-STA only, below the SPEC targets (recall 0.771 vs 0.85, R1@0.5 0.507 vs 0.70 at
+  `min_event_score` 0.5; `video_grounding/docs/EVALUATION.md`).
+  *Note 2026-11-16 (later): Charades-STA is in-domain for VideoJev, so these numbers are reference only and
+  `min_event_score` 0.5 is provisional. The target check moves to the held-out composite benchmarks (running, results pending).*
+- About 0.66× the video duration on an 8 GB laptop with CPU offload (Charades-STA, ~30 s videos; longer
+  videos not measured).
+
 ## v0.2.0-dev — Sprint 2 vertical slice (2026-11-05)
 
 **Not a course release.** Development snapshot for the Requirements & Design presentation and the

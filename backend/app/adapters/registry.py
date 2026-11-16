@@ -7,12 +7,14 @@ from ..errors import ApiError
 from . import VLMAdapter
 from .mock import MockTemporalAdapter
 from .qwen import Qwen25VLAdapter
+from .videojev import VideoJevAdapter
 
 
 def _build(settings: Settings) -> dict[str, VLMAdapter]:
     return {
         "mock": MockTemporalAdapter(seed_salt=settings.mock_seed_salt),
         "qwen2.5-vl": Qwen25VLAdapter(),
+        "videojev": VideoJevAdapter(settings.videojev_config),
     }
 
 

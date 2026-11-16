@@ -102,23 +102,47 @@ Environment variables (prefix `VLM_`) or a `.env` file at the repository root:
 | `VLM_API_TOKEN` | *(empty)* | When set, all `/api/v1` routes require `Authorization: Bearer <token>`. **Known limitation:** browsers cannot send this header for `<video>` playback, so stream/clip requests will 401 — do not enable it for demos that need video until PB-41 (signed media URLs) lands |
 | `VLM_MAX_UPLOAD_BYTES` | `2147483648` (2 GiB) | Upload cap |
 | `VLM_MAX_VIDEO_DURATION_SECONDS` | `14400` (4 h) | Hard duration cap |
-| `VLM_VLM_ADAPTER` | `mock` | Default adapter (`mock` only, until Alpha) |
+| `VLM_VLM_ADAPTER` | `mock` | Default adapter: `mock` or `videojev` (see 5.1) |
+| `VLM_VIDEOJEV_CONFIG` | *(empty)* | Path to a `video_grounding` YAML settings file; empty = engine defaults |
 | `VLM_CLIP_PADDING_SECONDS` | `1.0` | Preview padding around a candidate |
 | `VLM_CLIP_MAX_DURATION_SECONDS` | `90` | Maximum preview clip length |
 | `VLM_MAX_CANDIDATES_PER_JOB` | `12` | Candidate cap |
 | `VLM_WORKER_MAX_ATTEMPTS` | `3` | Retry budget |
 | `VLM_WORKER_RETRY_BACKOFF_SECONDS` | `5` | Linear backoff base |
+| `VLM_WORKER_HEARTBEAT_SECONDS` | `30` | Worker heartbeat interval; a running job is reclaimed after 3 missed beats. Only changes how fast a crashed job is retried |
 | `VLM_CORS_ORIGINS` | localhost:5173/4173 | JSON list for the dev frontend |
 | `VLM_FFMPEG_BINARY` | *(auto)* | Override the ffmpeg executable |
 | `VLM_AUTO_CREATE_SCHEMA` | `true` | Dev convenience; use Alembic in production |
 
 > Never commit `.env`. It is git-ignored.
 
+### 5.1 Real inference with the `videojev` adapter (worker only)
+
+The API process needs nothing extra. The **worker** venv must have the engine (Python 3.12, an NVIDIA GPU, CUDA
+torch installed first, see `video_grounding/docs/COMPATIBILITY.md`):
+
+```bash
+pip install -e ./video_grounding[videojev]
+VLM_VLM_ADAPTER=videojev VLM_VIDEOJEV_CONFIG=video_grounding/configs/<file>.yaml python -m app.worker --loop
+```
+
+The API process only checks that `VLM_VIDEOJEV_CONFIG` (if set) exists, so it can enqueue `videojev` jobs
+without the engine. A worker without the engine fails such a job at once with `ADAPTER_UNAVAILABLE`.
+Engine state per job is kept in
+`data/storage/engine/job-<id>/` and reused on retry; delete a job's directory to force a rescan. The adapter
+always turns off Gemini verification and engine clip cutting, whatever the YAML says.
+
+To check a GPU host end to end with the real model (API and worker running, several minutes per video):
+
+```bash
+python scripts/smoke_videojev.py --base-url http://127.0.0.1:8000 --action "person opens a door" a.mp4 b.mp4
+```
+
 ## 6. Verify the installation
 
 ```powershell
 # automated checks
-.\.venv\Scripts\python.exe -m pytest backend -q            # expect 56 passed
+.\.venv\Scripts\python.exe -m pytest backend -q            # expect 80 passed
 .\.venv\Scripts\python.exe scripts\smoke_e2e.py            # expect 26/26 checks
 
 # ffmpeg diagnostics
@@ -150,6 +174,7 @@ without `data/storage/` has no videos or clips. Restore by copying it back befor
 | `415 UNRECOGNISED_CONTAINER` | Wrong extension or non-video bytes | Use mp4/mov/m4v/webm/mkv; do not rename a file's extension |
 | `413 UPLOAD_TOO_LARGE` | Above `VLM_MAX_UPLOAD_BYTES` | Raise the limit or compress the video |
 | Job stays `queued` | Worker not running | Start `python -m app.worker --loop` |
+| Job `running` but nothing happens | Worker died mid-job | Restart the worker: after 3 missed heartbeats (`VLM_WORKER_HEARTBEAT_SECONDS`) the job is requeued with `WORKER_LOST`; or cancel it in the UI |
 | Job `failed` with `FFMPEG_NOT_FOUND` | No ffmpeg binary | `pip install imageio-ffmpeg` or set `VLM_FFMPEG_BINARY` |
 | `401 UNAUTHENTICATED` in UI | `VLM_API_TOKEN` set but no token entered | Paste the token in the UI / send the header |
 | `CORS` error in dev | Frontend port not allowed | Add it to `VLM_CORS_ORIGINS` |

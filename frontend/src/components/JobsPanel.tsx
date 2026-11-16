@@ -375,7 +375,7 @@ export function JobsPanel({
                       {busyJobId === job.id ? "Retrying…" : "Retry"}
                     </button>
                   ) : null}
-                  {job.status === "queued" ? (
+                  {job.status === "queued" || job.status === "running" ? (
                     <button
                       type="button"
                       className="btn btn--ghost btn--small"

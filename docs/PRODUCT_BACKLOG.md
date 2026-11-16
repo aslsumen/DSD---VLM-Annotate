@@ -1,6 +1,6 @@
 # Product Backlog
 
-**Type:** living artifact · **Owner:** Product Owner (role placeholder) · **Last updated:** 2026-11-05
+**Type:** living artifact · **Owner:** Product Owner (role placeholder) · **Last updated:** 2026-11-16
 **Access:** versioned in Git. Supervisor read access is **NOT yet configured** — see `R-12`.
 
 Priority: **M**ust / **S**hould / **C**ould. Estimates are **provisional story points** for relative sizing,
@@ -15,14 +15,14 @@ not person-hours. Team velocity is unknown until Sprint 2 closes, so all sizing 
 | E3 Async processing | Queue, worker, retries, progress, cancellation | Done |
 | E4 Candidate review | Timestamp contract, clips, TP/FP labelling, corrections | Done (API) / in progress (UI) |
 | E5 Dataset export | Verified labels, media, provenance | Done |
-| E6 Real VLM inference | Qwen2.5-VL windowed localization on real footage | Not started (Alpha gate) |
+| E6 Real VLM inference | Qwen2.5-VL windowed localization on real footage | Superseded 2026-11-16 by E13 / [ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md) (VideoJev-4B is the first real model; Qwen2.5-VL stays a stub) |
 | E7 Hardening & operations | Security, retention, observability, packaging | Partial |
 | E8 Course delivery | Backlogs, burndown, decks, reports, acceptance | In progress |
 | E9 Optional | Multi-model, comparison UI, active learning, tracking | Deferred |
 | E10 Accounts and access | Users, **global roles**, invitations, sessions, sign-out, lockout | Not started — MVP Must |
 | E11 Dataset and search domain | Dataset entity, assignments, search = one prompt over all videos | Not started — MVP Must |
 | E12 JSON export (OpenLABEL) | Multi-interval JSON, reviewer provenance, optional negatives | Not started — MVP Must |
-| E13 Detection engine | Windowed grounding, fusion, flags, clips, Gemini/VideoJev backends | Not started — MVP Must |
+| E13 Detection engine | Windowed grounding, fusion, flags, clips, VideoJev-4B backend, optional Gemini verify | In progress — MVP Must (engine + `videojev` adapter integrated; real-model smoke and product-footage validation pending) |
 
 ## 2. Backlog items
 
@@ -51,11 +51,11 @@ not person-hours. Team velocity is unknown until Sprint 2 closes, so all sizing 
 | PB-21 | E5 | Async ZIP export | M | 5 | Done | 2 | |
 | PB-22 | E5 | manifest.json / labels.csv / README / clips | M | 5 | Done | 2 | Schema 1.0 |
 | PB-23 | E5 | Refuse export with nothing reviewed | M | 2 | Done | 2 | Override flag |
-| PB-24 | E6 | Qwen2.5-VL adapter: windowed inference | M | 13 | Not started | 3 | Alpha gate |
-| PB-25 | E6 | Real-footage evaluation set + metrics | M | 8 | Not started | 3 | Recall@IoU etc. |
-| PB-26 | E6 | Model selection ADR with measured evidence | M | 3 | Not started | 3 | Replaces provisional ADR-0004 |
+| PB-24 | E6 | Qwen2.5-VL adapter: windowed inference | M | 13 | Superseded | 3 | ADR-0007: VideoJev-4B is the first real model; adapter stays a stub |
+| PB-25 | E6 | Real-footage evaluation set + metrics | M | 8 | In progress | 3 | Recall@IoU etc. Charades-STA reference run done (`video-grounding eval`); held-out composite benchmarks in PB-70; product-footage set not started |
+| PB-26 | E6 | Model selection ADR with measured evidence | M | 3 | Done | 3 | ADR-0007 (2026-11-16) supersedes provisional ADR-0004; evidence is a Charades-STA reference run (in-domain, integration/timing only); accuracy evidence pending in PB-70 |
 | PB-27 | E7 | Retention policy + purge job for old exports | S | 5 | Not started | 4 | `R-06` |
-| PB-28 | E7 | Stale running-job reaper | S | 3 | Not started | 4 | `R-07` |
+| PB-28 | E7 | Stale running-job reaper | S | 3 | Done | 4 | `R-07` |
 | PB-29 | E7 | Structured logging + request ids | C | 3 | Not started | 4 | |
 | PB-30 | E7 | Docker/compose packaging | S | 5 | Not started | 4 | Deployment docs |
 | PB-31 | E8 | Living Scrum artifacts + supervisor access | M | 3 | In progress | 2 | Human action needed |
@@ -83,20 +83,21 @@ not person-hours. Team velocity is unknown until Sprint 2 closes, so all sizing 
 | PB-53 | E12 | OpenLABEL-based JSON export with multiple intervals per action | M | 8 | Not started | 4 | EXP-1; schema proposal due 2026-11-17 |
 | PB-54 | E12 | Optional rejected-as-negatives export | C | 2 | Not started | 5 | EXP-2 |
 | PB-55 | E12 | Reviewer attribution in export (pending customer answer) | M | 2 | Not started | 4 | EXP-1, REV-3, Q2 |
-| PB-56 | E13 | Detection engine service + `GroundingBackend` interface | M | 13 | Not started | 3 | ENG-1…ENG-13 |
-| PB-57 | E13 | Gemini API backend (quota guard, retry, prompt template, validation) | M | 8 | Not started | 3 | First real detector; privacy approval pending |
-| PB-58 | E13 | VideoJev-4B self-hosted backend, low-VRAM profile | M | 13 | Not started | 3–4 | Verify card/licence first |
-| PB-59 | E13 | Window planning, fusion, hysteresis, completeness flags | M | 8 | Not started | 4 | Design §6.1.5/6.1.6 |
+| PB-56 | E13 | Detection engine service + `GroundingBackend` interface | M | 13 | Done | 3 | Built as a library in the worker, not a service (ADR-0007); ENG-1…ENG-13 not individually re-assessed |
+| PB-57 | E13 | Gemini API backend (quota guard, retry, prompt template, validation) | M | 8 | Deferred | 3 | Exists only as the engine's optional verify stage (off in the adapter; little precision gain on Charades-STA, costs recall); not the first detector. Privacy approval R-20 needed only if verify is on |
+| PB-58 | E13 | VideoJev-4B self-hosted backend, low-VRAM profile | M | 13 | In progress | 3–4 | `videojev` adapter integrated 2026-11-16, 8 GB profile `rtx3070.yaml`; real-model smoke on the laptop pending |
+| PB-59 | E13 | Window planning, fusion, hysteresis, completeness flags | M | 8 | Done | 4 | In the engine (`video_grounding/`); quality check against SPEC targets pending on held-out composites (PB-70); Charades-STA is reference only |
 | PB-60 | E7 | Signed media URLs (fixes R-18) | S | 5 | Not started | 4 | NFR-8 |
 | PB-61 | E11 | Pagination envelopes for datasets/videos/candidates/users | S | 3 | Not started | 4 | NFR-7 |
 | PB-62 | E4 | Thumbnails in the candidate list | C | 2 | Not started | 5 | REV-1 |
 | PB-63 | E7 | Docker Compose packaging (API, workers, Postgres, Redis, MinIO, engine) | S | 8 | Not started | 4 | NFR-10 |
 | PB-64 | E11 | Enforce MP4-only and 720p/1080p validation; 5 min Must / 30 min Should | M | 3 | Not started | 3 | DS-4/DS-5, NFR-4 |
-| PB-65 | E13 | KPI measurement harness (recall, R@IoU, complete-clip, boundary adjustment) | M | 5 | Not started | 4 | NFR-5 |
-| PB-66 | E13 | Test-dataset ingestion (Charades-STA, TimeLens-Bench) + licence review | M | 5 | Not started | 3 | `MODEL_EVALUATION.md` |
+| PB-65 | E13 | KPI measurement harness (recall, R@IoU, complete-clip, boundary adjustment) | M | 5 | In progress | 4 | NFR-5. Engine `eval` CLI covers recall/R@IoU/CCR (Charades-STA is reference only, in-domain for VideoJev; the main benchmarks are the held-out composites, PB-70); reviewer boundary-adjustment KPI not built |
+| PB-66 | E13 | Test-dataset ingestion (Charades-STA, TimeLens-Bench) + licence review | M | 5 | Done | 3 | Charades-STA only (`video_grounding/scripts/charades_sta.py`); TimeLens-Bench not used; non-commercial licence caveat in `MODEL_EVALUATION.md` §7 |
 | PB-67 | E9 | Automatic video summaries + tags (non-MVP) | C | 8 | Deferred | — | EXP-3; explicitly outside MVP |
 | PB-68 | E9 | Scene search over summaries/tags | C | 8 | Deferred | — | SRCH-1 |
 | PB-69 | E7 | Mobile review validation (Android Chrome, iOS Safari) | C | 3 | Not started | 6 | NFR-2 (Could) |
+| PB-70 | E13 | Run held-out composite benchmarks (`composite_bench.py`: youcook2_a/b, bddx), re-check `min_event_score`, report KPIs | M | 5 | In progress | 3 | NFR-5. Runs started 2026-11-16 on the RTX 3070 laptop; results go into `video_grounding/docs/EVALUATION.md`. Replaces Charades-STA as the accuracy check (R-27) |
 
 ## 3. Definition of Ready (an item may enter a sprint only if…)
 
@@ -124,3 +125,8 @@ not person-hours. Team velocity is unknown until Sprint 2 closes, so all sizing 
   access (R-23), test-dataset licence (R-24).
 - **Frozen until the MVP works:** PB-67, PB-68, PB-37…PB-40 (multi-model UI, summaries, semantic search).
 - Estimates remain provisional; team velocity is still not measured (no capacity data).
+
+## 6. Grooming notes (2026-11-16)
+
+- **Detector decision:** [ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md) makes VideoJev-4B the first real detector (E6/PB-24 superseded, PB-57 Gemini deferred). The engine and `videojev` adapter are integrated; the real-model smoke on the RTX 3070 laptop is pending.
+- **Quality:** Charades-STA is reference only (VideoJev was trained on it, so its scores there are in-domain). The SPEC targets are checked on the held-out composite benchmarks (PB-70, running since 2026-11-16, results pending; `video_grounding/docs/EVALUATION.md`). `min_event_score` was lowered to 0.5 on 2026-11-16 based on Charades-STA (recall 0.690 → 0.771, R1@0.5 0.460 → 0.507); this is provisional until re-checked on the composites. Product footage is not measured.

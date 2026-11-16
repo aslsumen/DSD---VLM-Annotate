@@ -163,6 +163,30 @@ health ok · / 200 text/html · /api/v1/projects 200 [] · /api/docs 200
 - Deck PPTX files were re-opened with python-pptx (slide counts 16 / 20 / 9 / 8) and spot-rendered; tables
   were tightened after the first render showed an over-tall header row.
 
+## 2026-11-16 — VideoJev-4B engine integrated as the `videojev` adapter
+
+**Goal:** replace the mock-only detector path with the self-hosted zero-shot grounding engine.
+
+**Changed:** `video_grounding/` (library + debug/eval CLI, no HTTP server), `backend/app/adapters/videojev.py`,
+`backend/app/services/pipeline.py` (exhaustive adapters), `backend/app/worker.py` (heartbeat lease, cancel),
+batch endpoint `POST /projects/{id}/actions/{action_id}/jobs`, `scripts/smoke_videojev.py`;
+`fusion.min_event_score` default lowered from 0.9 to 0.5; docs brought in line with this state.
+
+**Results (actual):** Charades-STA, 300 videos / 822 queries, RTX 3070 Laptop 8 GB, `min_event_score` 0.9, before
+verify: recall 0.690, precision 0.768, R1@0.5 0.460, mIoU 0.437. Rerun at the new default 0.5: recall 0.771,
+precision 0.737, R1@0.5 0.507, mIoU 0.486, queries with no event 12.3% → 1.1%, scan + refine 0.66× the video
+duration. All three SPEC targets missed (`video_grounding/docs/EVALUATION.md`).
+*Note 2026-11-16 (later): Charades-STA is in-domain for VideoJev, so these numbers are reference only and
+`min_event_score` 0.5 is provisional. Main accuracy benchmarks are now the held-out composites
+(`video_grounding/scripts/composite_bench.py`), running, results pending.*
+
+**Decisions:** [ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md) (VideoJev-4B is the first
+real detector; supersedes the ADR-0004 Alpha target), ADR-0001 amendment (heartbeat lease). Gemini verify exists in
+the engine but is off in the adapter. `mock` stays the default adapter.
+
+**Open items:** real-model smoke (`scripts/smoke_videojev.py`) on the RTX 3070 laptop; product-footage validation
+(10-30 min videos); peak VRAM at current sampling not recorded; test counts in docs not re-run at this commit.
+
 ## Template for the next entry
 
 ```markdown

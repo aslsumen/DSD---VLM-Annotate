@@ -26,7 +26,7 @@ Six external entities, two of them still unresolved:
 
 | Entity | Role | Status |
 |---|---|---|
-| Vision-language model | Detect events from a prompt: commercial API (Gemini) or open-source (VideoJev-4B/Qwen) | Both options live; choice after KPI comparison |
+| Vision-language model | Detect events from a prompt: commercial API (Gemini) or open-source (VideoJev-4B/Qwen) | VideoJev-4B is integrated as the first real detector ([ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md)); Gemini verify exists but is off in the product adapter; Qwen-VL is a stub |
 | Compute | Runs or calls the model: GPU server, 12 GB laptop, or API | **Open** — 12 GB laptops offered, remote access TBD |
 | Server + database hosting | Hosts the app, videos, annotations | **Open** — customer vs university |
 | Email service | Invitations and password resets | **Open** — SMTP vs transactional provider |
@@ -40,9 +40,9 @@ Six external entities, two of them still unresolved:
      │                        │
      │ signed links            ├── enqueue ──► Redis (Celery broker)
      ▼                        │
- object storage ◄─────────────┴── Celery workers ──HTTP──► Detection engine service (GPU)
+ object storage ◄─────────────┴── Celery workers ──in-process──► Detection engine (GPU)
  (videos, clips, export)                                            │
-                                                              VideoJev-4B / Gemini adapter
+                                                              VideoJev-4B (library)
 ```
 
 | Component | Responsibility | Proposed technology |
@@ -50,15 +50,16 @@ Six external entities, two of them still unresolved:
 | Web client | Sign-in, datasets, upload, search, review, export, user management | React + TypeScript |
 | Backend API | Auth/roles, dataset access checks, upload registration, search/export jobs, signed media links | FastAPI (Python) |
 | Task queue | Long-running detection and export jobs | Celery + Redis |
-| Workers | One detection job per video; poll the engine; store candidates; cut preview clips | Celery workers |
-| Detection engine | Windowed zero-shot grounding, fusion, flags, clips, KPIs | Standalone Python service on the GPU machine |
+| Workers | One detection job per video; call the engine; store candidates; cut preview clips | Celery workers |
+| Detection engine | Windowed zero-shot grounding, fusion, flags, clips, KPIs | Python library (`video_grounding/`) loaded by the GPU worker; also a debug/eval CLI |
 | Database | Users, sessions, invitations, datasets, videos, searches, candidates, exports | PostgreSQL |
 | Object storage | Source videos, preview clips, export archives | MinIO or S3 |
 | Deployment | Reproducible single-command setup | Docker Compose |
 
-**Why a separate engine service:** it pins the model, GPU and memory profile; the API stays light; the same
-service can run on a laptop with a low-VRAM profile or on a GPU server, and CI can replay recorded outputs
-without a GPU.
+**Why a separate engine package:** it pins the model, GPU and memory profile; the API process does not import it
+(only the GPU worker does); the same package runs on a laptop with a low-VRAM profile or on a GPU server, and CI
+can replay recorded outputs without a GPU. It has no HTTP server (removed; the backend owns queueing, review
+and export), so a separate engine service is not built.
 
 ## 4. Current implementation vs target (honest status)
 
@@ -69,10 +70,10 @@ without a GPU.
 | Celery + Redis | **Not used** — DB-backed queue + single worker process |
 | PostgreSQL | **SQLite**; models are PostgreSQL-portable, no deployment tested |
 | Object storage | **Local filesystem** behind a `StorageBackend` protocol |
-| Detection engine | **Mock adapter only** (deterministic, labelled); no VideoJev/Gemini |
+| Detection engine | `mock` adapter is the default (deterministic, labelled); `videojev` adapter runs the VideoJev-4B engine in the worker (opt-in, GPU). Backend tests (fake engine) and engine tests pass; real-model smoke on the 8 GB laptop is pending (2026-11-16). Gemini verify is off in the adapter |
 | Auth | **Optional single bearer token**; no users, roles, invitations, sessions |
 | Export | **ZIP + manifest + CSV**; no OpenLABEL JSON |
-| Tests | 56 backend + 21 UI + real-ffmpeg smoke (26/26) |
+| Tests | 80 backend + 21 UI + real-ffmpeg smoke (26/26) |
 
 **Reuse:** media upload/probe/range streaming, clip extraction, job queue semantics, candidate model with
 proposal/preview separation, review API/UX, provenance, error envelope, test harness.
@@ -115,7 +116,7 @@ deactivated, not deleted.
 1. User selects a dataset, writes one prompt, launches a search.
 2. API validates access, creates `Search(status=queued)`, enqueues one Celery job **per video**, returns the
    search id immediately (202).
-3. Each worker sends the video (or a signed URL/path) + prompt to the detection engine, polls its job, receives
+3. Each worker passes the video (or a signed URL/path) + prompt to the detection engine in-process, receives
    events, stores candidates with raw times, flags and preview clips.
 4. Search state aggregates video jobs: `queued → running → done`, or `failed` with per-video partial results.
 5. Review reads candidates across all videos of the search in one list; decisions update `review_status`,
@@ -124,17 +125,21 @@ deactivated, not deleted.
 
 ## 8. Detection engine (v1.1 §6.1, adapted)
 
-- **Model:** VideoJev-4B (Apache-2.0, Qwen3.5-4B base) as reference self-hosted backend; **Gemini API** as the
-  first API backend (key supplied by the customer); Qwen-VL optional comparator. All behind
-  `GroundingBackend`.
-- **Pipeline:** probe → 30 s windows / 20 s stride → cut ≤720p window clips → sample 0.5 FPS (≤16 frames) →
+- **Model:** VideoJev-4B (Apache-2.0, Qwen3.5-4B base, revision pinned in
+  `video_grounding/src/video_grounding/adapters/videojev.py`) is the self-hosted detector. **Gemini API** is an
+  optional verify stage (`gemini-decision-1`, key supplied by the customer), off in the product adapter: on
+  Charades-STA (reference set) it removed few false events and cost recall (`video_grounding/docs/EVALUATION.md`). Qwen-VL is a
+  registered stub. Backends sit behind `GroundingBackend`.
+- **Pipeline:** probe → 30 s windows / 20 s stride → cut ≤720p window clips → sample 1 FPS (≤32 frames) →
   score curve → map to source time → fuse on a 0.5 s grid with edge weighting → hysteresis (0.25/0.15) →
-  refine candidates at 1 FPS with expanding windows → completeness flags → clip export → `events.json`.
+  `fusion.min_event_score` filter (0.5) → refine candidates at 2 FPS (≤64 frames) with expanding windows →
+  optional Gemini verify → completeness flags → clip export → `events.json`. Defaults:
+  `video_grounding/configs/default.yaml`.
 - **Timestamp integrity:** PTS minus stream start; frame-pair sampling; alignment marked exact/estimated/unknown;
   engine never guesses when probability and timestamp arrays disagree (`AlignmentError`).
 - **Resume/idempotency:** window-level SQLite journal; job-local results; stable `event_id` hash; re-run skips
   succeeded windows.
-- **Hardware profiles:** `reference_gpu`, `dev_low_vram` (12 GB/8 GB, CPU offload, lower frame count),
+- **Hardware profiles:** `reference_gpu`, `dev_low_vram` (8 GB laptop, `configs/rtx3070.yaml`, CPU offload; OOM ladder lowers the frame count),
   `replay` (CI without GPU).
 
 ## 9. Export format — proposal for the customer (Q4)
@@ -149,7 +154,7 @@ implementing. Sketch:
   "exported_at": "2026-11-20T10:00:00Z",
   "dataset": {"id": "…", "name": "Warehouse operations", "use_case": "warehouse"},
   "search": {"id": "…", "prompt": "Person opens a door", "created_at": "…"},
-  "model": {"name": "videojev-4b", "revision": "…", "provider": "self_hosted", "frame_rate": 0.5},
+  "model": {"name": "videojev-4b", "revision": "…", "provider": "self_hosted", "frame_rate": 1.0},
   "videos": [
     {
       "id": "…", "file_name": "cam01_0915.mp4", "duration_s": 300.0,
@@ -219,7 +224,7 @@ is documented in `docs/API_CONTRACTS.md`; it will be migrated, not maintained in
 
 | Decision | Options | Depends on |
 |---|---|---|
-| Detection model | Gemini API / VideoJev-4B / Qwen-VL | Customer privacy approval, KPI results, GPU |
+| Detection model | VideoJev-4B chosen as first real detector (ADR-0007); Gemini verify optional/off; Qwen-VL stub | KPI results (held-out composite benchmarks running since 2026-11-16; Charades-STA is reference only, see EVALUATION.md), product-footage validation |
 | Compute | Gemini API / 12 GB laptop / 24 GB GPU / AWS | Customer + supervisors |
 | Hosting | Customer / university / cloud | Supervisors |
 | JSON schema | Team proposal §9 / customer example | Customer (by 2026-11-17) |
@@ -234,7 +239,7 @@ is documented in `docs/API_CONTRACTS.md`; it will be migrated, not maintained in
 
 | Decision | Alternative | Why |
 |---|---|---|
-| Separate detection engine service | library inside worker | GPU isolation, replay in CI, replacement without touching the API |
+| Engine as a library in the GPU worker (ADR-0007) | separate engine service over HTTP | One fewer service and no HTTP hop; the engine package still isolates model/GPU settings and replays in CI; API process never imports it |
 | Async search + polling | synchronous request | hours-long detection (NFR-3) |
 | Global roles | per-dataset roles | Customer preference; simpler authorization (CE-2) |
 | Keep raw + final timestamps | overwrite on review | Required for boundary-precision KPI (NFR-5) |
@@ -246,3 +251,4 @@ is documented in `docs/API_CONTRACTS.md`; it will be migrated, not maintained in
 |---|---|---|
 | 1.0 (repo) | 2026-11-05 | First repository design: project/action vertical slice |
 | **1.2 (repo)** | **2026-11-12** | Aligned to team v1.1 + CE-2: global roles, Dataset Admin invitations, email-only accounts, dataset/search model, JSON export proposal, engine service, honest implementation status |
+| 1.3 (repo) | 2026-11-16 | Engine is a library in the GPU worker (ADR-0007), `videojev` adapter integrated (real-model smoke pending), pipeline and defaults updated, Gemini verify off in the adapter |

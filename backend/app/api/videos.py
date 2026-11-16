@@ -221,7 +221,7 @@ def create_processing_job(
     payload: JobCreate,
     session: Session = Depends(get_db),
     settings: Settings = Depends(settings_dep),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=100),
 ) -> ProcessingJob:
     video = get_video_or_404(session, video_id)
     action = session.get(ActionDefinition, payload.action_id)

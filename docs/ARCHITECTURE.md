@@ -25,7 +25,7 @@ flowchart LR
     API["FastAPI backend<br/>auth/RBAC · uploads · searches · exports"]
     Q[("Redis<br/>Celery broker")]
     W["Celery workers<br/>1 job per video"]
-    E["Detection engine service<br/>VideoJev-4B / Gemini adapter"]
+    E["Detection engine (library)<br/>VideoJev-4B, optional Gemini verify"]
     DB[("PostgreSQL<br/>users · datasets · searches · candidates")]
     S[("Object storage<br/>videos · clips · exports")]
     M["Email service<br/>invitations · resets"]
@@ -34,7 +34,7 @@ flowchart LR
     API --> DB
     API -- "enqueue" --> Q
     Q --> W
-    W -- "HTTP job" --> E
+    W -- "in-process call" --> E
     W --> DB
     W --> S
     API -- "signed URLs" --> S
@@ -46,13 +46,14 @@ flowchart LR
 | SPA | Sign-in, invitation acceptance, dataset pages, upload with progress, search launch, cross-video review, export, user management |
 | API | Authentication, RBAC + dataset scoping, upload registration, search/export job creation, polling, signed media links |
 | Queue/workers | Fan out one detection job per video; aggregate search state; persist candidates; cut preview clips |
-| Detection engine | Windowed grounding, fusion, completeness flags, clip export, resume, KPI computation |
+| Detection engine | `video_grounding/` library: windowed grounding, fusion, completeness flags, resume, optional clip export and Gemini verify, KPI evaluation CLI. Runs in the worker process; no HTTP server |
 | PostgreSQL | Metadata, users, assignments, searches, candidates, review state |
 | Object storage | Source videos, preview clips, JSON/clip export artifacts |
 | Email | Invitations (48 h single-use) and password resets |
 
 **Deployment:** Docker Compose on a single host (API, workers, Redis, PostgreSQL, MinIO, engine with GPU
-profile, web build). The engine can also run on a separate GPU machine.
+profile, web build). The engine is a library loaded by the GPU worker; splitting it into a separate service is
+not built (see §4).
 
 ## 3. Current repository (verified 2026-11-12)
 
@@ -61,7 +62,7 @@ flowchart LR
     UI["React SPA<br/>projects · workspace · review"]
     API["FastAPI<br/>projects/actions/videos/jobs"]
     W["JobWorker process<br/>poll DB queue"]
-    A["Mock adapter<br/>(no pixels)"]
+    A["Adapters<br/>mock · videojev (GPU, worker only)"]
     DB[("SQLite<br/>7 tables")]
     FS[("Local storage<br/>videos · clips · exports")]
     UI --> API
@@ -73,13 +74,30 @@ flowchart LR
 ```
 
 - One API process + one worker process; queue in the database (`UPDATE … WHERE status='queued'`), no Redis.
+- **Heartbeat lease** (ADR-0001 amendment). A worker owns a job while `status='running' AND attempts=<value it
+  claimed with>` (`attempts` is the fencing token). Every commit of a job (progress, finish, failure) first runs
+  a conditional `UPDATE … SET updated_at` on that predicate; zero rows means the job was canceled or reclaimed,
+  so the worker rolls back, drops its result and moves on. A daemon thread in the worker also touches
+  `updated_at` every `VLM_WORKER_HEARTBEAT_SECONDS`, because the VLM engine can be silent for minutes (model
+  load, offloaded windows). Before each claim the worker **reaps** running jobs whose `updated_at` is older
+  than 3 beats: requeued with `error_code=WORKER_LOST`, or failed (export included) when attempts are
+  exhausted, so a job that kills the worker every time cannot loop forever. The `videojev` adapter then
+  resumes from its per-job engine dir.
+- **Cancel** applies to queued and running jobs. A running worker notices at its next progress tick (one engine
+  window), so cancel latency is one window, and its late result is never written. A linked export fails with
+  "canceled".
+- Known limit: `updated_at` is stamped with worker clocks, so several worker hosts need synchronized clocks.
 - SQLite with WAL; Alembic migration verified. PostgreSQL-compatible models but untested.
 - Local storage behind a `StorageBackend` protocol; generated keys, traversal guard.
 - Optional single bearer token enforced in middleware; **no users/roles/datasets**.
-- Mock adapter is the only detector; Qwen adapter is a registered stub.
+- Adapters: `mock` (CI default), `videojev` (real detector, the `video_grounding/` engine with VideoJev-4B, run
+  in the worker process only; [ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md)), and a
+  registered `qwen2.5-vl` stub. The `videojev` adapter is *exhaustive* (all events kept, zero events is
+  success), resumes from a per-job work dir `data/storage/engine/job-<id>/` on retry, and loads the model once
+  per worker. `POST /projects/{id}/actions/{id}/jobs` queues one job per video.
 - Export is a ZIP with `manifest.json` + `labels.csv` + clips (not OpenLABEL JSON).
 
-**Tests:** 56 backend (pytest), 21 UI (vitest), real-ffmpeg smoke 26/26.
+**Tests:** 80 backend (pytest), 21 UI (vitest), real-ffmpeg smoke 26/26; adapter tests use a fake engine (`backend/tests/test_videojev.py`), the engine has its own tests (`video_grounding/tests`); real-model `scripts/smoke_videojev.py` on the RTX 3070 laptop is pending (2026-11-16).
 
 ## 4. Gap and migration plan
 
@@ -90,7 +108,7 @@ flowchart LR
 | Object storage | Local FS | Implement `StorageBackend` for S3/MinIO; signed URL issuance belongs to the API |
 | Users/roles/invitations | Bearer token | New auth module, tables and screens; RBAC middleware; dataset scoping |
 | Dataset/Search domain | Project/Action | Rename + new entities; data migration for existing rows; adapt UI |
-| Detection engine | Mock adapter | New service + `GroundingBackend`; Gemini first, VideoJev self-hosted second |
+| Detection engine | `videojev` adapter in the worker (in-process) | Separate engine service + Gemini backend only if GPU hosting must be split from the worker |
 | JSON export | ZIP/CSV | New async export job writing the schema in Design §9 |
 | Signed media URLs | Token or open | Time-limited signed URLs/cookies so `<video>` works (also fixes R-18) |
 
@@ -100,8 +118,8 @@ flowchart LR
 
 1. `POST /api/datasets/{id}/searches` validates access and creates `Search(status=queued)`.
 2. API enqueues one job per video (Celery) and returns `202 {search_id}`.
-3. A worker posts each video to the engine (`POST /v1/jobs`), polls, receives events, writes candidates and
-   preview clips.
+3. A worker calls the engine in-process for each video (`videojev` adapter; progress callback updates the job),
+   receives events, writes candidates and cuts preview clips.
 4. Search state aggregates child jobs; partial failures are reported per video (NFR-9).
 5. The client polls `GET /api/searches/{id}`.
 
@@ -124,7 +142,7 @@ download URL.
 | Engine unavailable / model OOM | Job retried with fewer frames (ENG-11); after retries, per-video failure reported; search completes partially |
 | Window failure | Window marked coverage gap; search flags it (ENG-4) |
 | Worker crash | Job journal resumes finished windows (ENG-9); search can be retried |
-| API rate limit (Gemini 429) | Exponential backoff with a daily budget guard |
+| API rate limit (Gemini 429) | Only if engine verify is on (off in the `videojev` adapter); exponential backoff with a daily budget guard |
 | Upload invalid | 4xx with error envelope; file not retained |
 | Session expiry during review | Client keeps unsaved edits and replays after re-authentication (NFR-13) |
 

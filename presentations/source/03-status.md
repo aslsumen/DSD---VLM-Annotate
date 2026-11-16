@@ -4,7 +4,7 @@
 
 Course presentation · 2026-11-17 · version 1.0
 Upload deadline: Monday 2026-11-16 23:59 (manual course-page upload)
-Prepared 2026-11-15 from repository evidence — no unverified claims
+Prepared 2026-11-15 from repository evidence — no unverified claims; engine and detection rows updated 2026-11-16
 
 ---
 
@@ -25,9 +25,9 @@ Prepared 2026-11-15 from repository evidence — no unverified claims
 - **56** — backend tests (pytest, all green)
 - **21** — UI tests (vitest, build clean)
 - **26/26** — real ffmpeg checks (15 Nov smoke run)
-- **0** — measured model KPIs (no real detector yet)
+- **Pending** — event recall of VideoJev-4B on held-out composite benchmarks (running since 2026-11-16; target 0.85; Charades-STA reference 0.771 is in-domain; product footage not measured)
 
-_Test counts are verifiable in docs/TEST_PLAN.md; the smoke JSON is in docs/evidence/._
+_Test counts are those at Sprint 2 close and are verifiable in docs/TEST_PLAN.md; the smoke JSON is in docs/evidence/._
 
 ## 3. What the prototype can do today
 
@@ -42,7 +42,7 @@ _Test counts are verifiable in docs/TEST_PLAN.md; the smoke JSON is in docs/evid
 | Review TP/FP, correct timestamps, unreviewed state | Working |
 | Export ZIP with manifest, CSV, clips, provenance | Working (wrong target format) |
 | Responsive browser UI | Working (desktop, 375 px) |
-| Real zero-shot detection | Missing — mock labelled |
+| Real zero-shot detection | Integrated 2026-11-16 (`videojev` adapter, VideoJev-4B), real-model smoke on the 8 GB laptop pending; mock stays default and labelled |
 
 ## 4. Requirements & Design v1 (team v1.1 + repo v1.2)
 
@@ -86,7 +86,7 @@ _Test counts are verifiable in docs/TEST_PLAN.md; the smoke JSON is in docs/evid
 - Dataset entity + assignments
 - Search over all videos of a dataset
 - OpenLABEL JSON export
-- Real detector (Gemini/VideoJev)
+- Real detector validated on product footage (VideoJev-4B is integrated)
 - Signed media URLs, pagination, packaging
 
 ## 7. Sprint 3 — 16 → 29 Nov
@@ -98,19 +98,19 @@ _Test counts are verifiable in docs/TEST_PLAN.md; the smoke JSON is in docs/evid
 | Accounts & access | Users, global roles, invitations, sessions, sign-out/expiry/lockout |
 | Dataset & search domain | Dataset entity, assignments, search fan-out over videos |
 | JSON export | OpenLABEL-based schema with intervals, reviewer, provenance |
-| Detection engine | Gemini backend first; VideoJev-4B self-hosted second |
+| Detection engine | VideoJev-4B self-hosted (integrated, `videojev` adapter); Gemini only as optional verify, off |
 | UI | Sign-in, invitation, dataset page, cross-video review, export |
 
 ## 8. How detection will be built
 
 *Engine*
 
-- One `GroundingBackend` interface; Gemini and VideoJev behind it
-- 30 s windows, 20 s stride, 0.5 FPS coarse scan, 1 FPS refinement
+- One `GroundingBackend` interface; VideoJev-4B behind it, run inside the worker
+- 30 s windows, 20 s stride, 1 FPS coarse scan (32 frames), 2 FPS refinement (64 frames)
 - Fuse score curves on one timeline; hysteresis 0.25/0.15
 - Completeness flags: video edge, window edge, sparse sampling, coverage gap
-- Self-hosted by default for customer footage; cloud API only with written approval
-- Measure KPIs on Charades-STA / TimeLens before promising accuracy
+- Self-hosted; Gemini verify is off in the product adapter (cloud API only with written approval)
+- Accuracy check: held-out composite benchmarks (YouCook2, BDD-X), running, results pending; Charades-STA is reference only (VideoJev trained on it); TimeLens not used
 
 ## 9. Sprint 3 exit criteria (Alpha, 29 Nov)
 
@@ -121,8 +121,8 @@ _Test counts are verifiable in docs/TEST_PLAN.md; the smoke JSON is in docs/evid
 | Sign in, roles, invitation flow | Works end-to-end with two roles |
 | Dataset + search over several videos | Search returns candidates from all videos |
 | JSON export | Contains accepted annotations, intervals, provenance |
-| Real detector on test videos | Gemini or VideoJev measured on public data |
-| KPI report | Recall/R@IoU/precision on a labelled sample |
+| Real detector on test videos | VideoJev measured on held-out public data (composite benchmarks running, results pending; Charades-STA is reference only); product footage pending |
+| KPI report | Recall, complete-clip rate, precision on held-out sets |
 | Prototype testable | Documented limitations, no fake claims |
 
 ## 10. Blockers and risks
@@ -131,10 +131,10 @@ _Test counts are verifiable in docs/TEST_PLAN.md; the smoke JSON is in docs/evid
 
 | Risk | Response |
 |---|---|
-| No privacy approval for Gemini on face videos | Test data only; self-host for customer data |
-| Gemini key expired/leaked | Request a new key securely; env var only |
+| No privacy approval for Gemini on face videos | Gemini verify is off in the adapter; detection is self-hosted |
+| Gemini key expired/leaked | Matters only if verify is on; env var only |
 | OpenLABEL example still missing | Send schema proposal by 17 Nov; confirm before coding |
-| 12 GB vs 24 GB VRAM | Quantised 4B + low-VRAM profile; API fallback |
+| 12 GB vs 24 GB VRAM | VideoJev-4B runs on an 8 GB laptop with CPU offload, about 0.66× the video duration |
 | No capacity data | Fill table before Sprint 3 planning |
 
 ## 11. Decisions and dates

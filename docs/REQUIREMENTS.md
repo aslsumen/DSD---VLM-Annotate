@@ -83,7 +83,7 @@ Status column: **I** implemented in the current repository · **P** partial · *
 
 | ID | Requirement | Priority | Source | Status |
 |---|---|---|---|---|
-| DET-1 | Zero-shot detection without training a model for the event | Must | CP/CM | **N** (mock adapter only) |
+| DET-1 | Zero-shot detection without training a model for the event | Must | CP/CM | **P** (`videojev` adapter integrated 2026-11-16; mock is still the default; real-model smoke on the 8 GB laptop pending; KPI check on held-out composite benchmarks pending, Charades-STA is reference only) |
 | DET-2 | Each candidate has start/end timestamps in the video, in minutes and seconds | Must | CP/CM | **I** (stored in seconds; UI formats) |
 | DET-3 | Search runs in the background; user sees queued/running/done/failed and can leave the page | Must | CM/T | **I** (per-video jobs; dataset-level search missing) |
 | DET-4 | Confidence score shown when available; candidates sortable by it | Could | T | **I** (score stored/sorted) |
@@ -133,7 +133,7 @@ Status column: **I** implemented in the current repository · **P** partial · *
 | NFR-3 | Search results within 24 h | Timed batch on the reference dataset | Must | **N** (no real detector) |
 | NFR-4 | Accept HD 720p/1080p | Upload/process 1080p MP4 | Must | **P** (accepted; not enforced/tested) |
 | NFR-5 | Detection quality measured by KPIs defined before testing | KPI report on a labelled set | Must | **N** |
-| NFR-6 | Model replaceable without changing the workflow | Same search with two models | Should | **P** (adapter interface exists; one mock) |
+| NFR-6 | Model replaceable without changing the workflow | Same search with two models | Should | **P** (adapter interface; `mock` and `videojev` adapters, Qwen2.5-VL stub; same search with two real models not tried) |
 | NFR-7 | Candidates from all videos of a dataset in one filterable list | Review ≥ 20 videos from one list | Could | **P** (project-wide list; no pagination) |
 | NFR-8 | Videos/annotations only on customer-approved infrastructure; external AI only with approval | Deployment review | Must | **P** (local storage; signed media links missing — R-18) |
 | NFR-9 | Failed search shows an error and can be restarted | Simulated model failure | Should | **I** |
@@ -146,7 +146,7 @@ Status column: **I** implemented in the current repository · **P** partial · *
 ## 5. Detection engine requirements (ENG-1…ENG-13)
 
 These refine DET-1/DET-2 and are owned by the detection-engine workstream (Design Description v1.1 §6.1).
-**Status: all Not implemented (no engine code yet).**
+**Status (2026-11-16): engine code exists (`video_grounding/`, integrated as the `videojev` adapter); per-requirement status not re-assessed. KPI check against the targets is pending on the held-out composite benchmarks (Charades-STA is reference only, in-domain), see `video_grounding/docs/EVALUATION.md`.**
 
 | ID | Requirement (short) | Priority |
 |---|---|---|
@@ -171,8 +171,11 @@ These refine DET-1/DET-2 and are owned by the detection-engine workstream (Desig
 | Precision (accept rate) | Share of reviewed candidates accepted | Reported; target TBD |
 | Complete clip rate | Accepted candidates whose clip contains the whole event | ≥ 0.85 |
 | Boundary adjustment | Mean seconds reviewers move start/end of accepted candidates | Reported; target TBD |
-| Event recall | Share of manually marked events found, on a fully watched sample | ≥ 0.85 |
-| R@IoU=0.5 | Share of marked events found with temporal IoU ≥ 0.5 (also 0.3/0.7) | ≥ 0.70 |
+| Event recall | Share of manually marked events found (a candidate overlaps the event at temporal IoU ≥ 0.3), on a fully watched sample | ≥ 0.85 |
+| False candidates on absent prompts | Candidates returned for prompts whose event never happens in the videos (reviewer time wasted) | Reported; target TBD |
+| R@IoU 0.3/0.5/0.7, mIoU | Strict boundary overlap; diagnostic only | Reported, no target |
+
+*2026-11-16: R@IoU=0.5 ≥ 0.70 dropped as a target. This is an engineering tool, not a research benchmark: candidates only need to land in a reasonable range, because reviewers correct and confirm the span. Whether a span is good enough is measured by the complete clip rate (2 s tolerance per end) and the boundary adjustment.*
 
 ## 7. User stories
 

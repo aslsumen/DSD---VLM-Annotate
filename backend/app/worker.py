@@ -17,13 +17,21 @@ import signal
 import sys
 import threading
 
+from sqlalchemy.orm import Session
+
 from .adapters.registry import get_adapter
 from .config import Settings, get_settings
 from .db import SessionLocal
 from .errors import ApiError
-from .models import JobKind
+from .models import JobKind, ProcessingJob
 from .services.media import FFmpegClipExtractor, FFmpegMediaProbe
-from .services.pipeline import claim_next_job, execute_job, fail_job_now
+from .services.pipeline import (
+    claim_next_job,
+    execute_job,
+    fail_job_now,
+    heartbeat,
+    reap_stale_jobs,
+)
 from .services.storage import LocalStorage
 
 logger = logging.getLogger("vlm_annotate.worker")
@@ -45,29 +53,55 @@ class JobWorker:
 
     def run_once(self) -> bool:
         with SessionLocal() as session:
+            # Stale = 3 missed beats; a requeued job is then claimed like any other.
+            reap_stale_jobs(session, 3 * self.settings.worker_heartbeat_seconds)
             job = claim_next_job(session)
             if job is None:
                 return False
-            adapter = None
-            if job.kind == JobKind.candidate_proposal:
-                try:
-                    adapter = get_adapter(job.adapter_name, self.settings)
-                except ApiError as exc:
-                    fail_job_now(session, job, exc.code, exc.message)
-                    return True
-            execute_job(
-                session,
-                job.id,
-                storage=self.storage,
-                probe=self.probe,
-                extractor=self.extractor,
-                adapter=adapter,
-                settings=self.settings,
+            stop_beat = threading.Event()
+            beat = threading.Thread(
+                target=self._beat,
+                args=(job.id, job.attempts, stop_beat),
+                name=f"heartbeat-job-{job.id}",
+                daemon=True,
             )
-            logger.info(
-                "job %s (%s) finished with status=%s", job.id, job.kind.value, job.status.value
-            )
+            beat.start()
+            try:
+                self._run_claimed(session, job)
+            finally:
+                stop_beat.set()
+                beat.join()
             return True
+
+    def _run_claimed(self, session: Session, job: ProcessingJob) -> None:
+        adapter = None
+        if job.kind == JobKind.candidate_proposal:
+            try:
+                adapter = get_adapter(job.adapter_name, self.settings)
+            except ApiError as exc:
+                fail_job_now(session, job, exc.code, exc.message)
+                return
+        execute_job(
+            session,
+            job.id,
+            storage=self.storage,
+            probe=self.probe,
+            extractor=self.extractor,
+            adapter=adapter,
+            settings=self.settings,
+        )
+        logger.info("job %s (%s) finished with status=%s", job.id, job.kind.value, job.status.value)
+
+    def _beat(self, job_id: int, attempts: int, stop: threading.Event) -> None:
+        """Touch the job every interval so a long silent adapter step is not reaped."""
+        while not stop.wait(self.settings.worker_heartbeat_seconds):
+            try:
+                with SessionLocal() as session:
+                    if not heartbeat(session, job_id, attempts):
+                        return  # lost ownership; the main thread learns at its next fence
+            except Exception:
+                # e.g. SQLite locked: harmless, only 3 missed beats in a row matter.
+                logger.warning("heartbeat for job %s failed", job_id, exc_info=True)
 
     def run_forever(self, stop: threading.Event) -> None:
         logger.info("worker started (poll=%ss)", self.settings.worker_poll_interval_seconds)

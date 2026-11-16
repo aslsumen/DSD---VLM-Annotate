@@ -72,11 +72,16 @@ class Settings(BaseSettings):
     clip_max_duration_seconds: float = 90.0
     vlm_adapter: str = "mock"
     mock_seed_salt: str = "vlm-annotate-mock-v1"
+    # YAML settings file for the VideoJev engine (video_grounding); None = engine defaults.
+    videojev_config: str | None = None
 
     # --- worker -------------------------------------------------------
     worker_poll_interval_seconds: float = 1.0
     worker_max_attempts: int = 3
     worker_retry_backoff_seconds: float = 5.0
+    # A running job is touched every beat and counts as stale after 3 missed beats.  This only
+    # changes how fast a crashed job is retried, never results.
+    worker_heartbeat_seconds: float = 30.0
     ffmpeg_binary: str | None = None
 
     @field_validator("data_dir", mode="before")

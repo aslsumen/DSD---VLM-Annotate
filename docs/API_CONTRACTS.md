@@ -82,7 +82,11 @@ raw model output remains in `original_*`.
 Status: `queued | running | done | failed`. The artifact is the OpenLABEL-based JSON proposed in
 `DESIGN_DESCRIPTION.md` §9 (pending customer confirmation), optionally with clips.
 
-## 6. Engine service (internal, GPU host)
+## 6. Engine service (internal, GPU host) — not built
+
+> **Status 2026-11-16:** this HTTP service is not built and is no longer planned. The engine (`video_grounding/`) is a
+> library the worker calls in-process through the `videojev` adapter ([ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md));
+> its HTTP server was removed. The table is the earlier target design only.
 
 Not called by the browser. Worker → engine:
 
@@ -112,10 +116,28 @@ Not called by the browser. Worker → engine:
 |---|---|
 | Projects/actions | `POST/GET /api/v1/projects`, `GET/PATCH/DELETE /api/v1/projects/{id}`, `POST/GET /api/v1/projects/{id}/actions` |
 | Videos | `POST/GET /api/v1/projects/{id}/videos`, `GET/DELETE /api/v1/videos/{id}`, `GET /api/v1/videos/{id}/stream` |
-| Jobs | `POST /api/v1/videos/{id}/jobs`, `GET /api/v1/jobs`, `GET /api/v1/jobs/{id}`, retry/cancel, `GET /api/v1/jobs/{id}/candidates` |
+| Jobs | `POST /api/v1/videos/{id}/jobs`, `POST /api/v1/projects/{id}/actions/{action_id}/jobs` (batch), `GET /api/v1/jobs` (filters `project_id`, `video_id`, `action_id`, `status`, `limit`), `GET /api/v1/jobs/{id}`, retry (failed jobs), cancel (queued or running jobs; `409 JOB_NOT_CANCELABLE` otherwise), `GET /api/v1/jobs/{id}/candidates` |
 | Review | `GET /api/v1/projects/{id}/candidates`, `GET /api/v1/candidates/{id}`, `PUT/DELETE /api/v1/candidates/{id}/annotation`, `GET /api/v1/candidates/{id}/clip` |
 | Export | `POST/GET /api/v1/projects/{id}/exports`, `GET/DELETE /api/v1/exports/{id}`, `GET /api/v1/exports/{id}/download` |
 | System | `GET /api/v1/health`, `/api/v1/adapters`, `/api/v1/system/media`, `/api/docs` |
 
+**Job cancel and lost workers.** `POST /api/v1/jobs/{id}/cancel` works on `queued` and `running` jobs; a running
+worker stops at its next progress tick and its result is discarded. A running job whose worker stops
+heart-beating is requeued with `error_code=WORKER_LOST` (status `queued`, attempts kept), or set to `failed`
+with `error_code=WORKER_LOST` once `max_attempts` is exhausted.
+
+**Batch jobs.** `POST /api/v1/projects/{project_id}/actions/{action_id}/jobs` with body
+`{"video_ids": [1, 2] | null, "adapter": "videojev" | null, "params": {}}` queues one job per video and returns
+`202` with a list of `JobOut`. `video_ids` omitted/null means every `ready` video in the project; duplicates are
+ignored. Errors: `404` unknown project/action/video, `409 PROJECT_MISMATCH` (action or video in another
+project), `409 VIDEO_NOT_READY` (a listed video is not ready). An optional `Idempotency-Key` header is applied
+per video as `<key>:<video_id>`, so repeating the request returns the same jobs. Keys longer than 100
+characters are rejected with `422` on both job endpoints (the column is 128 wide).
+
+**Exhaustive adapters.** An adapter that reports `exhaustive` (currently `videojev`) returns every event it
+finds: the `max_candidates_per_job` cap does not apply, candidates are ranked by score descending, and zero
+events is a successful job with an empty candidate list (the action does not occur in that video). Other
+adapters keep the cap (earliest 12 by start time) and fail a job that yields no candidates.
+
 Behavioural guarantees of that API (timestamps, unreviewed semantics, error envelope, range streaming) are
-tested by 56 pytest tests and are the part to carry into the new contract.
+tested by the pytest suite (56 tests at Sprint 2 close) and are the part to carry into the new contract.
