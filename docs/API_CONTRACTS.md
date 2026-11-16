@@ -112,10 +112,15 @@ Not called by the browser. Worker → engine:
 |---|---|
 | Projects/actions | `POST/GET /api/v1/projects`, `GET/PATCH/DELETE /api/v1/projects/{id}`, `POST/GET /api/v1/projects/{id}/actions` |
 | Videos | `POST/GET /api/v1/projects/{id}/videos`, `GET/DELETE /api/v1/videos/{id}`, `GET /api/v1/videos/{id}/stream` |
-| Jobs | `POST /api/v1/videos/{id}/jobs`, `POST /api/v1/projects/{id}/actions/{action_id}/jobs` (batch), `GET /api/v1/jobs` (filters `project_id`, `video_id`, `action_id`, `status`, `limit`), `GET /api/v1/jobs/{id}`, retry/cancel, `GET /api/v1/jobs/{id}/candidates` |
+| Jobs | `POST /api/v1/videos/{id}/jobs`, `POST /api/v1/projects/{id}/actions/{action_id}/jobs` (batch), `GET /api/v1/jobs` (filters `project_id`, `video_id`, `action_id`, `status`, `limit`), `GET /api/v1/jobs/{id}`, retry (failed jobs), cancel (queued or running jobs; `409 JOB_NOT_CANCELABLE` otherwise), `GET /api/v1/jobs/{id}/candidates` |
 | Review | `GET /api/v1/projects/{id}/candidates`, `GET /api/v1/candidates/{id}`, `PUT/DELETE /api/v1/candidates/{id}/annotation`, `GET /api/v1/candidates/{id}/clip` |
 | Export | `POST/GET /api/v1/projects/{id}/exports`, `GET/DELETE /api/v1/exports/{id}`, `GET /api/v1/exports/{id}/download` |
 | System | `GET /api/v1/health`, `/api/v1/adapters`, `/api/v1/system/media`, `/api/docs` |
+
+**Job cancel and lost workers.** `POST /api/v1/jobs/{id}/cancel` works on `queued` and `running` jobs; a running
+worker stops at its next progress tick and its result is discarded. A running job whose worker stops
+heart-beating is requeued with `error_code=WORKER_LOST` (status `queued`, attempts kept), or set to `failed`
+with `error_code=WORKER_LOST` once `max_attempts` is exhausted.
 
 **Batch jobs.** `POST /api/v1/projects/{project_id}/actions/{action_id}/jobs` with body
 `{"video_ids": [1, 2] | null, "adapter": "videojev" | null, "params": {}}` queues one job per video and returns

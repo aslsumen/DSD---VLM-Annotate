@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from . import AdapterError, AdapterUnavailable, ProposalRequest, ProposedInterval
+from . import AdapterError, AdapterUnavailable, JobInterrupted, ProposalRequest, ProposedInterval
 
 # One model backend per worker process, reused across jobs (loading takes tens of seconds).
 _BACKENDS: dict[str | None, Any] = {}
@@ -86,6 +86,8 @@ class VideoJevAdapter:
                 )
         except ImportError as exc:
             raise AdapterUnavailable(f"video_grounding dependency missing: {exc}") from exc
+        except JobInterrupted:
+            raise  # canceled / reclaimed: the model is fine, keep it cached for the next job
         except Exception as exc:  # CUDA OOM, decode errors, ... - retryable
             # Drop the cached backend so the retry starts from a clean GPU state.
             if (stale := _BACKENDS.pop(self._config_path, None)) is not None:

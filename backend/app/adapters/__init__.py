@@ -20,6 +20,13 @@ class AdapterError(Exception):
     retryable = True
 
 
+class JobInterrupted(Exception):
+    """Raised from a progress callback when the job was canceled or reclaimed by another worker.
+
+    Adapters must let it propagate (it is not an adapter failure): the worker drops the result.
+    """
+
+
 class AdapterUnavailable(AdapterError):
     """The adapter cannot run in this environment (missing weights, deps, GPU)."""
 

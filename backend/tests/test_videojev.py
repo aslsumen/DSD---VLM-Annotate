@@ -8,7 +8,13 @@ from pathlib import Path
 from typing import ClassVar
 
 import pytest
-from app.adapters import AdapterError, AdapterUnavailable, ProposalRequest, ProposedInterval
+from app.adapters import (
+    AdapterError,
+    AdapterUnavailable,
+    JobInterrupted,
+    ProposalRequest,
+    ProposedInterval,
+)
 from app.adapters import videojev as vj
 from tests.conftest import create_action, create_project, upload_video
 
@@ -166,6 +172,16 @@ def test_engine_failure_is_retryable_and_evicts_backend(engine, tmp_path) -> Non
     assert info.value.retryable is True
     assert engine.unloaded == 1
     assert vj._BACKENDS == {}
+
+
+def test_job_interrupted_propagates_and_keeps_backend_loaded(engine, tmp_path) -> None:
+    def cancelled(_fraction: float) -> None:
+        raise JobInterrupted("canceled")
+
+    with pytest.raises(JobInterrupted):
+        vj.VideoJevAdapter().propose(_request(tmp_path, progress=cancelled))
+    assert engine.unloaded == 0
+    assert len(vj._BACKENDS) == 1  # the next job reuses the loaded model
 
 
 def test_missing_engine_is_unavailable(monkeypatch, tmp_path) -> None:

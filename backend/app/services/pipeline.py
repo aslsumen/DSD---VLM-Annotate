@@ -15,7 +15,13 @@ from typing import Any
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
-from ..adapters import AdapterError, AdapterUnavailable, ProposalRequest, VLMAdapter
+from ..adapters import (
+    AdapterError,
+    AdapterUnavailable,
+    JobInterrupted,
+    ProposalRequest,
+    VLMAdapter,
+)
 from ..config import Settings
 from ..errors import ApiError
 from ..models import (
@@ -187,6 +193,101 @@ def claim_next_job(session: Session, now: datetime | None = None) -> ProcessingJ
 
 
 # --------------------------------------------------------------------------- #
+# Lease: a worker owns a job while status == running AND attempts == the value it
+# claimed with (the fencing token).  Liveness is ProcessingJob.updated_at, touched by
+# every progress commit and by the worker's heartbeat thread.  updated_at uses the
+# worker's clock, so several worker hosts need synchronized clocks (NTP).
+# --------------------------------------------------------------------------- #
+
+
+def _owned(job_id: int, attempts: int) -> tuple[Any, ...]:
+    return (
+        ProcessingJob.id == job_id,
+        ProcessingJob.status == JobStatus.running,
+        ProcessingJob.attempts == attempts,
+    )
+
+
+def heartbeat(session: Session, job_id: int, attempts: int) -> bool:
+    """Touch updated_at if this worker still owns the job.  False means it no longer does."""
+    result = session.execute(
+        update(ProcessingJob)
+        .where(*_owned(job_id, attempts))
+        .values(updated_at=_now())
+        .execution_options(synchronize_session=False)
+    )
+    session.commit()
+    return result.rowcount == 1
+
+
+def _fence(session: Session, job: ProcessingJob) -> None:
+    """Assert ownership and take the row/write lock for the caller's upcoming commit.
+
+    Deliberately does not commit: the caller's ORM writes and commit share this transaction,
+    so the ownership check and the writes are atomic (SQLite write lock, Postgres row lock).
+    """
+    result = session.execute(
+        update(ProcessingJob)
+        .where(*_owned(job.id, job.attempts))
+        .values(updated_at=_now())
+        .execution_options(synchronize_session=False)
+    )
+    if result.rowcount != 1:
+        session.rollback()
+        raise JobInterrupted(f"job {job.id} is no longer owned by this worker")
+
+
+def _fail_export(session: Session, export_id: int | None, message: str) -> None:
+    export = session.get(DatasetExport, export_id) if export_id else None
+    if export is not None:
+        export.status = ExportStatus.failed
+        export.error_message = message[:2000]
+
+
+def reap_stale_jobs(
+    session: Session, stale_after_seconds: float, now: datetime | None = None
+) -> int:
+    """Requeue (or fail, when attempts are exhausted) running jobs whose worker went silent."""
+    moment = now or _now()
+    cutoff = moment - timedelta(seconds=stale_after_seconds)
+    stale = session.scalars(
+        select(ProcessingJob).where(
+            ProcessingJob.status == JobStatus.running, ProcessingJob.updated_at < cutoff
+        )
+    ).all()
+    reaped = 0
+    for job in stale:
+        exhausted = job.attempts >= job.max_attempts
+        message = "worker stopped heart-beating; " + (
+            "attempts exhausted" if exhausted else "requeued"
+        )
+        values: dict[str, Any] = {
+            "error_code": "WORKER_LOST",
+            "error_message": message,
+            "updated_at": moment,
+        }
+        if exhausted:
+            values.update(status=JobStatus.failed, finished_at=moment)
+        else:
+            values.update(status=JobStatus.queued, available_at=moment, progress=0.0)
+        # Re-checking status/updated_at/attempts keeps two reapers (or a late heartbeat) from
+        # double-acting on the same job.
+        result = session.execute(
+            update(ProcessingJob)
+            .where(*_owned(job.id, job.attempts), ProcessingJob.updated_at < cutoff)
+            .values(**values)
+            .execution_options(synchronize_session=False)
+        )
+        if result.rowcount == 1:
+            if exhausted and job.kind == JobKind.dataset_export:
+                _fail_export(session, job.export_id, message)
+            reaped += 1
+            logger.warning("job %s: %s", job.id, message)
+        session.commit()
+    return reaped
+
+
+# --------------------------------------------------------------------------- #
 # Execution
 # --------------------------------------------------------------------------- #
 
@@ -205,41 +306,52 @@ def execute_job(
     if job is None:
         raise ApiError(404, "JOB_NOT_FOUND", "job disappeared before execution")
     try:
-        if job.kind == JobKind.candidate_proposal:
-            if adapter is None:
-                raise AdapterUnavailable("no adapter resolved for this job")
-            _run_candidate_job(
+        try:
+            if job.kind == JobKind.candidate_proposal:
+                if adapter is None:
+                    raise AdapterUnavailable("no adapter resolved for this job")
+                _run_candidate_job(
+                    session,
+                    job,
+                    storage=storage,
+                    probe=probe,
+                    extractor=extractor,
+                    adapter=adapter,
+                    settings=settings,
+                )
+            elif job.kind == JobKind.dataset_export:
+                _run_export_job(session, job, storage=storage, settings=settings)
+            else:  # pragma: no cover - enum guard
+                raise ApiError(500, "UNKNOWN_JOB_KIND", f"unknown job kind {job.kind}")
+            _finish(session, job, JobStatus.succeeded)
+        except JobInterrupted:
+            raise  # must not reach the generic handler below
+        except (AdapterError, MediaError, StorageError) as exc:
+            _record_failure(
                 session,
                 job,
-                storage=storage,
-                probe=probe,
-                extractor=extractor,
-                adapter=adapter,
+                exc.code,
+                exc,
                 settings=settings,
+                retryable=getattr(exc, "retryable", True),
             )
-        elif job.kind == JobKind.dataset_export:
-            _run_export_job(session, job, storage=storage, settings=settings)
-        else:  # pragma: no cover - enum guard
-            raise ApiError(500, "UNKNOWN_JOB_KIND", f"unknown job kind {job.kind}")
-        _finish(session, job, JobStatus.succeeded)
-    except (AdapterError, MediaError, StorageError) as exc:
-        _record_failure(
-            session,
-            job,
-            exc.code,
-            exc,
-            settings=settings,
-            retryable=getattr(exc, "retryable", True),
+        except ApiError as exc:
+            _record_failure(session, job, exc.code, exc, settings=settings, retryable=False)
+        except Exception as exc:
+            logger.exception("unexpected job failure", extra={"job_id": job.id})
+            _record_failure(session, job, "JOB_FAILED", exc, settings=settings, retryable=True)
+    except JobInterrupted:
+        # Also reached from inside _record_failure.  Leave the row to its new owner/canceler.
+        session.rollback()
+        logger.info(
+            "job %s no longer owned by this worker (canceled or reclaimed); result dropped",
+            job_id,
         )
-    except ApiError as exc:
-        _record_failure(session, job, exc.code, exc, settings=settings, retryable=False)
-    except Exception as exc:
-        logger.exception("unexpected job failure", extra={"job_id": job.id})
-        _record_failure(session, job, "JOB_FAILED", exc, settings=settings, retryable=True)
     return job
 
 
 def _set_progress(session: Session, job: ProcessingJob, value: float) -> None:
+    _fence(session, job)
     job.progress = round(min(1.0, max(0.0, value)), 3)
     job.updated_at = _now()
     session.commit()
@@ -269,9 +381,7 @@ def _run_candidate_job(
 
     duration = float(video.duration_seconds)
     job.adapter_version = adapter.version
-    job.progress = 0.05
-    job.updated_at = _now()
-    session.commit()
+    _set_progress(session, job, 0.05)
 
     request = ProposalRequest(
         video_path=storage.path_for(video.storage_key),
@@ -361,9 +471,7 @@ def _run_candidate_job(
             candidate.clip_status = ClipStatus.failed
             candidate.clip_error = f"{exc.code}: {exc}"
             logger.warning("clip extraction failed for candidate %s: %s", candidate.id, exc)
-        job.progress = round(0.55 + 0.4 * index / len(created), 3)
-        job.updated_at = _now()
-        session.commit()
+        _set_progress(session, job, 0.55 + 0.4 * index / len(created))
 
     if failures:
         job.error_code = "CLIP_EXTRACTION_PARTIAL"
@@ -505,9 +613,7 @@ def _run_export_job(
     export.item_count = len(items)
     export.status = ExportStatus.ready
     export.finished_at = _now()
-    job.progress = 1.0
-    job.updated_at = _now()
-    session.commit()
+    _set_progress(session, job, 1.0)
 
 
 def _labels_csv(items: list[dict[str, Any]]) -> str:
@@ -570,6 +676,7 @@ def _export_readme(project: Project, items: list[dict[str, Any]]) -> str:
 
 
 def _finish(session: Session, job: ProcessingJob, status: JobStatus) -> None:
+    _fence(session, job)
     job.status = status
     job.progress = 1.0
     job.finished_at = _now()
@@ -588,6 +695,7 @@ def _record_failure(
     settings: Settings,
     retryable: bool,
 ) -> None:
+    _fence(session, job)
     job.error_code = code
     job.error_message = str(exc)[:4000]
     job.updated_at = _now()
@@ -600,11 +708,8 @@ def _record_failure(
     else:
         job.status = JobStatus.failed
         job.finished_at = _now()
-        if job.kind == JobKind.dataset_export and job.export_id:
-            export = session.get(DatasetExport, job.export_id)
-            if export is not None:
-                export.status = ExportStatus.failed
-                export.error_message = str(exc)[:2000]
+        if job.kind == JobKind.dataset_export:
+            _fail_export(session, job.export_id, str(exc))
     session.commit()
 
 
@@ -615,11 +720,8 @@ def fail_job_now(session: Session, job: ProcessingJob, code: str, message: str) 
     job.error_message = message[:4000]
     job.finished_at = _now()
     job.updated_at = _now()
-    if job.kind == JobKind.dataset_export and job.export_id:
-        export = session.get(DatasetExport, job.export_id)
-        if export is not None:
-            export.status = ExportStatus.failed
-            export.error_message = message[:2000]
+    if job.kind == JobKind.dataset_export:
+        _fail_export(session, job.export_id, message)
     session.commit()
     return job
 
@@ -645,26 +747,30 @@ def retry_job(session: Session, job: ProcessingJob) -> ProcessingJob:
 
 
 def cancel_job(session: Session, job: ProcessingJob) -> ProcessingJob:
-    if job.status != JobStatus.queued:
-        raise ApiError(409, "JOB_NOT_CANCELABLE", "only queued jobs can be canceled")
-    job.status = JobStatus.canceled
-    job.finished_at = _now()
-    job.updated_at = _now()
+    """Cancel a queued or running job; a running worker notices at its next fence."""
+    moment = _now()
+    result = session.execute(
+        update(ProcessingJob)
+        .where(
+            ProcessingJob.id == job.id,
+            ProcessingJob.status.in_((JobStatus.queued, JobStatus.running)),
+        )
+        .values(status=JobStatus.canceled, finished_at=moment, updated_at=moment)
+        .execution_options(synchronize_session=False)
+    )
+    if result.rowcount != 1:
+        session.rollback()
+        raise ApiError(409, "JOB_NOT_CANCELABLE", "only queued or running jobs can be canceled")
     if job.export_id:
-        export = session.get(DatasetExport, job.export_id)
-        if export is not None and export.status == ExportStatus.queued:
-            export.status = ExportStatus.failed
-            export.error_message = "canceled before execution"
+        session.execute(
+            update(DatasetExport)
+            .where(
+                DatasetExport.id == job.export_id,
+                DatasetExport.status.in_((ExportStatus.queued, ExportStatus.running)),
+            )
+            .values(status=ExportStatus.failed, error_message="canceled")
+            .execution_options(synchronize_session=False)
+        )
     session.commit()
+    session.refresh(job)
     return job
-
-
-__all__ = [
-    "cancel_job",
-    "claim_next_job",
-    "enqueue_candidate_job",
-    "enqueue_export_job",
-    "execute_job",
-    "fail_job_now",
-    "retry_job",
-]
