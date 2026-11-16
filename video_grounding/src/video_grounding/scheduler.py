@@ -128,6 +128,8 @@ def _ground_all(job: _Job, windows: list[Window], queries: list[Query], on_windo
             w = replace(w, clip_path=str(path), clip_origin_sec=origin)
         for q in todo:
             _ground_one(job, q, w)
+        if todo and job.backend.needs_clip:  # drop our temp clip; resume re-cuts unfinished windows
+            path.unlink(missing_ok=True)
         if on_window:
             on_window(i, len(windows))
 

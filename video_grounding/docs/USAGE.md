@@ -135,9 +135,9 @@ Ground-truth labels are shaped as `{"events":[{"query_id":"open_door","start_sec
 | `window_predictions.jsonl` | Window predictions and actual sampling metadata |
 | `clips/` | Playable event clips, when export is enabled |
 | `manifest.json`, `metrics.json` | Provenance, versions, config hash, timings, downgrade counts |
-| `windows/` | Rebuildable temporary window clips |
+| `windows/` | Temporary window clip; each is deleted once its window is grounded |
 
-Clean `windows/` only when no task is writing. Recovery (`resume`) still requires the source video. Do not delete the database to “retry.” There is no automatic retention policy.
+Recovery (`resume`) still requires the source video. Do not delete the database to “retry.” There is no automatic retention policy.
 
 ## Validation and troubleshooting
 
