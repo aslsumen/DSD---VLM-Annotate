@@ -3,9 +3,9 @@
 ## Gates
 | Gate | What | Status |
 |---|---|---|
-| L0 | Pure algorithm, no GPU: `uv run --group dev pytest -q` | Passed: 41 tests, macOS (ffmpeg 8.0) and the L1 host (ffmpeg 4.4.2) |
+| L0 | Pure algorithm, no GPU, no API: `uv run --group dev pytest -q` | Passed: 44 tests, macOS (ffmpeg 8.0) |
 | L1 | Real VideoJev inference, short video | Passed on RTX 3070 8 GB (CPU offload), see below |
-| L2 | Small real set, human review, KPIs | Not run: needs labelled 10–30 min videos |
+| L2 | Benchmark KPIs on Charades-STA | Ran 300 videos; below SPEC targets, see below |
 | L3 | 3070 low-VRAM adaptation | Works with offload; see PERFORMANCE.md for speed |
 
 ## L1 run (2026-11-08)
@@ -34,22 +34,92 @@ R@IoU {0.3, 0.5, 0.7}, temporal mIoU and boundary error. Targets (SPEC): Event R
 R@IoU=0.5 ≥ 0.70, Complete Clip Rate ≥ 0.85 (human-judged; a clip still counts as complete if the
 reviewed event extends at most 2 s past either end, `evaluate_review(..., tolerance_sec=2.0)`).
 
-## L2: YouCook2 (2026-11-09, 游戏本, RTX 3070 Laptop 8 GB)
-Labels `lmms-eval/YouCook2` (val), videos `lccshunli/youcook2-videos-only`. Not one of VideoJev's own
-benchmarks. Three videos concatenated per batch; 4 steps per video = 12 prompts; every prompt searches the
-whole video, so the other recipes act as distractors. A hit is IoU ≥ 0.3; complete = clip misses ≤ 2 s per end,
-over hits.
+## L2: Charades-STA
+Charades-STA is the only benchmark. Labels are the `test` split of HF `lmms-lab/charades_sta` (3720 queries over
+1334 indoor videos, ~30 s each; 4-fold zipped Charades 480p videos from the same repo). `scripts/charades_sta.py`
+takes a seed-0 shuffle of the test videos, runs every query of a video through scan → refine → verify with
+one loaded model, and scores all finished videos:
 
-Batch A (30.3 min), full pipeline, `fusion.min_event_score` 0 vs 0.9 (0.9 run reuses the same coarse pass):
+```
+python scripts/charades_sta.py run   DATA_DIR N configs/rtx3070.yaml   # reruns skip finished videos
+python scripts/charades_sta.py score DATA_DIR > kpis.json
+```
 
-| | recall | R@IoU0.5 | mIoU | complete | candidates/prompt | true step ranked 1st | refine | export |
+It reports the engine KPIs (recall, precision, R@IoU, mIoU, boundary error over all events, before and after
+verify), the standard Charades-STA R1@{0.3,0.5,0.7} and mIoU on the top-scoring event per query, Complete Clip
+Rate with an oracle reviewer (accepts events matched at IoU ≥ 0.3, adjusts them to GT), a verify threshold
+sweep, a split by GT length and the per-stage time.
+
+### Results (2026-11-16)
+游戏本, RTX 3070 Laptop 8 GB, `configs/rtx3070.yaml` (CPU offload), VideoJev-4B `b614f1a`, current sampling
+(coarse 1 fps / 32 frames, refine 2 fps / 64 frames), `min_event_score` 0.9 (the default then; now 0.5, see
+below), current Gemini question. 300 videos, 822 queries, 2.5 h of
+video, 0 failed videos, 0 unverified events.
+
+| | Event recall | Precision | R1@0.3 | R1@0.5 | R1@0.7 | R1 mIoU | Queries with no event | CCR (oracle) |
 |---|---|---|---|---|---|---|---|---|
-| 0 | 11/12 | 0.92 | 0.70 | 9/11 | 22.8 | 8/12 | 604 windows, 139 min | 7.5 min |
-| 0.9 | 12/12 | 0.92 | 0.73 | 12/12 | 8.8 | 9/12 | 289 windows, 78 min | 3.8 min |
+| Before verify | 0.690 | 0.768 | 0.683 | 0.460 | 0.215 | 0.437 | 12.3% | 0.778 |
+| After verify (p ≥ 0.5) | 0.593 | 0.784 | 0.589 | 0.397 | 0.191 | 0.378 | 25.3% | 0.772 |
+| After verify (p ≥ 0.3) | 0.663 | 0.776 | 0.657 | 0.440 | 0.204 | 0.420 | 15.7% | 0.778 |
 
-Coarse pass 26 min (1092 window×prompt units), peak VRAM 7.44 GiB, no OOM, no failure. `kill -9` during
-the coarse pass + `resume` continued from the last finished unit.
+All three SPEC targets are missed (recall 0.85, R@IoU 0.5 0.70, CCR 0.85).
 
-Batch B (25.4 min, holdout for the 0.9 threshold), coarse only: recall 11/12 at both 0 and 0.9 (0.95 loses one),
-candidates/prompt 22.1 → 8.2, complete 10/11, but R@IoU0.5 only 0.33 and true step ranked 1st 6/12: short,
-generic steps ("stir the food", "add onion paste") without refinement. Coarse pass 29 min (912 units).
+- **Verify on Charades:** Gemini kept 487/567 true events (86%) and removed 37/171 false ones (22%), so it costs
+  recall for +1.6 points of precision. Every Charades query happens in its video, so a "false" event (IoU < 0.3
+  with GT) can still show the action; Gemini said yes to 134 of the 171. A yes/no question about the clip cannot
+  fix a misplaced span. Verify earns its cost only when prompts can be absent from the video (cooking data, A/B
+  above).
+- **By GT length (before verify):** recall 0.42 for spans < 5 s (83 queries, 23% of them get no event), 0.68 for
+  5–10 s (542), 0.83 for ≥ 10 s (197). Short actions are the main loss.
+- **Time:** 22.6 s per ~30 s video (scan 8.8, refine 9.2, verify 2.9, export 1.3), 1.3× real time.
+
+Old vs current sampling defaults on the same 56 videos (before verify, so the Gemini question plays no part):
+
+| Defaults | Event recall | R1@0.5 | R1@0.7 | R1 mIoU | Queries with no event | Scan + refine |
+|---|---|---|---|---|---|---|
+| Coarse 0.5 fps / 16, refine 1 fps / 32 | 0.598 | 0.425 | 0.230 | 0.409 | 21.3% | 14.8 s |
+| Coarse 1 fps / 32, refine 2 fps / 64 | 0.672 | 0.431 | 0.178 | 0.427 | 10.9% | 21.4 s |
+
+Denser sampling finds more events (fewer queries left empty) but does not tighten boundaries. After verify, with
+the old and new question respectively, recall went from 0.420 to 0.552 on these 56 videos.
+
+**Paper reference (not comparable as is):** VideoJev-4B reports R1@0.3/0.5/0.7 82.8/69.4/40.3, mIoU 60.1 on
+Charades. That run uses TimeLens-refined labels (ours are the original ones), feeds the whole video at 4 fps up to
+640×640 with a 262144-token context (ours: 30 s windows, 8192 tokens) and always returns one span per query (ours
+leaves 12% of queries empty, scored as IoU 0). A model-only run under the paper protocol would separate the
+model's ceiling from the pipeline's losses; it has not been run.
+
+### Short spans and `min_event_score` (2026-11-16)
+The 103 queries whose GT span (clipped to the video) is under 5 s, at `min_event_score` 0.9: 49 hit (IoU ≥ 0.3).
+Of the 54 misses, 25 have an event overlapping GT but too wide (median 18 s against a median GT of 4.5 s), 14 were
+found by the model and then dropped by `min_event_score`, 7 sit elsewhere, 8 have no usable signal in GT.
+
+Re-fusing the stored predictions of the 300-video run (no model calls; queries that the 0.9 filter left without
+refinement are scored on coarse samples only, so lower thresholds are, if anything, underestimated):
+
+| Fusion variant | Recall | Precision | R1@0.5 | R1 mIoU | No event | < 5 s recall | < 5 s R1@0.5 |
+|---|---|---|---|---|---|---|---|
+| `min_event_score` 0.9 | 0.690 | 0.768 | 0.465 | 0.444 | 12.3% | 0.476 | 0.369 |
+| `min_event_score` 0.5 (new default) | 0.771 | 0.738 | 0.513 | 0.494 | 0.9% | 0.592 | 0.427 |
+| 0.5, segment threshold 0.5 (`low` = `high`) | 0.659 | 0.630 | 0.364 | 0.411 | 2.3% | 0.563 | 0.262 |
+| 0.5, segments trimmed to ≥ 50% of their peak | 0.691 | 0.637 | 0.384 | 0.425 | 0.9% | 0.602 | 0.301 |
+
+Narrowing segments in fusion makes every length bin worse: wide events come from the model scoring a long stretch
+high, which fusion cannot undo. Tightening short spans needs denser model input (not yet tested). Charades has no
+absent prompts, so the cost of 0.5 on prompts that never happen (the case 0.9 was set for on cooking data) is
+unmeasured here.
+
+### Gemini question A/B (2026-11-16)
+Clips from the first 56 videos (old sampling defaults), each sent to `gemini-decision-1` with both questions:
+123 events covering ≥ 50% of a GT span (positives); 81 same-caption clips of the same length placed ≥ 1 s away from
+the GT span (wrong time); 49 positive clips paired with a caption from another video that shares no content word
+with any caption of this video (absent). Present = p ≥ 0.5.
+
+| Question | Positives kept | Wrong-time removed | Absent removed | AUC wrong-time | AUC absent |
+|---|---|---|---|---|---|
+| `Does the following event visibly happen in this video clip?` | 71.5% | 97.5% | 93.9% | 0.972 | 0.952 |
+| Current (`verifier.py` `_INSTRUCTIONS` + `_CRITERIA`) | 84.6% | 96.3% | 93.9% | 0.981 | 0.963 |
+
+The bare question wrongly rejected mostly with p in 0.3–0.49 on short, dark clips of simple actions ("person
+opens a cabinet"). The new question says the clip is a proposal, the text is informal and the event may be brief
+or at the clip edge. It keeps more true events and separates better (higher AUC), not only a looser cutoff.

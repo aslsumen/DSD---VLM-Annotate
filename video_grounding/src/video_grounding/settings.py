@@ -32,8 +32,8 @@ class ModelCfg(_Section):
 class Coarse(_Section):
     window_seconds: float = 30
     stride_seconds: float = 20
-    fps: float = 0.5
-    max_frames: int = 16
+    fps: float = 1.0
+    max_frames: int = 32
     grounding_threshold: float = 0.25
     context_tokens: int = 8192
     min_candidate_seconds: float = 0.5
@@ -41,8 +41,8 @@ class Coarse(_Section):
 
 class Refine(_Section):
     enabled: bool = True
-    fps: float = 1.0
-    max_frames: int = 32
+    fps: float = 2.0
+    max_frames: int = 64
     window_seconds: float = 30
     expand_min_seconds: float = 5
     max_span_seconds: float = 180
@@ -62,10 +62,10 @@ class Fusion(_Section):
     high: float = 0.25
     low: float = 0.15
     edge_weight_floor: float = 0.05
-    sparse_spacing_sec: float = 2.5  # VideoJev: 1 score per frame pair → 2 s cells @1 FPS, 4 s @0.5 FPS
-    # drop events whose raw_score_max is lower (before refine and export); tuned on VideoJev-4B raw scores
-    # with YouCook2 (docs/EVALUATION.md L2), re-tune when the model changes
-    min_event_score: float = 0.9
+    sparse_spacing_sec: float = 1.5  # VideoJev: 1 score per frame pair → 1 s cells @2 FPS (refine), 2 s @1 FPS (coarse)
+    # drop events whose raw_score_max is lower (before refine and export); chosen on Charades-STA with VideoJev-4B
+    # (docs/EVALUATION.md L2 sweep); re-check when the model or sampling changes
+    min_event_score: float = 0.5
 
 
 class Export(_Section):
@@ -78,7 +78,7 @@ class Export(_Section):
 
 class Retry(_Section):
     max_attempts: int = 3
-    oom_ladder: list[int] = [32, 24, 16, 12, 8, 4]
+    oom_ladder: list[int] = [48, 32, 24, 16, 12, 8, 4]
 
 
 class Settings(_Section):

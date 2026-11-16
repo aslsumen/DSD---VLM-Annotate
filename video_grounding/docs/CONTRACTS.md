@@ -2,7 +2,8 @@
 
 Source of truth for data types: `src/video_grounding/models.py`. This file pins module
 signatures, the VideoJev output semantics we verified, and the job-directory layout.
-Spec: `SPEC_ZeroShot_Video_Event_Grounding_MVP_v1.1`.
+Public integration contract: [API.md](API.md). Setup, CLI and operations: [USAGE.md](USAGE.md).
+Historical spec name: `SPEC_ZeroShot_Video_Event_Grounding_MVP_v1.1` (not included in this checkout).
 
 ## Time
 - Global seconds: source video-stream PTS minus stream `start_time`; 0.0 = first frame.
@@ -44,7 +45,7 @@ Spec: `SPEC_ZeroShot_Video_Event_Grounding_MVP_v1.1`.
   floor 0.05 at an inner window edge). A window edge that lies on the video start or end truncates
   nothing, so it is not treated as an edge. `max_weight < 0.5` at an event boundary sets
   `boundary_near_window_edge`.
-- Events whose `raw_score_max` is below `fusion.min_event_score` (default 0.9, tuned for VideoJev-4B)
+- Events whose `raw_score_max` is below `fusion.min_event_score` (default 0.5, chosen on Charades-STA for VideoJev-4B)
   are dropped before refinement and export. events.json lists each query's events by descending
   `raw_score_max`, so reviewers see the likely ones first.
 
@@ -53,13 +54,16 @@ Spec: `SPEC_ZeroShot_Video_Event_Grounding_MVP_v1.1`.
   the class default is off). Each event's clip span (`clip_start_sec..clip_end_sec`) is cut at
   `verify.max_height` (default 480) and resampled to `verify.fps` (default 2.0), then sent inline to the Gemini
   Decisions API (`verify.model`, default `gemini-decision-1`, endpoint `v1beta/decisions`) as one yes/no question
-  built from the query text. The model scores it in one forward pass, with no generated text, and returns a calibrated
+  built from the query text (`_INSTRUCTIONS` plus true/false `_CRITERIA`: a proposed clip, informal query text, the event
+  may be brief or at the clip edge). The model scores it in one forward pass, with no generated text, and returns a calibrated
   `P(true)`. The verdict is `{present: p_present >= 0.5, p_present, model}`. A 429 response is retried for about 4 minutes
   to wait out per-minute limits.
 - Key: `GEMINI_API_KEY` env var or `video_grounding/.env` (template `.env.example`, gitignored).
   A missing key fails the job before scanning starts. Install with `uv sync --extra gemini`.
-- Verdicts are cached in the `verdicts` table, keyed by `(query_id, clip_start_us, clip_end_us, model)`.
-  Resume and `export` reuse them and make no API calls. `verify` is excluded from `config_hash`, so
+- Verdicts are cached in the `verdicts` table, keyed by `(query_id, clip_start_us, clip_end_us, model, QUESTION_ID)`;
+  `QUESTION_ID` hashes the question text, so editing it re-verifies.
+  Resume reuses cached verdicts and calls the API only for missing ones; `export` never calls the API.
+  Sampling settings (`verify.fps`, `max_height`) are not in the cache key: use a new job for sampling comparisons. `verify` is excluded from `config_hash`, so
   changing it never blocks a resume or changes event ids. To verify a finished job, enable `verify`
   in its `config.yaml` and resume the job.
 - Gemini only removes refined events: `present=false` moves the event from `events` to
@@ -68,9 +72,9 @@ Spec: `SPEC_ZeroShot_Video_Event_Grounding_MVP_v1.1`.
   with `verdict: null`, `needs_review` and `not_verified`; a resume retries it. A 429 that outlasts the
   retries (daily quota) stops the stage, so the remaining events stay `not_verified` until a later resume.
 
-## Module ownership and signatures
+## Module responsibilities and signatures
 
-`media` agent:
+Media and model adapter:
 - `probe.probe_video(path: str) -> VideoInfo` (ffprobe JSON; rotation from side_data/tags;
   VFR = r_frame_rate != avg_frame_rate or irregular frame durations).
 - `cutter.cut_window_clip(src: str, start_sec: float, end_sec: float, out_path: str,
@@ -86,7 +90,7 @@ Spec: `SPEC_ZeroShot_Video_Event_Grounding_MVP_v1.1`.
   protocol below. Caches the last window's encoded features so several queries on one window
   encode once. Converts CUDA OOM into `BackendOOM` after freeing tensors.
 
-`core` agent:
+Scheduling and data pipeline:
 - `adapters/base.py`: `GroundingBackend` Protocol (`model_id: str`, `model_revision: str`,
   `needs_clip: bool`, `load()`, `ground(window, query_id, query) -> GroundingResult`, `unload()`),
   `SyntheticBackend`, `ReplayBackend`, `make_backend(settings) -> GroundingBackend`
@@ -109,29 +113,20 @@ metrics.json               # window counts, failures, OOMs, peak VRAM, durations
 - Window key: `(job_id, query_id, window_start_us, window_end_us, sampling_profile, model_revision)`.
 - Event id: `models.stable_event_id(query_id, start, end, model_revision, config_hash)`.
 
-## HTTP API (`video-grounding serve --config C --jobs-root R [--media-root M]`)
-Needs the `server` extra. One worker thread runs scans and dataset builds one at a time; the model stays loaded.
-Jobs live in `R/jobs/job_<id>/`, datasets in `R/datasets/ds_<id>/`; `request.json` is written first, so a restart
-re-queues unfinished work (a failed one writes `error.txt` and stays failed until retried).
+## HTTP integration
 
-| Endpoint | Purpose |
-|---|---|
-| `GET /v1/health` | `{status, model_id, model_revision, model_loaded, queue_length}` |
-| `POST /v1/jobs` | `{video, prompts:[{query_id,text}] \| prompt}` -> 202 `{job_id, state}`; `video` = local path (inside `--media-root` if set) or http(s) URL |
-| `GET /v1/jobs`, `GET /v1/jobs/{id}` | `{job_id, state, video, queries, progress, error, scan_complete, n_events}` |
-| `GET /v1/jobs/{id}/events` | `events.json` (409 until completed) |
-| `GET /v1/jobs/{id}/clips/{event_id}` | event clip mp4 |
-| `POST /v1/jobs/{id}/reviews` | `{reviews:[{event_id, accepted, start_sec?, end_sec?}]}` -> eval metrics; latest review per event wins; 400 invalid, 409 not completed |
-| `GET /v1/jobs/{id}/reviews` | stored reviews + metrics |
-| `POST /v1/jobs/{id}/retry` | re-run a failed/paused job (409 otherwise) |
-| `POST /v1/datasets` | `{name, job_ids, include_rejected}` -> 202 `{dataset_id, state}` |
-| `GET /v1/datasets/{id}` | `{dataset_id, state: queued\|running\|completed\|failed, error, stats}` |
-| `GET /v1/datasets/{id}/manifest`, `.../clips/{name}` | `dataset.json`, clip mp4 (`name` = the file stem under `annotations[].clip`) |
+The external API contract is maintained in [API.md](API.md), including request/response examples,
+job states, retry rules, event/verdict fields, reviews and datasets. [USAGE.md](USAGE.md) covers deployment.
+`server.py` is the implementation source of truth; `/openapi.json` exposes routes and request schemas.
+Routes currently have no complete typed response models, so OpenAPI alone does not describe all response fields.
 
-State mapping to the backend's Search states: `queued` -> queued; `created, probing, scanning, refining, verifying, exporting` -> running;
-`completed` -> done; `failed, paused` -> failed-retryable. A job with an `error.txt` reports `failed`.
+One worker thread runs scans and dataset builds serially. HTTP jobs live under `jobs_root/jobs/job_<id>/`,
+datasets under `jobs_root/datasets/ds_<id>/`. `request.json` enables restart recovery; `error.txt` marks failed work.
+A completed job may still have coverage gaps or unverified candidates. Clients must inspect
+`scan_complete`, `coverage_gaps`, `verdict` and `review_reasons` separately.
 
-`dataset.json`: `{dataset, created_at, model, model_revision, videos:[{video, job_id, duration_sec, scan_complete}],
-annotations:[{video, job_id, query_id, prompt, start_s, end_s, status: accepted\|rejected, engine_event_id, clip,
-adjusted, raw_score_max}], stats:{n_annotations, n_accepted, n_rejected, n_unreviewed}}`. Unreviewed events are left out;
-rejected ones appear only with `include_rejected`. Reviewer-adjusted times are re-cut from the source video.
+## Model revision caveat
+
+The configured revision is used for identity, event IDs and resume checks. The current VideoJev adapter
+loads `local_path` or model ID without passing an explicit `revision` to `from_pretrained`.
+For reproducibility, deploy a pre-downloaded snapshot at the declared revision through `model.local_path`.

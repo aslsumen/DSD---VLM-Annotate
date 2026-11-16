@@ -6,6 +6,8 @@ The API key comes from the GEMINI_API_KEY environment variable or a `.env` file
 from __future__ import annotations
 
 import base64
+import hashlib
+import json
 import os
 import tempfile
 import time
@@ -16,7 +18,19 @@ from .settings import Verify
 
 _ENV_FILES = (Path.cwd() / ".env", Path(__file__).resolve().parents[2] / ".env")
 _INLINE_LIMIT = 20 * 1024 * 1024  # inline request cap
-_QUESTION = 'Does the following event visibly happen in this video clip? Event: "{query}"'
+# Charades-STA A/B (docs/EVALUATION.md): vs the bare question 'Does the following event visibly happen in this video
+# clip?', true events kept 72% -> 85% at p >= 0.5 while wrong-time and unrelated-caption clips stay removed (96% / 94%).
+_INSTRUCTIONS = ('A video search tool proposed this clip for the event below. Does the event happen in the clip?\n'
+                 'Event: "{query}"\n'
+                 'The event text was written by a person and may be short, informal or misspelled: judge its main '
+                 'action and object, not every word. The clip can start before or end after the event, and the '
+                 'event can be brief, partly out of frame, dark or low resolution.')
+_CRITERIA = {"true_description": "The described action happens at some point in the clip, even briefly or only "
+                                 "near its start or end.",
+             "false_description": "The described action does not happen anywhere in the clip, or only a "
+                                  "different action happens."}
+# part of the verdict cache key: editing the question re-verifies instead of reusing old verdicts
+QUESTION_ID = hashlib.sha1(json.dumps([_INSTRUCTIONS, _CRITERIA]).encode()).hexdigest()[:8]
 
 
 def api_key() -> str:
@@ -53,7 +67,7 @@ class GeminiVerifier:
             raise ValueError(f"clip {len(data) / 1e6:.1f} MB exceeds the inline limit; lower verify.max_height")
         video_in = {"type": "video", "data": base64.b64encode(data).decode(), "mime_type": "video/mp4",
                     "processing": {"type": "static", "fps": self.cfg.fps}}
-        q = {"type": "noul", "instructions": _QUESTION.format(query=query)}
+        q = {"type": "noul", "instructions": _INSTRUCTIONS.format(query=query), "criteria": _CRITERIA}
         for attempt in range(5):  # per-minute rate limits clear within a few minutes; a daily cap still raises
             try:
                 r = self.client.decisions.create(model=f"models/{self.cfg.model}", api_version="v1beta",

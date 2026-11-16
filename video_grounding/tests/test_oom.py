@@ -11,7 +11,7 @@ def _rows(out):
 
 
 def test_oom_downgrades_to_8(tmp_path):
-    st = make_settings(refine={"enabled": False})
+    st = make_settings(refine={"enabled": False}, coarse={"max_frames": 16})
     doc = run_scan("v.mp4", [Query("q", "x")], st, tmp_path, video_info=make_info(60.0),
                    backend=SyntheticBackend({"q": [(20, 25)]}, oom_above_frames=8))
     rows = _rows(tmp_path)

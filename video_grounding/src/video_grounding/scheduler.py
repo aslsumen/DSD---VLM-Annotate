@@ -18,6 +18,7 @@ import yaml
 from . import fusion, persistence as P, refinement
 from .adapters.base import make_backend
 from .models import BackendOOM, Query, VideoInfo, Window
+from .verifier import QUESTION_ID
 from .sampler import plan_windows
 from .settings import Settings, config_hash, dump_settings, load_settings
 
@@ -155,7 +156,7 @@ def _refine(job: _Job) -> None:
 
 
 def _verdict_key(e, model: str) -> str:
-    return f"{e.query_id}|{round(e.clip_start_sec * 1e6)}|{round(e.clip_end_sec * 1e6)}|{model}"
+    return f"{e.query_id}|{round(e.clip_start_sec * 1e6)}|{round(e.clip_end_sec * 1e6)}|{model}|{QUESTION_ID}"
 
 
 def _verify(job: _Job) -> None:

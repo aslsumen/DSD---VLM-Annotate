@@ -47,13 +47,14 @@ class VideoJevBackend:
             return
         import torch
         from transformers import AutoModel, AutoProcessor
-        self._processor = AutoProcessor.from_pretrained(self.model_path, trust_remote_code=True)
+        self._processor = AutoProcessor.from_pretrained(self.model_path, revision=self.model_revision, trust_remote_code=True)
         kw = {"max_memory": dict(self.max_memory)} if self.max_memory else {}
         device_map = self.device_map
         if device_map == "auto" and self.max_memory:
             device_map = self._offload_map(torch)
         model = AutoModel.from_pretrained(
-            self.model_path, trust_remote_code=True, dtype=torch.bfloat16, device_map=device_map,
+            self.model_path, revision=self.model_revision, trust_remote_code=True, dtype=torch.bfloat16,
+            device_map=device_map,
             attn_implementation=self.attn_implementation, **kw)
         model.eval()
         model.prepare_for_inference()
@@ -66,7 +67,7 @@ class VideoJevBackend:
         bypassing accelerate's offload hook, so an offloaded head fails with 'Tensor on device meta'."""
         from accelerate import infer_auto_device_map, init_empty_weights
         from transformers import AutoConfig, AutoModel
-        cfg = AutoConfig.from_pretrained(self.model_path, trust_remote_code=True)
+        cfg = AutoConfig.from_pretrained(self.model_path, revision=self.model_revision, trust_remote_code=True)
         with init_empty_weights():
             m0 = AutoModel.from_config(cfg, trust_remote_code=True, dtype=torch.bfloat16)
         dmap = infer_auto_device_map(m0, max_memory=dict(self.max_memory), no_split_module_classes=m0._no_split_modules,
