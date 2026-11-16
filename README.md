@@ -214,10 +214,11 @@ Read more: [Architecture](docs/ARCHITECTURE.md) · [Design Description](docs/DES
 
 ## Status
 
-Sprint 2 closed on **2026-11-15**. The increment is a runnable, tested **technical prototype** with mock
-candidates — accounts, global roles, datasets, searches and OpenLABEL JSON are the Sprint 3 scope. The
-real detector is the opt-in `videojev` adapter (VideoJev-4B; Charades-STA reference numbers only, held-out composite results pending;
-see [MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md)).
+Sprint 3 is in progress (2026-11-16 → 2026-11-29; Alpha gate 29 Nov). `main` contains the tested vertical slice
+(mock adapter is the default), the opt-in `videojev` adapter and the `video_grounding` engine (Linux/WSL2 only;
+Charades-STA reference numbers only, held-out composite results pending — see
+[MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md)). Accounts, global roles, datasets, searches and OpenLABEL JSON
+are the remaining Sprint 3 scope.
 
 Course artifacts are tracked in [docs/course/DSD_DELIVERABLES_REGISTER.md](docs/course/DSD_DELIVERABLES_REGISTER.md).
 Known gap: the official `Guidelines (SCRUM, Presentations)` files are behind a FER login wall, so decks are
