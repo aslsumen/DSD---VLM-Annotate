@@ -61,3 +61,19 @@ def test_resume_rejects_changed_config_or_video(tmp_path):
     cfg.write_text(yaml.safe_dump(d))
     with pytest.raises(ResumeMismatch, match="config"):
         resume(tmp_path, backend=be, video_info=info)
+
+
+def test_progress_is_monotonic_and_ends_at_one_also_after_resume(tmp_path):
+    st, info, qs = _setup()
+    fresh = []
+    run_scan("v.mp4", qs, st, tmp_path / "a", video_info=info, backend=CountingBackend({"q": [(40, 46)]}),
+             progress=fresh.append)
+    assert fresh == sorted(fresh) and 0 < fresh[0] <= fresh[-1] == 1.0 and 0.8 in fresh
+
+    be, seen = CountingBackend({"q": [(40, 46)]}, crash_after=3), []
+    with pytest.raises(Crash):
+        run_scan("v.mp4", qs, st, tmp_path / "b", video_info=info, backend=be, progress=seen.append)
+    assert seen and seen[-1] < 0.8  # interrupted mid-scan: never reported done
+    be.crash_after, seen = None, []
+    resume(tmp_path / "b", backend=be, video_info=info, progress=seen.append)
+    assert seen == sorted(seen) and 0 < seen[0] and seen[-1] == 1.0

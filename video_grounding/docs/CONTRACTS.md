@@ -113,16 +113,10 @@ metrics.json               # window counts, failures, OOMs, peak VRAM, durations
 - Window key: `(job_id, query_id, window_start_us, window_end_us, sampling_profile, model_revision)`.
 - Event id: `models.stable_event_id(query_id, start, end, model_revision, config_hash)`.
 
-## HTTP integration
+## Integration
 
-The external API contract is maintained in [API.md](API.md), including request/response examples,
-job states, retry rules, event/verdict fields, reviews and datasets. [USAGE.md](USAGE.md) covers deployment.
-`server.py` is the implementation source of truth; `/openapi.json` exposes routes and request schemas.
-Routes currently have no complete typed response models, so OpenAPI alone does not describe all response fields.
-
-One worker thread runs scans and dataset builds serially. HTTP jobs live under `jobs_root/jobs/job_<id>/`,
-datasets under `jobs_root/datasets/ds_<id>/`. `request.json` enables restart recovery; `error.txt` marks failed work.
-A completed job may still have coverage gaps or unverified candidates. Clients must inspect
+The Python API (`run_scan`, `resume`, `export`, progress callback) is documented in [API.md](API.md); [USAGE.md](USAGE.md) covers the CLI.
+A completed job may still have coverage gaps or unverified candidates. Callers must inspect
 `scan_complete`, `coverage_gaps`, `verdict` and `review_reasons` separately.
 
 ## Model revision caveat
