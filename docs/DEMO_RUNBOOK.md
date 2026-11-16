@@ -90,7 +90,7 @@ Fill with real names only when the team supplies them:
 
 ## 6. Questions to expect
 
-- *"Is that a real model?"* → Not in the mock demo (labelled). A real model, VideoJev-4B, is integrated as the `videojev` adapter and was measured on a public benchmark (Charades-STA) only, below target; validation on product footage is pending.
-- *"Why 8 GB?"* → The dev laptop's GPU; VideoJev-4B runs on it with CPU offload (about 0.66× the video duration on ~30 s Charades-STA videos); 7B bf16 does not fit.
+- *"Is that a real model?"* → Not in the mock demo (labelled). A real model, VideoJev-4B, is integrated as the `videojev` adapter and has only reference numbers on Charades-STA (the model was trained on it, so they do not show accuracy on new footage); held-out benchmark results (running since 2026-11-16) and validation on product footage are pending.
+- *"Why 8 GB?"* → The dev laptop's GPU; VideoJev-4B runs on it with CPU offload (about 0.66× the video duration on ~30 s Charades-STA videos; reference set); 7B bf16 does not fit.
 - *"What if the model is wrong?"* → A human labels every candidate; the proposal is preserved separately.
 - *"Can two reviewers work at once?"* → Yes at the API level; the queue is single-worker today.

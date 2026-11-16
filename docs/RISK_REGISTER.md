@@ -29,10 +29,11 @@ Score = probability (1–5) × impact (1–5). Reassess at every sprint review.
 | **R-20** | No written approval to send face-containing videos to the Gemini API (NFR-8) | 5 | 5 | **25** | Product Owner | Ask the customer on 2026-11-13; use only public/team footage for API experiments until approval | **OPEN — blocking** |
 | **R-21** | Gemini key expired before redemption or leaked; free-tier quota insufficient | 3 | 4 | **12** | Backend | Check redemption now; request a new key via the secure channel; store only in environment; add quota guard/backoff | **OPEN** |
 | **R-22** | Timeline: USR-1…USR-7 are **Must** in v1.1 but Sprint 2 ends 2026-11-15 | 5 | 5 | **25** | Scrum Master | Declare the Sprint 2 gate a technical prototype (per course wording "prototype growing in fidelity"); move the new MVP scope to Sprint 3–4; inform supervisor | **OPEN** |
-| **R-23** | 12 GB VRAM offered vs 24 GB assumed for quantised VideoJev-4B | 2 | 4 | **8** | ML owner | 2026-11-16: VideoJev-4B runs on an 8 GB RTX 3070 laptop with CPU offload (`configs/rtx3070.yaml`), about 0.66× the video duration on Charades-STA (EVALUATION.md); no quantisation needed. Slow, not a reference setup; a GPU worker is still needed. Peak VRAM at current sampling not recorded | **MITIGATED** |
+| **R-23** | 12 GB VRAM offered vs 24 GB assumed for quantised VideoJev-4B | 2 | 4 | **8** | ML owner | 2026-11-16: VideoJev-4B runs on an 8 GB RTX 3070 laptop with CPU offload (`configs/rtx3070.yaml`), about 0.66× the video duration on Charades-STA (reference set, EVALUATION.md); no quantisation needed. Slow, not a reference setup; a GPU worker is still needed. Peak VRAM at current sampling not recorded | **MITIGATED** |
 | **R-24** | Test-dataset licences are non-commercial (Charades/Charades-STA, DMD); commercial use unclear | 4 | 3 | **12** | ML owner | Ask the customer; use MEVA (CC-BY-4.0) for public demos; never redistribute restricted videos | **OPEN** |
 | **R-25** | OpenLABEL schema mismatch discovered late; the customer's example is still missing from the repo | 4 | 4 | **16** | Architect | Send the one-page schema proposal by 2026-11-17; confirm multi-interval, reviewer, clips before implementing | **OPEN** |
-| **R-26** | Detection quality below KPI targets (recall/R@IoU) | 5 (occurred) | 5 | **25** | ML owner | 2026-11-16: measured on Charades-STA (300 videos, 822 queries, `min_event_score` 0.9): recall 0.690, R1@0.5 0.460, CCR 0.778 vs targets 0.85 / 0.70 / 0.85 (EVALUATION.md). Lowered the default to 0.5; rerun: recall 0.771, R1@0.5 0.507, CCR 0.786, still below target. Short events (< 5 s) are the main loss (recall 0.58). Customer accepts model limits; human review mandatory; only Charades-STA measured, not product footage | **OCCURRED — mitigating** |
+| **R-26** | Detection quality below KPI targets (recall/complete clip rate) | 5 (occurred) | 5 | **25** | ML owner | 2026-11-16: reference run on Charades-STA (in-domain for VideoJev; 300 videos, 822 queries, `min_event_score` 0.9): recall 0.690, R1@0.5 0.460, CCR 0.778 vs targets 0.85 / 0.70 / 0.85 (EVALUATION.md). Lowered the default to 0.5 (provisional); rerun: recall 0.771, R1@0.5 0.507, CCR 0.786. Not a valid target check (R-27): held-out composite results are pending. Short events (< 5 s) are the main loss (recall 0.58). Customer accepts model limits; human review mandatory; product footage not measured | **OCCURRED — mitigating** |
+| **R-27** | Headline accuracy measured only on training-domain data: VideoJev-4B was trained on Charades-STA, so its Charades-STA scores overstate accuracy on new footage | 4 | 4 | **16** | ML owner | 2026-11-16: Charades-STA demoted to reference. Main benchmarks are held-out composites (`video_grounding/scripts/composite_bench.py`: youcook2_a/b, bddx), running since 2026-11-16 on the RTX 3070 laptop, results pending (PB-70, S3-17). `min_event_score` 0.5 was tuned on Charades-STA and is provisional until re-checked there. Product footage still not measured | **OPEN** |
 
 ## 2. Top risks and what happens this week
 
@@ -40,7 +41,7 @@ Score = probability (1–5) × impact (1–5). Reassess at every sprint review.
    deliver. Decide with the supervisor whether the Nov 15 gate is met by a testable technical prototype.
 2. **R-20 (privacy approval)** — without it the Gemini API cannot be used on customer footage. Detection is self-hosted and Gemini verify is off in the `videojev` adapter, so it matters only if verify is turned on.
 3. **R-01 / R-12 (guidelines + supervisor access)** — course-compliance issues no code can fix.
-4. **R-26 (detection quality)** — the core value; measured on Charades-STA (below SPEC targets, EVALUATION.md); not yet on product footage.
+4. **R-26 (detection quality)** — the core value; the Charades-STA numbers are reference only (in-domain, R-27); the held-out composite results are pending (EVALUATION.md); not yet on product footage.
 
 ## 3. Closed / accepted
 
@@ -55,3 +56,4 @@ Score = probability (1–5) × impact (1–5). Reassess at every sprint review.
 |---|---|
 | 2026-11-05 | Register created; R-05 recorded as occurred (missed deck deadline) |
 | 2026-11-16 | R-03, R-10, R-23, R-26 updated after the `videojev` adapter integration (ADR-0007) and the Charades-STA measurements; R-26 occurred (below KPI targets) |
+| 2026-11-16 | R-27 added (headline accuracy only on training-domain data); R-26 reworded: Charades-STA is reference only, the target check is pending on the held-out composites |

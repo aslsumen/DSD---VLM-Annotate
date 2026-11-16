@@ -128,7 +128,7 @@ deactivated, not deleted.
 - **Model:** VideoJev-4B (Apache-2.0, Qwen3.5-4B base, revision pinned in
   `video_grounding/src/video_grounding/adapters/videojev.py`) is the self-hosted detector. **Gemini API** is an
   optional verify stage (`gemini-decision-1`, key supplied by the customer), off in the product adapter: on
-  Charades-STA it removed few false events and cost recall (`video_grounding/docs/EVALUATION.md`). Qwen-VL is a
+  Charades-STA (reference set) it removed few false events and cost recall (`video_grounding/docs/EVALUATION.md`). Qwen-VL is a
   registered stub. Backends sit behind `GroundingBackend`.
 - **Pipeline:** probe → 30 s windows / 20 s stride → cut ≤720p window clips → sample 1 FPS (≤32 frames) →
   score curve → map to source time → fuse on a 0.5 s grid with edge weighting → hysteresis (0.25/0.15) →
@@ -224,7 +224,7 @@ is documented in `docs/API_CONTRACTS.md`; it will be migrated, not maintained in
 
 | Decision | Options | Depends on |
 |---|---|---|
-| Detection model | VideoJev-4B chosen as first real detector (ADR-0007); Gemini verify optional/off; Qwen-VL stub | KPI results (Charades-STA misses the targets, see EVALUATION.md), product-footage validation |
+| Detection model | VideoJev-4B chosen as first real detector (ADR-0007); Gemini verify optional/off; Qwen-VL stub | KPI results (held-out composite benchmarks running since 2026-11-16; Charades-STA is reference only, see EVALUATION.md), product-footage validation |
 | Compute | Gemini API / 12 GB laptop / 24 GB GPU / AWS | Customer + supervisors |
 | Hosting | Customer / university / cloud | Supervisors |
 | JSON schema | Team proposal §9 / customer example | Customer (by 2026-11-17) |

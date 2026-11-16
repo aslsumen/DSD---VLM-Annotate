@@ -64,7 +64,8 @@ class Fusion(_Section):
     edge_weight_floor: float = 0.05
     sparse_spacing_sec: float = 1.5  # VideoJev: 1 score per frame pair → 1 s cells @2 FPS (refine), 2 s @1 FPS (coarse)
     # drop events whose raw_score_max is lower (before refine and export); chosen on Charades-STA with VideoJev-4B
-    # (docs/EVALUATION.md L2 sweep); re-check when the model or sampling changes
+    # (docs/EVALUATION.md Charades sweep); provisional: Charades is in-domain for VideoJev, so re-check on the held-out
+    # composites (scripts/composite_bench.py), and again when the model or sampling changes
     min_event_score: float = 0.5
 
 

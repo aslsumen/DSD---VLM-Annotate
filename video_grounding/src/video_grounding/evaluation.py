@@ -1,5 +1,5 @@
 """Evaluation of events.json: against ground truth (same query_id only) or against reviewer decisions
-(evaluate_review: used by scripts/charades_sta.py's oracle reviewer)."""
+(evaluate_review: used by the oracle reviewer of scripts/composite_bench.py and scripts/charades_sta.py)."""
 from __future__ import annotations
 
 import numpy as np

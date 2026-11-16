@@ -11,8 +11,9 @@ Target 80–85 % of declared capacity once the table is filled.
 > **Status note 2026-11-16 (detector work):** the plan above is unchanged. The real detector is VideoJev-4B
 > through the `videojev` adapter ([ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md)), not
 > Gemini; Gemini exists only as an optional engine verify stage, off in the adapter. S3-11 is superseded,
-> S3-12 is done (Charades-STA only), S3-13 is partly done (engine `eval` CLI). Charades-STA results miss the
-> SPEC targets (`video_grounding/docs/EVALUATION.md`); the real-model smoke on the RTX 3070 laptop is pending.
+> S3-12 is done (Charades-STA only), S3-13 is partly done (engine `eval` CLI). Charades-STA is reference only (VideoJev
+> was trained on it); the SPEC target check moves to the held-out composite benchmarks (S3-17, running since
+> 2026-11-16, results pending; `video_grounding/docs/EVALUATION.md`). The real-model smoke on the RTX 3070 laptop is pending.
 
 ## 1. Committed scope (Must)
 
@@ -30,10 +31,11 @@ Target 80–85 % of declared capacity once the table is filled.
 | S3-10 | OpenLABEL-based JSON export (multi-interval) + async job | EXP-1 | 8 | Backend | Schema confirmed with customer |
 | S3-11 | Gemini adapter: `GroundingBackend`, quota guard, retry, JSON validation | DET-1, NFR-6 | 8 | ML | **Superseded 2026-11-16** by the `videojev` adapter (ADR-0007). Gemini is only the engine's optional verify stage (off in the adapter); privacy approval R-20 matters only if verify is on |
 | S3-12 | Test-data ingestion (Charades-STA subset) + licence check | NFR-5 | 5 | ML | Done 2026-11-16 (Charades-STA only). Non-commercial caveat |
-| S3-13 | KPI harness: recall, R@IoU, complete clip, boundary adjustment | NFR-5 | 5 | ML | First measurements done 2026-11-16 (engine `eval` CLI, Charades-STA); reviewer boundary-adjustment KPI not built |
+| S3-13 | KPI harness: recall, R@IoU, complete clip, boundary adjustment | NFR-5 | 5 | ML | First measurements done 2026-11-16 (engine `eval` CLI; Charades-STA reference only, composites in S3-17); reviewer boundary-adjustment KPI not built |
 | S3-14 | Alpha deck + evidence + upload checklist | D-19 | 5 | Scrum Master | Upload 2026-11-30 |
 | S3-15 | Carry-over: validate a real 10–30 min video | NFR-4 | 3 | QA | From Sprint 2 |
 | S3-16 | Integration tests: auth, permissions, dataset scoping | NFR-11…14 | 5 | QA | Security-critical |
+| S3-17 | Run held-out composite benchmarks, re-check `min_event_score` (0.5 is provisional), report KPIs | NFR-5 | 5 | ML | Started 2026-11-16 on the RTX 3070 laptop (PB-70); results pending |
 
 **Total committed:** ~99 SP. **This is likely more than the team can absorb in two weeks without capacity
 data** (R-22). Triage proposal: S3-01…S3-07 and S3-14 are the minimum; S3-08…S3-13 can slip into Sprint 4 if
@@ -50,7 +52,7 @@ the detector or JSON schema is blocked.
 | Fri 20 Nov | Invitations; dataset UI; real-video validation | invite → sign-in works |
 | Mon 23 Nov | JSON export v1; real-model smoke on the 8 GB laptop (replaces the Gemini adapter spike) | first JSON export |
 | Tue 24 Nov | Cross-video review; review flags | one list across videos |
-| Wed 25 Nov | KPI harness; product-footage run (Charades-STA already measured 2026-11-16) | KPI numbers on product footage |
+| Wed 25 Nov | KPI harness; composite benchmark results (S3-17); product-footage run | KPI numbers on product footage |
 | Thu 26 Nov | Integration tests; fix defects | tests green |
 | Fri 27 Nov | Alpha deck draft; limitations documented | deck source ready |
 | Sat 28 Nov | **No work assumed** | — |
@@ -63,7 +65,7 @@ the detector or JSON schema is blocked.
 - [ ] Search over all videos of a dataset returns candidates
 - [ ] Review across videos with accept/reject and final timestamps
 - [ ] JSON export with intervals and provenance
-- [ ] Real detector measured on a public test set (or documented blocker) — VideoJev-4B measured on Charades-STA 2026-11-16, below SPEC targets
+- [ ] Real detector measured on a public test set (or documented blocker) — VideoJev-4B on held-out composites (S3-17, running since 2026-11-16, pending; Charades-STA is reference only)
 - [ ] Alpha deck ready for upload by 2026-11-30 23:59
 - [ ] Limitations explicit; no fabricated metrics
 

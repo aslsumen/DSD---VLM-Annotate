@@ -176,6 +176,9 @@ batch endpoint `POST /projects/{id}/actions/{action_id}/jobs`, `scripts/smoke_vi
 verify: recall 0.690, precision 0.768, R1@0.5 0.460, mIoU 0.437. Rerun at the new default 0.5: recall 0.771,
 precision 0.737, R1@0.5 0.507, mIoU 0.486, queries with no event 12.3% → 1.1%, scan + refine 0.66× the video
 duration. All three SPEC targets missed (`video_grounding/docs/EVALUATION.md`).
+*Note 2026-11-16 (later): Charades-STA is in-domain for VideoJev, so these numbers are reference only and
+`min_event_score` 0.5 is provisional. Main accuracy benchmarks are now the held-out composites
+(`video_grounding/scripts/composite_bench.py`), running, results pending.*
 
 **Decisions:** [ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md) (VideoJev-4B is the first
 real detector; supersedes the ADR-0004 Alpha target), ADR-0001 amendment (heartbeat lease). Gemini verify exists in

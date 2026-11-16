@@ -24,6 +24,8 @@ Development snapshot after v0.2.0-dev; not a course release.
 - Real-model smoke on the RTX 3070 laptop is pending; not validated on product footage.
 - Measured on Charades-STA only, below the SPEC targets (recall 0.771 vs 0.85, R1@0.5 0.507 vs 0.70 at
   `min_event_score` 0.5; `video_grounding/docs/EVALUATION.md`).
+  *Note 2026-11-16 (later): Charades-STA is in-domain for VideoJev, so these numbers are reference only and
+  `min_event_score` 0.5 is provisional. The target check moves to the held-out composite benchmarks (running, results pending).*
 - About 0.66× the video duration on an 8 GB laptop with CPU offload (Charades-STA, ~30 s videos; longer
   videos not measured).
 

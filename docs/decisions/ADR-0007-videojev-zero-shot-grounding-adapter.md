@@ -15,6 +15,11 @@ Evidence (Charades-STA test subset, 300 videos / 822 queries, VideoJev-4B, befor
 refine take about 0.66× the video duration on an RTX 3070 Laptop 8 GB. At the earlier default 0.9: recall 0.690,
 R1@0.5 0.460. Below the SPEC targets either way (`video_grounding/docs/EVALUATION.md`).
 
+*Note 2026-11-16 (later): this evidence is reference only. VideoJev was trained on Charades-STA, so these scores are
+in-domain and do not support accuracy claims. It supports the integration and timing, not the accuracy. Main accuracy
+benchmarks are now the held-out composites (`video_grounding/scripts/composite_bench.py`), running, results pending;
+`min_event_score` 0.5 is provisional until re-checked there. The integration decision itself stands.*
+
 ## Decision
 
 Plug the engine into the existing job queue as the `videojev` adapter (`backend/app/adapters/videojev.py`).
