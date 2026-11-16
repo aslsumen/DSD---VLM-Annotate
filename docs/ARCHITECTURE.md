@@ -83,7 +83,7 @@ flowchart LR
   per worker. `POST /projects/{id}/actions/{id}/jobs` queues one job per video.
 - Export is a ZIP with `manifest.json` + `labels.csv` + clips (not OpenLABEL JSON).
 
-**Tests:** 68 backend (pytest), 21 UI (vitest), real-ffmpeg smoke 26/26.
+**Tests:** 69 backend (pytest), 21 UI (vitest), real-ffmpeg smoke 26/26; real-model `scripts/smoke_videojev.py` (GPU host).
 
 ## 4. Gap and migration plan
 

@@ -225,6 +225,7 @@ def test_exhaustive_adapter_keeps_all_events_ranked_by_score(client, worker, mon
 
     done = client.get(f"/api/v1/jobs/{job['id']}").json()
     assert done["status"] == "succeeded"
+    assert done["adapter_version"] == stub.version  # provenance carried into exports
     cands = client.get(f"/api/v1/jobs/{job['id']}/candidates").json()
     assert len(cands) == 20  # not truncated to max_candidates_per_job
     assert cands[0]["score"] == 0.2 and cands[0]["rank"] == 1  # highest score first
@@ -305,3 +306,8 @@ def test_jobs_filter_by_action(client) -> None:
         client.post(f"/api/v1/videos/{video['id']}/jobs", json={"action_id": action["id"]})
     jobs = client.get("/api/v1/jobs", params={"action_id": a2["id"]}).json()
     assert [j["action_id"] for j in jobs] == [a2["id"]]
+
+
+def test_idempotency_key_longer_than_100_is_rejected(client):
+    r = client.post("/api/v1/projects/1/actions/1/jobs", json={}, headers={"Idempotency-Key": "k" * 101})
+    assert r.status_code == 422

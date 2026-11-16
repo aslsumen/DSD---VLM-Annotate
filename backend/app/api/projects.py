@@ -262,7 +262,7 @@ def create_action_jobs(
     payload: BatchJobCreate,
     session: Session = Depends(get_db),
     settings: Settings = Depends(settings_dep),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=100),
 ) -> list[ProcessingJob]:
     """Queue one candidate job per video: all ready videos, or the listed ones."""
     get_project_or_404(session, project_id)
