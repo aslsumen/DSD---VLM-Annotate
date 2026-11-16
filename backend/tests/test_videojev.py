@@ -83,8 +83,12 @@ def engine(monkeypatch):
             ResumeMismatch=ResumeMismatch, resume=resume, run_scan=run_scan
         ),
         "video_grounding.settings": types.SimpleNamespace(
-            Settings=lambda: _Section(export=_Section(cut_clips=True)),
-            load_settings=lambda path: _Section(export=_Section(cut_clips=True), path=path),
+            Settings=lambda: _Section(
+                export=_Section(cut_clips=True), verify=_Section(enabled=True)
+            ),
+            load_settings=lambda path: _Section(
+                export=_Section(cut_clips=True), verify=_Section(enabled=True), path=path
+            ),
         ),
     }
     for name, mod in mods.items():
@@ -120,7 +124,7 @@ def _request(tmp_path: Path, progress=None) -> ProposalRequest:
 # --------------------------------------------------------------------------- #
 
 
-def test_propose_maps_events_and_disables_engine_clips(engine, tmp_path) -> None:
+def test_propose_maps_events_and_disables_engine_clips_and_verify(engine, tmp_path) -> None:
     engine.events = [_event(1, 5, 0.9, ["boundary uncertain"]), _event(20, 25, 0.6)]
     seen: list[float] = []
     out = vj.VideoJevAdapter().propose(_request(tmp_path, progress=seen.append))
@@ -131,6 +135,7 @@ def test_propose_maps_events_and_disables_engine_clips(engine, tmp_path) -> None
     kind, _video, queries, settings, work_dir, kw = engine.calls[0]
     assert (kind, queries, work_dir) == ("scan", [("q1", "a person waves")], tmp_path / "work")
     assert settings.export.cut_clips is False
+    assert settings.verify.enabled is False
     assert kw["keep_loaded"] is True
     assert seen == [0.5]
 
@@ -309,5 +314,7 @@ def test_jobs_filter_by_action(client) -> None:
 
 
 def test_idempotency_key_longer_than_100_is_rejected(client):
-    r = client.post("/api/v1/projects/1/actions/1/jobs", json={}, headers={"Idempotency-Key": "k" * 101})
+    r = client.post(
+        "/api/v1/projects/1/actions/1/jobs", json={}, headers={"Idempotency-Key": "k" * 101}
+    )
     assert r.status_code == 422

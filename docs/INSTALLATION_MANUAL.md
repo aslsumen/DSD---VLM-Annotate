@@ -128,8 +128,8 @@ VLM_VLM_ADAPTER=videojev VLM_VIDEOJEV_CONFIG=video_grounding/configs/<file>.yaml
 The API process only checks that `VLM_VIDEOJEV_CONFIG` (if set) exists, so it can enqueue `videojev` jobs
 without the engine. A worker without the engine fails such a job at once with `ADAPTER_UNAVAILABLE`.
 Engine state per job is kept in
-`data/storage/engine/job-<id>/` and reused on retry; delete a job's directory to force a rescan. Gemini
-verification is off by default.
+`data/storage/engine/job-<id>/` and reused on retry; delete a job's directory to force a rescan. The adapter
+always turns off Gemini verification and engine clip cutting, whatever the YAML says.
 
 To check a GPU host end to end with the real model (API and worker running, several minutes per video):
 

@@ -35,6 +35,6 @@ The adapter boundary, the DB-backed queue and the single worker (ADR-0001) are u
   API calls it at enqueue time. A worker without the engine fails the job with `ADAPTER_UNAVAILABLE` (not retryable).
 - **Configuration.** `VLM_VLM_ADAPTER=videojev` selects it by default; `VLM_VIDEOJEV_CONFIG` points at an engine
   YAML file (unset = engine defaults). The engine's own clip cutting is disabled; the backend cuts previews.
-- **Gemini verification stays off by default** (engine setting), so no footage leaves the machine.
+- **Gemini verification is always off** in the adapter (it overrides the engine YAML, like `cut_clips`): the human reviewer takes its place, and no footage leaves the machine.
 - **Progress** is forwarded from the engine into the job's 0.05-0.35 progress band.
 - Qwen2.5-VL remains a registered stub and can still be implemented behind the same boundary.
