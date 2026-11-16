@@ -1,8 +1,12 @@
 # Installation Manual
 
-**Status:** draft for Sprint 2 (2027-01-17 static deliverable will freeze this)
+**Status:** living document (2027-01-17 static deliverable will freeze this)
 **Verified environment:** Windows 11 · Python 3.14.4 · Node 24.22 · ffmpeg bundled via `imageio-ffmpeg`
-**Verified on:** 2026-11-05 (see `docs/evidence/`)
+**Verified on:** 2026-11-16 with a clean `git clone` followed by the steps below (80 backend tests, 21 UI tests,
+26/26 smoke checks, API and worker running). macOS/Linux use the same steps with `.venv/bin/python` instead of
+`.venv\Scripts\python.exe`.
+**GPU engine:** `video_grounding/` is optional, Linux/WSL2 only, and documented separately — it is **not**
+needed to run the web app.
 
 VLM Annotate has three parts: a FastAPI **API**, a background **worker**, and a React **web UI**. For the
 course demo all three run on one machine.
@@ -11,11 +15,12 @@ course demo all three run on one machine.
 
 | Requirement | Version | Notes |
 |---|---|---|
-| Python | ≥ 3.12 (verified 3.14.4) | `python --version` |
-| Node.js | ≥ 20 (verified 24.22) | `node --version` |
+| Python | 3.12 – 3.14 (verified 3.14.4) | `python --version` (Windows) / `python3 --version` (macOS/Linux) |
+| Node.js | **≥ 20.19** (22 LTS recommended; verified 24.22) | `node --version` — Vite 7 fails on older Node |
 | npm | bundled with Node | `npm --version` |
 | Disk | ≥ 5 GB free | videos, clips and exports |
-| OS | Windows 10/11 verified; macOS/Linux expected but **untested** | paths below use PowerShell |
+| OS | Windows 10/11 verified end-to-end; macOS/Linux expected (same commands, `.venv/bin/python`) | macOS/Linux not yet verified on a clean machine |
+| NVIDIA GPU | optional | only for `video_grounding/` (Linux/WSL2); the app runs without it |
 
 ffmpeg does **not** need a system install: the `imageio-ffmpeg` wheel ships a binary. Set
 `VLM_FFMPEG_BINARY` only if you want to use a different build.
@@ -23,11 +28,31 @@ ffmpeg does **not** need a system install: the `imageio-ffmpeg` wheel ships a bi
 ## 2. Get the code
 
 ```powershell
-git clone <repository-url> vlm-annotate
-cd vlm-annotate
+git clone https://github.com/aslsumen/DSD---VLM-Annotate.git
+cd DSD---VLM-Annotate
 ```
 
+Use `main`. The old `backend` branch was merged through PR #42; do not develop on it.
+
+### 2.1 Fast path (recommended)
+
+```powershell
+# Windows
+powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+```
+
+```bash
+# macOS / Linux
+bash scripts/setup.sh
+```
+
+The script checks Python/Node versions, creates `.venv`, installs the backend lockfile, applies migrations and
+builds the UI. Then start the API and worker in two terminals (sections 3 and 4).
+
 ## 3. Backend and worker
+
+Windows commands below; on macOS/Linux replace `.\.venv\Scripts\python.exe` with `.venv/bin/python` and use
+forward slashes (the setup scripts handle this automatically).
 
 ```powershell
 # 1. virtual environment at the repository root
@@ -44,6 +69,15 @@ cd backend
 ..\.venv\Scripts\python.exe -m alembic upgrade head
 cd ..
 ```
+
+> **Run the migration before starting the API for the first time.** The API defaults to
+> `VLM_AUTO_CREATE_SCHEMA=true`; if it starts on an empty database it creates the tables *without* Alembic's
+> version row, and any later `alembic upgrade head` fails with `table ... already exists`. Recovery: stop the
+> API/worker, delete the development database (`data/vlm_annotate.db`, no real data), rerun the migration, and
+> start the API again.
+>
+> **Keep `VLM_API_TOKEN` unset for demos**: browsers cannot send the bearer header to `<video>`, so playback
+> returns 401 when the token is enabled (known limitation R-18).
 
 Start the API (terminal 1):
 
@@ -118,8 +152,11 @@ Environment variables (prefix `VLM_`) or a `.env` file at the repository root:
 
 ### 5.1 Real inference with the `videojev` adapter (worker only)
 
-The API process needs nothing extra. The **worker** venv must have the engine (Python 3.12, an NVIDIA GPU, CUDA
-torch installed first, see `video_grounding/docs/COMPATIBILITY.md`):
+**Platform:** the engine runs on **Linux or WSL2** with an NVIDIA GPU and CUDA. It is not supported natively on
+Windows: run it inside WSL2. The web app does not need it.
+
+The API process needs nothing extra. The **worker** venv must have the engine (Python 3.12, CUDA torch installed
+first, see `video_grounding/docs/COMPATIBILITY.md`):
 
 ```bash
 pip install -e ./video_grounding[videojev]
@@ -181,6 +218,11 @@ without `data/storage/` has no videos or clips. Restore by copying it back befor
 | Port 8000 busy | Another process | `--port 8001` and update the Vite proxy |
 | Clips missing, candidates present | ffmpeg failure on that file | Check job `error_code=CLIP_EXTRACTION_PARTIAL`; source video still reviewable |
 | `ModuleNotFoundError: app` | Wrong working directory | Run commands from `backend/` |
+| `table projects already exists` during migration | API started before migrations | Stop API/worker, delete `data/vlm_annotate.db` (dev), rerun `alembic upgrade head` |
+| `npm ci` or Vite fails with an engine/version error | Node older than 20.19 | Install Node 22 LTS and delete `frontend/node_modules` |
+| Engine install fails on Windows | GPU engine is Linux/WSL2 only | Use WSL2; the app works without the engine |
+| `python` not found (macOS/Linux) | Only `python3` is installed | Use `python3` or set `PYTHON=python3` for the setup script |
+| `.venv/bin/python` not found (Windows) | Unix path used on Windows | Use `.venv\Scripts\python.exe` |
 
 ## 9. Optional: PostgreSQL
 
