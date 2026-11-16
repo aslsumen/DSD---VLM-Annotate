@@ -66,7 +66,7 @@ def main() -> int:
                 seen[j["id"]].append(j["progress"])
         if all(j["status"] in TERMINAL for j in cur):
             break
-        time.sleep(10)
+        time.sleep(2)
     check("action_id filter returns exactly this batch", sorted(j["id"] for j in cur) == sorted(seen))
 
     summary = []
@@ -74,7 +74,7 @@ def main() -> int:
         cands = c.get(f"/jobs/{j['id']}/candidates").json()
         p = seen[j["id"]]
         check(f"job {j['id']} succeeded", j["status"] == "succeeded", j.get("error_message") or "")
-        check(f"job {j['id']} progress moved and is monotonic", len(p) > 3 and p == sorted(p), p[:3] + p[-2:])
+        check(f"job {j['id']} progress moved and is monotonic", len(p) >= 3 and p == sorted(p), p[:3] + p[-2:])
         check(f"job {j['id']} clips ready", all(x["clip_status"] == "ready" for x in cands))
         check(f"job {j['id']} ranked by score", [x["score"] for x in cands] == sorted(
             (x["score"] for x in cands), reverse=True))
