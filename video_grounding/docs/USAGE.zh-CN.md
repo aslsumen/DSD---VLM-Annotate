@@ -2,19 +2,19 @@
 
 [English](USAGE.md) | 简体中文
 
-本文描述当前工程行为。命令均在 `video_grounding/` 下执行；HTTP 协议见 [API.zh-CN.md](API.zh-CN.md)。
+本文描述当前工程行为。命令均在 `video_grounding/` 下执行；后端适配器使用的 Python API 见 [API.zh-CN.md](API.zh-CN.md)。
 
 ## 环境与安装
 
 - Python ≥ 3.11，已验证 GPU 环境使用 Python 3.12。
 - 系统 PATH 中需有 `ffmpeg`、`ffprobe`。它们用于读取元数据、切窗口和导出片段。
 - VideoJev 需要兼容的 CUDA/PyTorch、FlashAttention 和 causal-conv1d。请按 [COMPATIBILITY.md](COMPATIBILITY.md) 的已验证组合安装，不要仅安装基础包就启动真实模型。
-- 基础包只依赖 numpy、PyYAML、Pydantic；可选安装项为 `videojev`、`server`、`gemini`。
+- 基础包只依赖 numpy、PyYAML、Pydantic；可选安装项为 `videojev`、`gemini`。
 
 完成 GPU 依赖安装后：
 
 ```bash
-uv pip install -p .venv/bin/python -e '.[videojev,server,gemini]'
+uv pip install -p .venv/bin/python -e '.[videojev,gemini]'
 ffmpeg -version
 ffprobe -version
 .venv/bin/video-grounding --help
@@ -101,7 +101,7 @@ Gemini 接收重编码后的事件片段（含前后留白），不是 VideoJev 
   --config configs/local.yaml --prompt-file prompts.json --out runs/multi
 ```
 
-使用唯一、非空的 query_id 和明确描述视觉事件的文本。声音、意图等信息不能只靠画面可靠确认。CLI 使用本地视频；HTTP 服务额外支持 URL 下载。
+使用唯一、非空的 query_id 和明确描述视觉事件的文本。声音、意图等信息不能只靠画面可靠确认。CLI 使用本地视频。
 
 ### 3. 恢复与重新导出
 
@@ -114,45 +114,17 @@ Gemini 接收重编码后的事件片段（含前后留白），不是 VideoJev 
 
 `resume` 校验源视频指纹、模型 revision 和配置 hash；除 `verify` 节外修改任务配置会被拒绝，应创建新任务目录。保留原视频及原路径。已成功的预测和核验会被复用；恢复仍会加载后端。`export` 不调用 VideoJev 或 Gemini，只根据存储预测和已有 verdict 重新生成输出。
 
-对已完成任务补做 Gemini：任务停止写入后修改该任务 `config.yaml` 中的 `verify` 节，配置密钥，然后用 CLI `resume`。HTTP 的 retry 不接受 completed 任务。
+对已完成任务补做 Gemini：任务停止写入后修改该任务 `config.yaml` 中的 `verify` 节，配置密钥，然后用 CLI `resume`。
 
 **缓存限制：** verdict 缓存键只含 query_id、片段起止微秒、模型名和提问文本的哈希，不含 `verify.fps`、`max_height`。因此修改采样参数后 resume 不会重新核验已有 verdict；对照实验请使用新任务目录，不要把缓存命中误认为复测结果。
 
-### 4. 人工复核、数据集与评测
-
-`reviews.json` 使用 CLI 数组格式（HTTP 则外包一层 `reviews`）：
-
-```json
-[{"event_id":"evt_example","accepted":true,"start_sec":12.5,"end_sec":18.0}]
-```
-
-替换为任务输出的真实 event_id，时间使用原视频秒数：
+### 4. 评测
 
 ```bash
-.venv/bin/video-grounding review --job runs/demo --reviews reviews.json
-.venv/bin/video-grounding dataset --jobs runs/demo --out datasets/demo --name demo
-.venv/bin/video-grounding eval --pred runs/demo/events.json --reviews reviews.json
+.venv/bin/video-grounding eval --pred runs/demo/events.json --gt gt.json
 ```
 
-也可使用 `eval --gt gt.json`，标注格式为 `{"events":[{"query_id":"open_door","start_sec":12.5,"end_sec":18.0}]}`。人工复核评测不能衡量漏检召回率；真值评测才支持时间 IoU 召回。
-
-数据集仅导入已人工复核事件。默认只包含接受项；`--include-rejected` 包含人工拒绝项，不包括 Gemini `rejected_events`。调整边界后数据集会重切原视频，job 原始事件/片段不会因保存 review 而被改写。
-
-## HTTP 服务部署
-
-```bash
-.venv/bin/video-grounding serve --config configs/local.yaml \
-  --jobs-root /data/grounding --media-root /data/videos \
-  --host 127.0.0.1 --port 8800
-```
-
-- jobs-root、媒体和模型使用持久化存储及绝对路径；服务账号必须有读媒体、写任务目录的权限。
-- 每个进程一个模型、一个后台线程，扫描和数据集构建共用串行队列。不要给同一 jobs-root 启多个服务进程；不要同时用 CLI 修改服务正在处理的任务。
-- 启动时会恢复无 `error.txt` 的未完成请求。失败任务不会自动无限重试；调用 retry。停止服务会等待当前任务结束，部署系统须为长任务留出退出时间。
-- `/v1/health` 的 `ok` 表示服务响应，不保证 CUDA、模型加载或 Gemini 配额可用。模型是延迟加载的。
-- 当前无内建认证、CORS 配置、租户隔离、取消 API、webhook/SSE 或请求幂等键。对外接入通过业务网关完成鉴权、任务去重、流量控制与通知。
-- `--media-root` 仅限制本地路径；URL 下载没有内网地址过滤、文件大小限制或业务域名白名单。对外提交入口应在业务层限制 URL/重定向及下载资源，防止未授权访问内部资源。
-- Gemini 会接收候选视频内容，源 URL 下载也需要出站网络；按系统的数据权限与网络策略配置。
+真值标注格式为 `{"events":[{"query_id":"open_door","start_sec":12.5,"end_sec":18.0}]}`，时间使用原视频秒数。`eval` 输出时间 IoU 召回。
 
 ## 输出、保留与清理
 
@@ -164,27 +136,23 @@ Gemini 接收重编码后的事件片段（含前后留白），不是 VideoJev 
 | `clips/` | 可播放事件片段（如开启导出） |
 | `manifest.json`、`metrics.json` | 来源、版本、配置 hash、阶段耗时和降帧统计 |
 | `windows/` | 可重建的临时窗口视频 |
-| `reviews.json` | 人工决策及修正时间 |
 
-HTTP 任务还包含 `request.json`、失败时的 `error.txt`，URL 视频下载为 `source.mp4`。仅停止写入后清理 `windows/`；恢复和重切数据集仍依赖原视频。不要删除数据库来“重试”。当前无自动保留期和磁盘清理 API。
+仅停止写入后清理 `windows/`；恢复（`resume`）仍依赖原视频。不要删除数据库来“重试”。当前无自动保留期。
 
 ## 验证与排障
 
 ```bash
 uv sync --group dev
 uv run pytest
-# 已运行真实服务后执行；会创建任务，并自动提交示例复核、生成数据集
-.venv/bin/python scripts/api_smoke.py --base http://127.0.0.1:8800 \
-  --video /data/videos/demo.mp4 --prompt 'A person opens a door'
 ```
 
 | 现象 | 检查方法 |
 |---|---|
-| 缺 Gemini key，任务立即失败 | 检查服务进程的环境变量 / .env，或明确关闭 verify |
+| 缺 Gemini key，任务立即失败 | 检查进程的环境变量 / .env，或明确关闭 verify |
 | completed 但存在 not_verified | API 错误、配额或片段体积导致未核验；检查日志，人工处理或 CLI resume |
 | scan_complete=false | 检查 coverage_gaps、永久失败窗口和 metrics；不应展示“完整扫描无结果” |
 | 结果为空 | 可能无匹配、VideoJev 阈值过滤或 Gemini 拒绝；同时检查 rejected_events 和覆盖缺口 |
-| GET clips 返回 404 | 检查 export.cut_clips、事件是否被 Gemini 拒绝及文件是否存在 |
+| 事件没有片段文件 | 检查 export.cut_clips、事件是否被 Gemini 拒绝及文件是否存在 |
 | resume 配置不匹配 | 恢复原配置，或用新目录创建任务；不要强改数据库 |
 | 任务慢或显存不足 | 检查 CPU offload、实际帧数、OOM 次数；参考性能文档 |
 

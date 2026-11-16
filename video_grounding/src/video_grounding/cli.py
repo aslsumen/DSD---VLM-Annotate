@@ -1,4 +1,4 @@
-"""video-grounding CLI: probe | scan | resume | export | eval | serve | review | dataset."""
+"""video-grounding CLI: probe | scan | resume | export | eval."""
 from __future__ import annotations
 
 import argparse
@@ -60,32 +60,9 @@ def _export(a) -> dict:
 
 
 def _eval(a) -> dict:
-    from .evaluation import evaluate, evaluate_review
+    from .evaluation import evaluate
 
-    pred = json.loads(Path(a.pred).read_text())
-    if a.reviews:
-        return evaluate_review(pred, json.loads(Path(a.reviews).read_text()))
-    return evaluate(pred, json.loads(Path(a.gt).read_text()))
-
-
-def _serve(a) -> None:
-    import uvicorn
-
-    from .server import create_app
-
-    uvicorn.run(create_app(load_settings(a.config), a.jobs_root, media_root=a.media_root), host=a.host, port=a.port)
-
-
-def _review(a) -> dict:
-    from .dataset import save_reviews
-
-    return save_reviews(a.job, json.loads(Path(a.reviews).read_text()))
-
-
-def _dataset(a) -> dict:
-    from .dataset import build_dataset
-
-    return build_dataset(a.jobs, a.out, a.name, a.include_rejected)
+    return evaluate(json.loads(Path(a.pred).read_text()), json.loads(Path(a.gt).read_text()))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -107,29 +84,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--job", required=True), p.add_argument("--threshold", type=float, help="high threshold")
     p.add_argument("--low", type=float)
     p.set_defaults(fn=_export)
-    p = sub.add_parser("eval", help="score events.json against ground truth or reviewer decisions")
+    p = sub.add_parser("eval", help="score events.json against ground truth")
     p.add_argument("--pred", required=True)
-    g = p.add_mutually_exclusive_group(required=True)
-    g.add_argument("--gt", help="labelled events: {events: [{query_id, start_sec, end_sec}]}")
-    g.add_argument("--reviews", help="JSON list of {event_id, accepted, start_sec?, end_sec?}")
+    p.add_argument("--gt", required=True, help="labelled events: {events: [{query_id, start_sec, end_sec}]}")
     p.set_defaults(fn=_eval)
-    p = sub.add_parser("serve", help="HTTP API (needs the `server` extra)")
-    p.add_argument("--config", required=True), p.add_argument("--jobs-root", required=True)
-    p.add_argument("--host", default="127.0.0.1"), p.add_argument("--port", type=int, default=8800)
-    p.add_argument("--media-root", help="local video paths must resolve inside this directory")
-    p.set_defaults(fn=_serve)
-    p = sub.add_parser("review", help="store reviewer decisions for a finished job")
-    p.add_argument("--job", required=True), p.add_argument("--reviews", required=True, help="JSON list of {event_id, accepted, start_sec?, end_sec?}")
-    p.set_defaults(fn=_review)
-    p = sub.add_parser("dataset", help="compile reviewed events of finished jobs into a dataset")
-    p.add_argument("--jobs", required=True, nargs="+"), p.add_argument("--out", required=True)
-    p.add_argument("--name", required=True), p.add_argument("--include-rejected", action="store_true")
-    p.set_defaults(fn=_dataset)
     a = ap.parse_args(argv)
     out = a.fn(a)
-    if a.cmd in ("eval", "probe", "review", "dataset"):
+    if a.cmd in ("eval", "probe"):
         print(json.dumps(out, indent=2, ensure_ascii=False))
-    elif a.cmd != "serve":
+    else:
         print(f"{a.cmd}: {len(out['events'])} events, scan_complete={out['scan_complete']}, "
               f"coverage_gaps={len(out['coverage_gaps'])}")
     return 0

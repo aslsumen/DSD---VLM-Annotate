@@ -9,6 +9,7 @@ import json
 import os
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
@@ -41,6 +42,7 @@ class _Job:
     backend: object = None
     verifier: object = None
     timings: dict = field(default_factory=dict)
+    progress: Callable[[float], None] | None = None
 
 
 def _write_json(path: Path, obj) -> None:
@@ -103,14 +105,20 @@ def _ground_one(job: _Job, q: Query, w: Window) -> None:
             return
 
 
-def _ground_all(job: _Job, windows: list[Window], queries: list[Query]) -> None:
-    """Windows outer, queries inner: one clip / one encoding per window serves every query."""
-    for w in windows:
+def _report(job: _Job, fraction: float) -> None:
+    """Progress in [0, 1]; runs on the calling thread, so an exception from the callback aborts the job."""
+    if job.progress:
+        job.progress(fraction)
+
+
+def _ground_all(job: _Job, windows: list[Window], queries: list[Query], on_window=None) -> None:
+    """Windows outer, queries inner: one clip / one encoding per window serves every query.
+
+    on_window(done, total) runs after each window, including ones already done on resume."""
+    for i, w in enumerate(windows, 1):
         todo = [q for q in queries
                 if (P.get_window(job.conn, _key(job, q, w)) or {"state": ""})["state"] not in P.DONE]
-        if not todo:
-            continue
-        if job.backend.needs_clip:
+        if todo and job.backend.needs_clip:
             from . import cutter
 
             name = f"{w.sampling_profile}_{round(w.source_start_sec * 1000)}_{round(w.source_end_sec * 1000)}.mp4"
@@ -120,6 +128,8 @@ def _ground_all(job: _Job, windows: list[Window], queries: list[Query]) -> None:
             w = replace(w, clip_path=str(path), clip_origin_sec=origin)
         for q in todo:
             _ground_one(job, q, w)
+        if on_window:
+            on_window(i, len(windows))
 
 
 def _events(job: _Job, q: Query, profile: str | None = None, settings: Settings | None = None):
@@ -134,7 +144,7 @@ def _hash(job: _Job, settings: Settings | None) -> str:
 
 def _scan(job: _Job) -> None:
     P.set_job_state(job.conn, job.job_id, "scanning")
-    _ground_all(job, _coarse_windows(job), job.queries)
+    _ground_all(job, _coarse_windows(job), job.queries, lambda done, total: _report(job, 0.8 * done / total))
 
 
 def _refine(job: _Job) -> None:
@@ -142,7 +152,7 @@ def _refine(job: _Job) -> None:
     st = job.settings
     if not st.refine.enabled:
         return
-    for q in job.queries:
+    for n, q in enumerate(job.queries, 1):
         spans = refinement.plan_spans(_events(job, q, "coarse"), job.info.duration_sec,
                                       coarse=st.coarse, refine=st.refine)
         tiles = [t for sp in spans for t in refinement.tile(sp.start, sp.end, st.refine.window_seconds)]
@@ -153,6 +163,7 @@ def _refine(job: _Job) -> None:
             if not tiles:
                 break
             _ground_all(job, _refine_windows(job, tiles), [q])
+        _report(job, 0.8 + 0.2 * n / len(job.queries))
 
 
 def _verdict_key(e, model: str) -> str:
@@ -247,7 +258,9 @@ def _continue(job: _Job, keep_loaded: bool = False) -> dict:
             t0 = time.perf_counter()
             fn(job)
             job.timings[name] = round(time.perf_counter() - t0, 3)
-        return _export(job)
+        doc = _export(job)
+        _report(job, 1.0)
+        return doc
     except Exception:
         P.set_job_state(job.conn, job.job_id, "failed")
         raise
@@ -261,7 +274,8 @@ def _continue(job: _Job, keep_loaded: bool = False) -> dict:
 
 def run_scan(video: str, queries: list[Query], settings: Settings, out_dir: str | Path, *,
              video_info: VideoInfo | None = None, backend=None, job_id: str | None = None,
-             keep_loaded: bool = False, verifier=None) -> dict:
+             keep_loaded: bool = False, verifier=None,
+             progress: Callable[[float], None] | None = None) -> dict:
     out = Path(out_dir)
     if (out / "job.sqlite").exists():
         raise FileExistsError(f"{out} already holds a job; use resume")
@@ -277,7 +291,7 @@ def run_scan(video: str, queries: list[Query], settings: Settings, out_dir: str 
     chash = config_hash(settings)
     P.create_job(conn, job_id, video, video_info, chash, backend.model_revision, queries)
     job = _Job(out, conn, job_id, video_info, settings, chash, queries, backend.model_revision, video, backend,
-               verifier)
+               verifier, progress=progress)
     return _continue(job, keep_loaded)
 
 
@@ -303,9 +317,9 @@ def _open(out_dir: str | Path, backend=None, video_info: VideoInfo | None = None
 
 
 def resume(out_dir: str | Path, *, backend=None, video_info: VideoInfo | None = None,
-           keep_loaded: bool = False, verifier=None) -> dict:
+           keep_loaded: bool = False, verifier=None, progress: Callable[[float], None] | None = None) -> dict:
     job = _open(out_dir, backend, video_info)
-    job.verifier = verifier
+    job.verifier, job.progress = verifier, progress
     return _continue(job, keep_loaded)
 
 

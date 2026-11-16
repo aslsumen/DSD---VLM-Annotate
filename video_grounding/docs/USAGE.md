@@ -2,19 +2,19 @@
 
 English | [简体中文](USAGE.zh-CN.md)
 
-This guide describes the current implementation. Run commands from `video_grounding/`. See [API.md](API.md) for the HTTP integration contract.
+This guide describes the current implementation. Run commands from `video_grounding/`. See [API.md](API.md) for the Python API used by the backend adapter.
 
 ## Environment and installation
 
 - Python ≥ 3.11; the verified GPU environment uses Python 3.12.
 - `ffmpeg` and `ffprobe` must be on PATH for metadata inspection, window cutting, and clip export.
 - VideoJev requires compatible CUDA/PyTorch, FlashAttention, and causal-conv1d. Follow the verified combination in [COMPATIBILITY.md](COMPATIBILITY.md); installing the base package alone is insufficient for real-model inference.
-- Base dependencies are numpy, PyYAML, and Pydantic. Optional extras: `videojev`, `server`, and `gemini`.
+- Base dependencies are numpy, PyYAML, and Pydantic. Optional extras: `videojev` and `gemini`.
 
 After installing the GPU dependencies:
 
 ```bash
-uv pip install -p .venv/bin/python -e '.[videojev,server,gemini]'
+uv pip install -p .venv/bin/python -e '.[videojev,gemini]'
 ffmpeg -version
 ffprobe -version
 .venv/bin/video-grounding --help
@@ -101,7 +101,7 @@ For multiple prompts, create `prompts.json`:
   --config configs/local.yaml --prompt-file prompts.json --out runs/multi
 ```
 
-Use unique, nonempty query IDs and descriptions of visible events. Audio or intent cannot reliably be established from video frames alone. The CLI expects a local video; the HTTP service additionally supports URL download.
+Use unique, nonempty query IDs and descriptions of visible events. Audio or intent cannot reliably be established from video frames alone. The CLI expects a local video.
 
 ### 3. Resume and re-export
 
@@ -114,45 +114,17 @@ Use unique, nonempty query IDs and descriptions of visible events. Audio or inte
 
 `resume` checks the source fingerprint, model revision, and configuration hash. Changing configuration outside the `verify` section is rejected; create a new job directory instead. Preserve the source video at its original path. Successful predictions and cached verdicts are reused, although resume still loads the backend. `export` calls neither VideoJev nor Gemini; it regenerates outputs from stored predictions and verdicts.
 
-To verify a completed job, stop any writers, enable `verify` in that job's `config.yaml`, configure the key, and run CLI `resume`. HTTP retry does not accept completed jobs.
+To verify a completed job, stop any writers, enable `verify` in that job's `config.yaml`, configure the key, and run CLI `resume`.
 
 **Cache limitation:** verdict keys include only query ID, clip start/end in microseconds, model name and a hash of the question text—not `verify.fps` or `max_height`. Changing sampling settings and resuming does not re-verify cached verdicts. Use a new job directory for sampling experiments; cache reuse is not a new evaluation.
 
-### 4. Review, dataset creation, and evaluation
-
-CLI `reviews.json` is an array; HTTP wraps the same items in a `reviews` object:
-
-```json
-[{"event_id":"evt_example","accepted":true,"start_sec":12.5,"end_sec":18.0}]
-```
-
-Replace the example event ID with an actual output ID. Times are source-video seconds.
+### 4. Evaluation
 
 ```bash
-.venv/bin/video-grounding review --job runs/demo --reviews reviews.json
-.venv/bin/video-grounding dataset --jobs runs/demo --out datasets/demo --name demo
-.venv/bin/video-grounding eval --pred runs/demo/events.json --reviews reviews.json
+.venv/bin/video-grounding eval --pred runs/demo/events.json --gt gt.json
 ```
 
-Alternatively, use `eval --gt gt.json`, with labels shaped as `{"events":[{"query_id":"open_door","start_sec":12.5,"end_sec":18.0}]}`. Review-based evaluation cannot measure missed-event recall; ground-truth evaluation supports temporal-IoU recall.
-
-Datasets include only human-reviewed events. By default only accepted events are included; `--include-rejected` adds human-rejected events, not Gemini `rejected_events`. Adjusted boundaries cause clips to be recut from the source during dataset creation. Saving reviews does not rewrite original job events or clips.
-
-## HTTP service deployment
-
-```bash
-.venv/bin/video-grounding serve --config configs/local.yaml \
-  --jobs-root /data/grounding --media-root /data/videos \
-  --host 127.0.0.1 --port 8800
-```
-
-- Use persistent storage and absolute paths for jobs, media, and models. The service account needs read access to media and write access to job directories.
-- Each process has one model and one worker thread. Scans and dataset builds share a serial queue. Do not run multiple service processes against one jobs-root or modify active service jobs through the CLI.
-- Startup recovers unfinished requests without `error.txt`. Failed jobs require explicit retry. Shutdown waits for the current task; allow sufficient termination time for long jobs.
-- Health `ok` means the service responds, not that CUDA, model loading, or Gemini quota are available. Model loading is lazy.
-- There is no built-in authentication, CORS configuration, tenant isolation, cancellation API, webhook/SSE, or idempotency key. The surrounding gateway/business service must implement these controls and notifications as needed.
-- `--media-root` restricts local paths only. URL downloads do not enforce private-network filtering, file-size limits, or a business-domain allowlist. Validate URLs, redirects, and download resources at the integration boundary to prevent unauthorized access to internal resources.
-- Gemini receives candidate video content. Both URL download and verification need outbound access; configure network and data-access policies accordingly.
+Ground-truth labels are shaped as `{"events":[{"query_id":"open_door","start_sec":12.5,"end_sec":18.0}]}`; times are source-video seconds. `eval` reports temporal-IoU recall.
 
 ## Outputs, retention, and cleanup
 
@@ -164,27 +136,23 @@ Datasets include only human-reviewed events. By default only accepted events are
 | `clips/` | Playable event clips, when export is enabled |
 | `manifest.json`, `metrics.json` | Provenance, versions, config hash, timings, downgrade counts |
 | `windows/` | Rebuildable temporary window clips |
-| `reviews.json` | Human decisions and adjusted times |
 
-HTTP jobs also have `request.json`, `error.txt` on failure, and `source.mp4` for downloaded videos. Clean `windows/` only when no task is writing. Recovery and dataset recutting still require the source video. Do not delete the database to “retry.” There is no automatic retention policy or disk-cleanup API.
+Clean `windows/` only when no task is writing. Recovery (`resume`) still requires the source video. Do not delete the database to “retry.” There is no automatic retention policy.
 
 ## Validation and troubleshooting
 
 ```bash
 uv sync --group dev
 uv run pytest
-# Against an already running service; creates a job, submits sample reviews, and builds a dataset.
-.venv/bin/python scripts/api_smoke.py --base http://127.0.0.1:8800 \
-  --video /data/videos/demo.mp4 --prompt 'A person opens a door'
 ```
 
 | Symptom | Check |
 |---|---|
-| Immediate failure due to a missing Gemini key | Check the service process environment/.env, or explicitly disable verify |
+| Immediate failure due to a missing Gemini key | Check the process environment/.env, or explicitly disable verify |
 | completed with not_verified events | Check API errors, quota, and clip size; review manually or use CLI resume |
 | scan_complete=false | Inspect coverage_gaps, permanent failures, and metrics; do not display “complete scan, no matches” |
 | Empty results | Could mean no match, VideoJev filtering, or Gemini rejection; inspect rejected_events and coverage gaps |
-| Clip endpoint returns 404 | Check export.cut_clips, Gemini rejection, and file presence |
+| No clip file for an event | Check export.cut_clips, Gemini rejection, and file presence |
 | Resume configuration mismatch | Restore the original configuration or use a new job; do not force-edit the database |
 | Slow processing or OOM | Check CPU offload, actual frame counts, and OOM counts; consult Performance |
 

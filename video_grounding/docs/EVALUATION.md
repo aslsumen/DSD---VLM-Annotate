@@ -22,12 +22,6 @@ Every occurrence was found (2/2 per positive query), there were no false events,
 and there were 0 coverage gaps. Boundaries are within one 2 s refine cell; the end of the second
 occurrence overshoots by about 1.5–2 s, because the model still scores the demo clip's last seconds as positive.
 
-## HTTP API run (2026-11-08)
-`video-grounding serve` on the same host, then `scripts/api_smoke.py` (job → events → clip → reviews → dataset):
-same 4 events as above; 96 s for the first job (model load included), 20 s for a second job with one prompt
-(model stayed loaded); review metrics and a dataset with one adjusted, re-cut clip came back as expected;
-a path outside `--media-root` was rejected with 400.
-
 ## Running KPIs
 `video-grounding eval --pred <job>/events.json --gt gt.json` reports Event Recall/Precision,
 R@IoU {0.3, 0.5, 0.7}, temporal mIoU and boundary error. Targets (SPEC): Event Recall ≥ 0.85,
