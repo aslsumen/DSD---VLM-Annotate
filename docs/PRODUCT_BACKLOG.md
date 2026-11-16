@@ -128,4 +128,4 @@ not person-hours. Team velocity is unknown until Sprint 2 closes, so all sizing 
 ## 6. Grooming notes (2026-11-16)
 
 - **Detector decision:** [ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md) makes VideoJev-4B the first real detector (E6/PB-24 superseded, PB-57 Gemini deferred). The engine and `videojev` adapter are integrated; the real-model smoke on the RTX 3070 laptop is pending.
-- **Quality:** Charades-STA results miss the SPEC targets (`video_grounding/docs/EVALUATION.md`); `min_event_score` was lowered to 0.5 on 2026-11-16 and a validation run is in progress. Product footage is not measured.
+- **Quality:** Charades-STA results miss the SPEC targets (`video_grounding/docs/EVALUATION.md`); `min_event_score` was lowered to 0.5 on 2026-11-16 (recall 0.690 → 0.771, R1@0.5 0.460 → 0.507). Product footage is not measured.

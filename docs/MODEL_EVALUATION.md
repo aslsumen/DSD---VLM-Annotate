@@ -73,11 +73,11 @@ use public/team footage for API experiments and keep the self-hosted path for cu
 [ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md) plugs the `video_grounding/` engine into
 the job queue. Why VideoJev-4B: it is a temporal-grounding model with a score curve, and it runs on an 8 GB
 laptop GPU with CPU offload. Evidence, Charades-STA test subset (300 videos / 822 queries), before verification:
-recall 0.690, precision 0.768, R1@0.3/0.5/0.7 = 0.683/0.460/0.215, mIoU 0.437, about 1.3x video duration
-processing time on an RTX 3070 Laptop 8 GB (details: `video_grounding/docs/EVALUATION.md`). These numbers use
-`min_event_score` 0.9; the default is now 0.5 (lowered 2026-11-16). Re-fusing the stored predictions at 0.5 gives
-recall 0.771, precision 0.738 (EVALUATION.md); a validation run at 0.5 is in progress. All three SPEC targets are
-missed on Charades-STA at 0.9. <!-- m05 numbers: add the 0.5 validation-run results here when available -->
+recall 0.771, precision 0.737, R1@0.3/0.5/0.7 = 0.760/0.507/0.237, mIoU 0.486, Complete Clip Rate (oracle
+reviewer) 0.786, at the current default `min_event_score` 0.5. Scan + refine takes about 0.66× the video duration on
+an RTX 3070 Laptop 8 GB (details: `video_grounding/docs/EVALUATION.md`). At the old default 0.9 the same videos gave
+recall 0.690, R1@0.5 0.460. All three SPEC targets (recall 0.85, R@IoU 0.5 0.70, CCR 0.85) are missed on
+Charades-STA; spans under 5 s are the weakest (recall 0.58).
 Gemini verification is off in the product adapter: on Charades-STA it removed 37 of 171 false events and cost recall.
 The Qwen2.5-VL comparator row above is not implemented (stub only).
 

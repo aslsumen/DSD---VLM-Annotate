@@ -6,8 +6,8 @@
 > adapter**: a deterministic generator that does *not* look at the video pixels. The UI shows a MOCK banner on
 > such jobs and the exported manifest marks them. A real detector, the `videojev` adapter (VideoJev-4B), is
 > available on a worker configured with a GPU ([INSTALLATION_MANUAL.md](INSTALLATION_MANUAL.md) §5.1). It is
-> integrated, but not yet validated on product footage, and it is slow on an 8 GB laptop (about 1.3x the video
-> duration on Charades-STA, 2026-11-16). With it, review every candidate: quality on public data is below target.
+> integrated, but not yet validated on product footage. On an 8 GB laptop it takes about 0.66× the video
+> duration on ~30 s Charades-STA videos (2026-11-16); longer videos are not measured. With it, review every candidate: quality on public data is below target.
 
 ## 1. What you can do
 

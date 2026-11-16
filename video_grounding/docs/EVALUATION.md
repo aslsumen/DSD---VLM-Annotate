@@ -65,7 +65,8 @@ All three SPEC targets are missed (recall 0.85, R@IoU 0.5 0.70, CCR 0.85).
   above).
 - **By GT length (before verify):** recall 0.42 for spans < 5 s (83 queries, 23% of them get no event), 0.68 for
   5–10 s (542), 0.83 for ≥ 10 s (197). Short actions are the main loss.
-- **Time:** 22.6 s per ~30 s video (scan 8.8, refine 9.2, verify 2.9, export 1.3), 1.3× real time.
+- **Time:** 22.6 s per ~30 s video (scan 8.8, refine 9.2, verify 2.9, export 1.3), about 0.75× the video
+  duration. Videos average 2.7 queries each.
 
 Old vs current sampling defaults on the same 56 videos (before verify, so the Gemini question plays no part):
 
@@ -80,7 +81,7 @@ the old and new question respectively, recall went from 0.420 to 0.552 on these 
 **Paper reference (not comparable as is):** VideoJev-4B reports R1@0.3/0.5/0.7 82.8/69.4/40.3, mIoU 60.1 on
 Charades. That run uses TimeLens-refined labels (ours are the original ones), feeds the whole video at 4 fps up to
 640×640 with a 262144-token context (ours: 30 s windows, 8192 tokens) and always returns one span per query (ours
-leaves 12% of queries empty, scored as IoU 0). A model-only run under the paper protocol would separate the
+leaves 12% of queries empty at `min_event_score` 0.9 and 1% at 0.5, scored as IoU 0). A model-only run under the paper protocol would separate the
 model's ceiling from the pipeline's losses; it has not been run.
 
 ### Short spans and `min_event_score` (2026-11-16)
@@ -102,6 +103,26 @@ Narrowing segments in fusion makes every length bin worse: wide events come from
 high, which fusion cannot undo. Tightening short spans needs denser model input (not yet tested). Charades has no
 absent prompts, so the cost of 0.5 on prompts that never happen (the case 0.9 was set for on cooking data) is
 unmeasured here.
+
+### Validation run at `min_event_score` 0.5 (2026-11-16)
+The same 300 videos, 822 queries and config as the results above, rerun with the new default 0.5 (every kept event
+refined). 0 failed videos; 1 event unverified (Gemini refused the clip with `prohibited_content`).
+
+| | Event recall | Precision | R1@0.3 | R1@0.5 | R1@0.7 | R1 mIoU | Queries with no event | CCR (oracle) |
+|---|---|---|---|---|---|---|---|---|
+| Before verify | 0.771 | 0.737 | 0.760 | 0.507 | 0.237 | 0.486 | 1.1% | 0.786 |
+| After verify (p ≥ 0.5) | 0.629 | 0.777 | 0.625 | 0.419 | 0.198 | 0.399 | 20.6% | 0.774 |
+| After verify (p ≥ 0.3) | 0.726 | 0.763 | 0.719 | 0.479 | 0.220 | 0.458 | 7.3% | 0.784 |
+
+- The re-fusion estimate held (recall 0.771, precision 0.738, R1@0.5 0.513). Against 0.9 (before verify): recall
+  +8.1 points, R1@0.5 +4.7, CCR +0.8, precision −3.1, queries with no event 12.3% → 1.1%. All three SPEC targets
+  are still missed.
+- **By GT length (before verify):** recall 0.58 for spans < 5 s (83 queries; 0.42 at 0.9), 0.77 for 5–10 s
+  (542; 0.68), 0.86 for ≥ 10 s (197; 0.83). Precision on < 5 s spans is 0.57.
+- **Verify:** Gemini kept 517/634 true events (82%) and removed 78/225 false ones (35%): −14.2 points of recall
+  for +4.0 of precision. Same conclusion as at 0.9.
+- **Time:** 25.0 s per ~30 s video (scan 8.9, refine 10.9, verify 3.8, export 1.5). Scan + refine alone, what
+  the product adapter runs, is 19.8 s, about 0.66× the video duration. Refine grows with the extra kept events.
 
 ### Gemini question A/B (2026-11-16)
 Clips from the first 56 videos (old sampling defaults), each sent to `gemini-decision-1` with both questions:

@@ -10,10 +10,10 @@ ADR-0004 planned windowed Qwen2.5-VL as the first real detector. The team has si
 zero-shot temporal-grounding engine (`video_grounding/`, model VideoJev-4B) that returns a score curve and
 event boundaries, and runs on an 8 GB laptop GPU with CPU offload.
 
-Evidence (Charades-STA test subset, 300 videos / 822 queries, VideoJev-4B, before verification): recall 0.690,
-precision 0.768, R1@0.3/0.5/0.7 = 0.683/0.460/0.215, mIoU 0.437, about 1.3x video duration of processing time
-on an RTX 3070 Laptop 8 GB. These numbers use `min_event_score` 0.9; a re-run with the new default 0.5 is in
-progress (offline estimate: recall 0.771).
+Evidence (Charades-STA test subset, 300 videos / 822 queries, VideoJev-4B, before verification, default
+`min_event_score` 0.5): recall 0.771, precision 0.737, R1@0.3/0.5/0.7 = 0.760/0.507/0.237, mIoU 0.486; scan +
+refine take about 0.66× the video duration on an RTX 3070 Laptop 8 GB. At the earlier default 0.9: recall 0.690,
+R1@0.5 0.460. Below the SPEC targets either way (`video_grounding/docs/EVALUATION.md`).
 
 ## Decision
 
