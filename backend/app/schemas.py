@@ -119,6 +119,14 @@ class JobCreate(BaseModel):
     params: dict[str, object] = Field(default_factory=dict)
 
 
+class BatchJobCreate(BaseModel):
+    """Body for POST /projects/{id}/actions/{id}/jobs (one job per video)."""
+
+    video_ids: list[int] | None = None  # None = every ready video in the project
+    adapter: str | None = Field(default=None, max_length=100)
+    params: dict[str, object] = Field(default_factory=dict)
+
+
 class JobOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -280,9 +280,14 @@ def _run_candidate_job(
         min_duration_seconds=settings.candidate_min_duration_seconds,
         max_duration_seconds=settings.candidate_max_duration_seconds,
         params=json.loads(job.params_json or "{}"),
+        # Stable per job id so a resumable engine can pick up where a failed attempt stopped.
+        work_dir=storage.path_for(f"engine/job-{job.id}"),
+        progress=lambda fraction: _set_progress(session, job, 0.05 + 0.30 * fraction),
     )
     proposals = adapter.propose(request)
-    if not proposals:
+    # Exhaustive adapters report every occurrence they find; none means "does not occur".
+    exhaustive = getattr(adapter, "exhaustive", False)
+    if not proposals and not exhaustive:
         raise AdapterError("adapter returned zero candidate intervals")
 
     # Retries must be idempotent: clear any partial rows from a previous attempt.
@@ -290,9 +295,13 @@ def _run_candidate_job(
     session.flush()
     _set_progress(session, job, 0.35)
 
-    ordered = sorted(proposals, key=lambda p: (p.start_seconds, p.end_seconds))
+    if exhaustive:  # keep everything, likely ones first for reviewers
+        ordered = sorted(proposals, key=lambda p: (-p.score, p.start_seconds))
+    else:
+        ordered = sorted(proposals, key=lambda p: (p.start_seconds, p.end_seconds))
+        ordered = ordered[: settings.max_candidates_per_job]
     created: list[Candidate] = []
-    for rank, proposal in enumerate(ordered[: settings.max_candidates_per_job], start=1):
+    for rank, proposal in enumerate(ordered, start=1):
         start, end = clamp_to_duration(
             min(proposal.start_seconds, duration),
             min(proposal.end_seconds, duration),

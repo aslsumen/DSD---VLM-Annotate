@@ -58,7 +58,7 @@ cd frontend; npm run build; npm test
 | True/false-positive review, corrections, explicit unreviewed | Working (API), UI in progress |
 | Dataset export: manifest, labels.csv, clips, provenance | Working, tested |
 | Responsive web UI | Working — build + 21 unit tests + a headless-Chrome end-to-end pass (reported, not committed as a test) |
-| **Real VLM inference** | **Not yet** — deterministic mock adapter, clearly labelled |
+| **Real VLM inference** | **Integrated, not yet validated on product footage** — `videojev` adapter (VideoJev-4B, worker GPU); mock stays the default |
 | 10–30 minute real footage validation | Not yet (planned 2026-11-13) |
 
 ## Repository map
@@ -68,7 +68,7 @@ backend/
   app/                 FastAPI app, models, services, adapters, worker
     api/               REST routers (projects, videos, jobs, candidates, exports)
     services/          storage, media (ffmpeg), pipeline (queue/export)
-    adapters/          VLMAdapter boundary: mock (working) + Qwen2.5-VL (stub)
+    adapters/          VLMAdapter boundary: mock, videojev (real), Qwen2.5-VL (stub)
   alembic/             database migrations (initial schema verified)
   tests/               56 pytest tests
 frontend/              React + TypeScript + Vite UI
@@ -95,8 +95,8 @@ scripts/               smoke_e2e.py, render_burndown.py
   proposal, preview and human correction are stored separately.
 - **Unreviewed is structural.** No `is_negative` column exists; a label is an annotation row created by a
   person.
-- **The model is replaceable.** One `VLMAdapter` interface; the mock is the CI default, Qwen2.5-VL is the
-  planned Alpha adapter.
+- **The model is replaceable.** One `VLMAdapter` interface; the mock is the CI default, `videojev` is the
+  first real adapter ([ADR-0007](docs/decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md)).
 - **Provenance travels with the data.** Adapter name/version, mock flag, clamping flag and source checksum are
   in every export.
 
@@ -108,8 +108,8 @@ Read more: [Architecture](docs/ARCHITECTURE.md) · [Design Description](docs/DES
 
 Sprint 2 closed on **2026-11-15**. The increment is a runnable, tested **technical prototype** with mock
 candidates — accounts, global roles, datasets, searches and OpenLABEL JSON are the Sprint 3 scope. Real
-inference is planned behind one adapter (Gemini first, VideoJev-4B self-hosted second) and has not been
-measured yet ([MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md)).
+inference runs through the `videojev` adapter (VideoJev-4B, measured on Charades-STA only; see
+[MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md)).
 
 Course artifacts are tracked in [docs/course/DSD_DELIVERABLES_REGISTER.md](docs/course/DSD_DELIVERABLES_REGISTER.md).
 Known gap: the official `Guidelines (SCRUM, Presentations)` files are behind a FER login wall, so decks are

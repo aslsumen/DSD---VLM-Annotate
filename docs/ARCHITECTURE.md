@@ -61,7 +61,7 @@ flowchart LR
     UI["React SPA<br/>projects · workspace · review"]
     API["FastAPI<br/>projects/actions/videos/jobs"]
     W["JobWorker process<br/>poll DB queue"]
-    A["Mock adapter<br/>(no pixels)"]
+    A["Adapters<br/>mock · videojev (GPU, worker only)"]
     DB[("SQLite<br/>7 tables")]
     FS[("Local storage<br/>videos · clips · exports")]
     UI --> API
@@ -76,10 +76,14 @@ flowchart LR
 - SQLite with WAL; Alembic migration verified. PostgreSQL-compatible models but untested.
 - Local storage behind a `StorageBackend` protocol; generated keys, traversal guard.
 - Optional single bearer token enforced in middleware; **no users/roles/datasets**.
-- Mock adapter is the only detector; Qwen adapter is a registered stub.
+- Adapters: `mock` (CI default), `videojev` (real detector, the `video_grounding/` engine with VideoJev-4B, run
+  in the worker process only; [ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md)), and a
+  registered `qwen2.5-vl` stub. The `videojev` adapter is *exhaustive* (all events kept, zero events is
+  success), resumes from a per-job work dir `data/storage/engine/job-<id>/` on retry, and loads the model once
+  per worker. `POST /projects/{id}/actions/{id}/jobs` queues one job per video.
 - Export is a ZIP with `manifest.json` + `labels.csv` + clips (not OpenLABEL JSON).
 
-**Tests:** 56 backend (pytest), 21 UI (vitest), real-ffmpeg smoke 26/26.
+**Tests:** 68 backend (pytest), 21 UI (vitest), real-ffmpeg smoke 26/26.
 
 ## 4. Gap and migration plan
 
@@ -90,7 +94,7 @@ flowchart LR
 | Object storage | Local FS | Implement `StorageBackend` for S3/MinIO; signed URL issuance belongs to the API |
 | Users/roles/invitations | Bearer token | New auth module, tables and screens; RBAC middleware; dataset scoping |
 | Dataset/Search domain | Project/Action | Rename + new entities; data migration for existing rows; adapt UI |
-| Detection engine | Mock adapter | New service + `GroundingBackend`; Gemini first, VideoJev self-hosted second |
+| Detection engine | `videojev` adapter in the worker (in-process) | Separate engine service + Gemini backend only if GPU hosting must be split from the worker |
 | JSON export | ZIP/CSV | New async export job writing the schema in Design §9 |
 | Signed media URLs | Token or open | Time-limited signed URLs/cookies so `<video>` works (also fixes R-18) |
 

@@ -7,7 +7,7 @@ the database or the UI: the worker only ever sees this contract.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -43,6 +43,10 @@ class ProposalRequest:
     min_duration_seconds: float
     max_duration_seconds: float
     params: Mapping[str, Any] = field(default_factory=dict)
+    # Optional hooks for long-running adapters: a per-job directory that survives
+    # retries of the same job (resumable engines) and a 0..1 progress callback.
+    work_dir: Path | None = None
+    progress: Callable[[float], None] | None = None
 
 
 @dataclass(frozen=True)

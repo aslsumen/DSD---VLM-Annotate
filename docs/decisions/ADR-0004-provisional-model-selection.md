@@ -1,6 +1,6 @@
 # ADR-0004 — Provisional model choice: mock now, Qwen2.5-VL windowed for Alpha
 
-- **Status:** Provisional / Supersedable
+- **Status:** Provisional / Supersedable — Alpha target superseded by [ADR-0007](ADR-0007-videojev-zero-shot-grounding-adapter.md)
 - **Date:** 2026-11-05
 - **Deciders:** ML owner (role), Architect
 - **Evidence:** [docs/MODEL_EVALUATION.md](../MODEL_EVALUATION.md) (cards fetched 2026-11-05)
