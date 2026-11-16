@@ -53,9 +53,12 @@ class VideoJevAdapter:
             raise AdapterUnavailable(f"video_grounding engine is not installed: {exc}") from exc
 
         engine = load_settings(self._config_path) if self._config_path else EngineSettings()
-        # The backend cuts its own preview clips from the proposed intervals.
+        # The backend cuts its own preview clips, and the reviewer replaces Gemini verify.
         engine = engine.model_copy(
-            update={"export": engine.export.model_copy(update={"cut_clips": False})}
+            update={
+                "export": engine.export.model_copy(update={"cut_clips": False}),
+                "verify": engine.verify.model_copy(update={"enabled": False}),
+            }
         )
         work_dir = request.work_dir or Path(tempfile.mkdtemp(prefix="videojev-"))
         try:
