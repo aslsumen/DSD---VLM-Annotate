@@ -94,6 +94,39 @@ def client(app):
 
 
 @pytest.fixture()
+def auth_settings(settings: Settings) -> Settings:
+    """Same database, but session authentication is enforced."""
+    return Settings(
+        auth_required=True,
+        bootstrap_token="test-bootstrap-token",
+        database_url=settings.database_url,
+        data_dir=settings.data_dir,
+        auth_max_failed_logins=3,
+        auth_lockout_minutes=5,
+    )
+
+
+@pytest.fixture()
+def auth_app(auth_settings: Settings, probe: FakeProbe, extractor: FakeExtractor):
+    engine = db.engine
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    application = create_app(auth_settings, probe=probe, extractor=extractor)
+    application.state.probe = probe
+    application.state.extractor = extractor
+    yield application
+    Base.metadata.drop_all(bind=db.engine)
+
+
+@pytest.fixture()
+def auth_client(auth_app):
+    from fastapi.testclient import TestClient
+
+    with TestClient(auth_app) as test_client:
+        yield test_client
+
+
+@pytest.fixture()
 def worker(app, settings: Settings, probe: FakeProbe, extractor: FakeExtractor) -> JobWorker:
     return JobWorker(
         settings,
@@ -129,6 +162,74 @@ def upload_video(client, project_id: int, filename: str = "clip.mp4") -> dict:
     response = client.post(
         f"/api/v1/projects/{project_id}/videos",
         files={"file": (filename, make_video_bytes(), "video/mp4")},
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+# --------------------------------------------------------------------------- #
+# Auth helpers
+# --------------------------------------------------------------------------- #
+
+
+def login_user(client, email: str, password: str) -> dict:
+    response = client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def bootstrap_admin(
+    client,
+    email: str = "admin@example.com",
+    password: str = "admin-password",
+) -> dict:
+    response = client.post(
+        "/api/v1/auth/bootstrap",
+        json={"email": email, "full_name": "Admin", "password": password},
+        headers={"X-Bootstrap-Token": "test-bootstrap-token"},
+    )
+    assert response.status_code == 201, response.text
+    return login_user(client, email, password)
+
+
+def auth_header(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def create_dataset(client, token: str, name: str = "Warehouse") -> dict:
+    response = client.post(
+        "/api/v1/datasets",
+        json={"name": name, "description": "fixture"},
+        headers=auth_header(token),
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def invite_user(
+    client,
+    token: str,
+    email: str,
+    role: str = "annotator",
+) -> dict:
+    response = client.post(
+        "/api/v1/auth/invitations",
+        json={"email": email, "role": role},
+        headers=auth_header(token),
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def accept_invitation(
+    client,
+    invitation_token: str,
+    full_name: str = "Invited User",
+    password: str = "invited-password",
+) -> dict:
+    response = client.post(
+        "/api/v1/auth/accept-invitation",
+        json={"token": invitation_token, "full_name": full_name, "password": password},
     )
     assert response.status_code == 201, response.text
     return response.json()

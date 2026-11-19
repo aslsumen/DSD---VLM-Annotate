@@ -37,6 +37,17 @@ class Settings(BaseSettings):
     # When set, every /api/v1 route except /health requires
     # `Authorization: Bearer <token>`.  Empty means "development, open".
     api_token: str | None = None
+    # Sprint 3 session authentication.  Off by default so the existing demo
+    # keeps working; set VLM_AUTH_REQUIRED=true to enforce sign-in on the new
+    # auth and dataset routes (existing project routes stay on the static token).
+    auth_required: bool = False
+    # One-time bootstrap secret for the first administrator (POST /auth/bootstrap).
+    bootstrap_token: str | None = None
+    auth_session_hours: int = 12
+    auth_invitation_hours: int = 48
+    auth_max_failed_logins: int = 5
+    auth_lockout_minutes: int = 15
+    password_min_length: int = 8
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:5173",
