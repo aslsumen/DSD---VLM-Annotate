@@ -8,6 +8,7 @@ import { Dialog, ErrorNotice, Frame, Icon, Loading, Notice, PageHeader, Progress
 import { api, toApiError, type ApiError } from "../lib/api";
 import { formatDateTime, percent } from "../lib/format";
 import { useApiData } from "../lib/hooks";
+import { deleteSearch as deleteSearchSafely } from "../lib/operations";
 import { navigate } from "../lib/router";
 import { countReview, isActive, summarizeSearch } from "../lib/search";
 import { useSession } from "../lib/session";
@@ -76,7 +77,7 @@ export function SearchPage({ datasetId, searchId }: { datasetId: number; searchI
 
   async function deleteSearch() {
     try {
-      await api.deleteAction(searchId);
+      await deleteSearchSafely(datasetId, searchId);
       navigate(`/datasets/${datasetId}`);
     } catch (failure) {
       setActionError(toApiError(failure));
@@ -329,9 +330,19 @@ export function SearchPage({ datasetId, searchId }: { datasetId: number; searchI
           }
         >
           <p>
-            The prompt “{action.description}” is removed from the dataset. Candidates already produced stay in
-            the database but are no longer linked to a search.
+            The prompt “{action.description}” is removed from the dataset. Queued and running jobs of this search
+            are canceled first.
           </p>
+          {counts.accepted + counts.rejected > 0 ? (
+            <Notice tone="warning" title="Review decisions will be lost">
+              Its {counts.all} candidates are deleted, including {counts.accepted + counts.rejected} already
+              reviewed. They will not be exported. This cannot be undone.
+            </Notice>
+          ) : (
+            <p className="muted small">
+              Its {counts.all} candidates and their preview clips are deleted too. This cannot be undone.
+            </p>
+          )}
         </Dialog>
       ) : null}
     </div>

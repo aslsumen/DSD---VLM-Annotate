@@ -278,6 +278,10 @@ export const api = {
   getVideo: (videoId: number, signal?: AbortSignal): Promise<Video> =>
     request<Video>(`/videos/${videoId}`, { signal }),
 
+  /** Deletes the video, its jobs, candidates, review decisions and clips. */
+  deleteVideo: (videoId: number): Promise<void> =>
+    request<void>(`/videos/${videoId}`, { method: "DELETE" }),
+
   uploadVideo: (
     projectId: number,
     file: File,

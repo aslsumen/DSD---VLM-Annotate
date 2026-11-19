@@ -8,6 +8,7 @@ import {
   promptTitle,
   summarizeSearch,
   uniqueName,
+  unprocessedVideos,
   videoReviewer,
 } from "./search";
 
@@ -106,6 +107,25 @@ describe("summarizeSearch", () => {
 
   it("ignores export jobs", () => {
     expect(summarizeSearch([job({ kind: "dataset_export", video_id: null })]).status).toBe("empty");
+  });
+});
+
+describe("unprocessedVideos", () => {
+  const video = (id: number, status: Video["status"] = "ready") => ({ id, status }) as Video;
+
+  it("lists ready videos without a job, or with only a canceled one", () => {
+    const videos = [video(1), video(2), video(3), video(4), video(5, "failed")];
+    const jobs = [
+      job({ id: 1, video_id: 1, status: "succeeded" }),
+      job({ id: 2, video_id: 2, status: "canceled" }),
+      job({ id: 3, video_id: 4, status: "failed" }),
+    ];
+    expect(unprocessedVideos(videos, jobs).map((item) => item.id)).toEqual([2, 3]);
+  });
+
+  it("uses the latest job of each video", () => {
+    const jobs = [job({ id: 1, video_id: 1, status: "canceled" }), job({ id: 2, video_id: 1, status: "queued" })];
+    expect(unprocessedVideos([video(1)], jobs)).toEqual([]);
   });
 });
 

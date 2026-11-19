@@ -105,7 +105,7 @@ because videos still belong to projects.
 | --- | --- | --- |
 | `#/signin`, `#/forgot-password`, `#/invite/:token` | Sign in, password reset info, invitation acceptance | Public |
 | `#/` | Datasets: cards with videos, searches and review progress; New dataset | All |
-| `#/datasets/:id` | Dataset: MP4 drop zone with progress, video table, searches with status, restart, delete | All (managers can edit) |
+| `#/datasets/:id` | Dataset: MP4 drop zone with progress, video table, searches with status, restart; delete a video, a search or the dataset; **Run searches on new videos** (every search on the ready videos it has not processed, DS-7) | All (managers can edit) |
 | `#/datasets/:id/searches/new` | New search: prompt, customer examples, optional short name (PR-3), model | Managers |
 | `#/datasets/:id/searches/:searchId` | Search status: steps, progress, per-video jobs with retry / cancel | All |
 | `#/datasets/:id/searches/:searchId/review` | Review screen | All |

@@ -226,15 +226,19 @@ def _fence(session: Session, job: ProcessingJob) -> None:
     Deliberately does not commit: the caller's ORM writes and commit share this transaction,
     so the ownership check and the writes are atomic (SQLite write lock, Postgres row lock).
     """
+    # Read the identity before anything else: once the row is gone (job canceled,
+    # reclaimed, or deleted with its action/video) the rollback expires the ORM
+    # object and reading job.id afterwards would raise ObjectDeletedError.
+    job_id, attempts = job.id, job.attempts
     result = session.execute(
         update(ProcessingJob)
-        .where(*_owned(job.id, job.attempts))
+        .where(*_owned(job_id, attempts))
         .values(updated_at=_now())
         .execution_options(synchronize_session=False)
     )
     if result.rowcount != 1:
         session.rollback()
-        raise JobInterrupted(f"job {job.id} is no longer owned by this worker")
+        raise JobInterrupted(f"job {job_id} is no longer owned by this worker")
 
 
 def _fail_export(session: Session, export_id: int | None, message: str) -> None:
@@ -338,7 +342,7 @@ def execute_job(
         except ApiError as exc:
             _record_failure(session, job, exc.code, exc, settings=settings, retryable=False)
         except Exception as exc:
-            logger.exception("unexpected job failure", extra={"job_id": job.id})
+            logger.exception("unexpected job failure", extra={"job_id": job_id})
             _record_failure(session, job, "JOB_FAILED", exc, settings=settings, retryable=True)
     except JobInterrupted:
         # Also reached from inside _record_failure.  Leave the row to its new owner/canceler.

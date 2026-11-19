@@ -1833,3 +1833,26 @@ a.dataset-card:hover {
     padding-left: 0;
   }
 }
+
+/* dataset page: per-row actions and pending-search dialog */
+.search-row__actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.pending-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--color-divider);
+}
+.pending-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-divider);
+}

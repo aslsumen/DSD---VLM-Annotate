@@ -84,6 +84,21 @@ export function summarizeSearch(jobs: Job[]): SearchSummary {
   };
 }
 
+/**
+ * Videos a search has not processed yet (DS-7: every video of a dataset ends up
+ * with results for every search). A video counts as unprocessed when it is ready
+ * and has no job for this search, or only a canceled one. Failed jobs are not
+ * included: they are restarted with "Restart" (NFR-9).
+ */
+export function unprocessedVideos(videos: Video[], jobs: Job[]): Video[] {
+  const latest = latestJobsByVideo(jobs);
+  return videos.filter((video) => {
+    if (video.status !== "ready") return false;
+    const job = latest.get(video.id);
+    return !job || job.status === "canceled";
+  });
+}
+
 export function isActive(status: SearchStatus): boolean {
   return status === "queued" || status === "running";
 }
