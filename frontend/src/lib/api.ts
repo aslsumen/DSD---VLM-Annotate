@@ -16,17 +16,23 @@ import type {
   ExportCreated,
   ExportInput,
   Health,
+  InvitationCreated,
   Job,
   JobInput,
   JobStatus,
   Project,
   ProjectInput,
   ProjectStats,
+  User,
+  UserRole,
+  LoginResponse,
   Video,
 } from "../types";
 import type { ApiErrorBody } from "../types";
 
 export const API_BASE = "/api/v1";
+// Holds the session token returned by POST /auth/login (or a deployment-wide
+// VLM_API_TOKEN in older setups). Sent as `Authorization: Bearer <token>`.
 const TOKEN_STORAGE_KEY = "vlm-annotate.api-token";
 
 export class ApiError extends Error {
@@ -280,17 +286,38 @@ export const api = {
 
   // Jobs
   listJobs: (
-    params: { projectId?: number; videoId?: number; status?: JobStatus },
+    params: {
+      projectId?: number;
+      videoId?: number;
+      actionId?: number;
+      status?: JobStatus;
+      limit?: number;
+    },
     signal?: AbortSignal,
   ): Promise<Job[]> =>
     request<Job[]>(
       `/jobs${toQuery({
         project_id: params.projectId,
         video_id: params.videoId,
+        action_id: params.actionId,
         status: params.status,
+        limit: params.limit,
       })}`,
       { signal },
     ),
+
+  /** One candidate job per video for an action (a "search"): all ready videos or the listed ones. */
+  createActionJobs: (
+    projectId: number,
+    actionId: number,
+    input: { video_ids?: number[]; adapter?: string },
+    idempotencyKey: string,
+  ): Promise<Job[]> =>
+    request<Job[]>(`/projects/${projectId}/actions/${actionId}/jobs`, {
+      method: "POST",
+      body: input,
+      headers: { "Idempotency-Key": idempotencyKey },
+    }),
 
   getJob: (jobId: number, signal?: AbortSignal): Promise<Job> =>
     request<Job>(`/jobs/${jobId}`, { signal }),
@@ -311,6 +338,20 @@ export const api = {
   jobCandidates: (jobId: number, signal?: AbortSignal): Promise<Candidate[]> =>
     request<Candidate[]>(`/jobs/${jobId}/candidates`, { signal }),
 
+  projectCandidates: (
+    projectId: number,
+    params: { actionId?: number; videoId?: number; limit?: number },
+    signal?: AbortSignal,
+  ): Promise<Candidate[]> =>
+    request<Candidate[]>(
+      `/projects/${projectId}/candidates${toQuery({
+        action_id: params.actionId,
+        video_id: params.videoId,
+        limit: params.limit ?? 1000,
+      })}`,
+      { signal },
+    ),
+
   // Annotations
   upsertAnnotation: (candidateId: number, input: AnnotationInput): Promise<Candidate> =>
     request<Candidate>(`/candidates/${candidateId}/annotation`, {
@@ -327,6 +368,32 @@ export const api = {
 
   createExport: (projectId: number, input: ExportInput): Promise<ExportCreated> =>
     request<ExportCreated>(`/projects/${projectId}/exports`, { method: "POST", body: input }),
+
+  // Accounts (USR-1, USR-5, NFR-12)
+  login: (email: string, password: string): Promise<LoginResponse> =>
+    request<LoginResponse>("/auth/login", { method: "POST", body: { email, password } }),
+
+  logout: (): Promise<void> => request<void>("/auth/logout", { method: "POST" }),
+
+  me: (signal?: AbortSignal): Promise<User> => request<User>("/auth/me", { signal }),
+
+  acceptInvitation: (token: string, fullName: string, password: string): Promise<LoginResponse> =>
+    request<LoginResponse>("/auth/accept-invitation", {
+      method: "POST",
+      body: { token, full_name: fullName, password },
+    }),
+
+  createInvitation: (email: string, role: UserRole): Promise<InvitationCreated> =>
+    request<InvitationCreated>("/auth/invitations", { method: "POST", body: { email, role } }),
+
+  listUsers: (signal?: AbortSignal): Promise<User[]> => request<User[]>("/auth/users", { signal }),
+
+  /**
+   * Probe used at start-up: succeeds when the deployment does not require a
+   * sign-in (development), fails with 401 when it does.
+   */
+  probeOpenAccess: (signal?: AbortSignal): Promise<unknown> =>
+    request<unknown>("/datasets", { signal }),
 };
 
 /**

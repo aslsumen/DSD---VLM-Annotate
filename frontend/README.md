@@ -1,10 +1,13 @@
 # VLM Annotate — frontend
 
 React + TypeScript single-page app for **VLM Annotate**, a university DSD
-project. A reviewer creates a project, describes an action in natural language,
-uploads a long single-view RGB video, runs asynchronous VLM candidate proposal,
-marks each timestamped clip as **true positive — false positive — unreviewed**,
-and exports the reviewed dataset as a ZIP.
+project. It follows the Requirements Definition v1.2 and Design Description v1.2
+(`docs/inputs/2026-11-12/`) and the "Industry" visual system of the Claude
+mockup: Barlow Condensed headings over Barlow, a steel-blue accent and square
+hairline frames with registration corners, in light and dark themes.
+
+The loop is **dataset → prompt → detection → review → JSON export**, with
+sign-in, global roles and invitations.
 
 No component library, no Tailwind, no router library: plain CSS in
 `src/styles.css` and a hand-written hash router.
@@ -27,11 +30,12 @@ reproducible install.
 
 ## Development
 
-Start the API first (from the repository root):
+Start the API and a worker first (from the repository root):
 
 ```bash
 cd backend
-../.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
+../.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000   # terminal 1
+../.venv/Scripts/python.exe -m app.worker --loop                  # terminal 2
 ```
 
 Then, in another terminal:
@@ -45,146 +49,135 @@ Open <http://localhost:5173>. The interface uses relative `/api/v1/...` URLs.
 
 ### How the proxy works
 
-`vite.config.ts` maps every request starting with `/api` to the backend:
+`vite.config.ts` maps every request starting with `/api` to the backend
+(`server.proxy` and `preview.proxy`), which covers the JSON API and `/api/docs`
+and avoids CORS during development. In production FastAPI serves the built
+`dist/` folder at `/`, so the same relative URLs work without any proxy.
 
-```ts
-server: {
-  proxy: { "/api": { target: "http://127.0.0.1:8000", changeOrigin: true } }
-}
-```
+The fonts are loaded from Google Fonts (`index.html`); without network access the
+app falls back to the system sans-serif.
 
-This covers both the JSON API (`/api/v1/...`) and the FastAPI docs
-(`/api/docs`), and avoids CORS during development. `vite preview` has the same
-proxy under `preview.proxy`, because Vite does not inherit `server.proxy` in
-preview mode.
+## Accounts and sign-in
 
-In production FastAPI serves the built `dist/` folder at `/`, so the same
-relative URLs work without any proxy.
+At start-up the app decides between three modes:
 
-### API token
+| Mode | When | What the user sees |
+| --- | --- | --- |
+| Signed in | A session token is stored and `GET /auth/me` accepts it | Sidebar with the user's name and global role; pages filtered by role |
+| Development | The backend does not require sign-in (`VLM_AUTH_REQUIRED` unset) | Full access as an administrator, a "Development mode" label and a **Sign in** link |
+| Signed out | `VLM_AUTH_REQUIRED=true` and no valid session | The sign-in page only |
 
-If the deployment sets `VLM_API_TOKEN`, every `/api/v1` route except `/health`
-requires `Authorization: Bearer <token>`. Use the **API token** field in the
-header: the value is stored in `localStorage` under `vlm-annotate.api-token` and
-attached to JSON, upload and export-download requests.
+- **Sign in** (`POST /auth/login`) stores the session token in `localStorage`
+  (`vlm-annotate.api-token`) and sends it as `Authorization: Bearer <token>`.
+  Wrong credentials always show the same message (NFR-14).
+- **Sign out** is on every page and revokes the session on the server (NFR-12).
+- **Invitations** (Users page): no mail transport exists yet, so the invitation
+  link is shown once to the inviter. `#/invite/:token` creates the account
+  (full name + password, at least 8 characters); used or expired links show an
+  explicit message (NFR-11, 48 h).
+- **First administrator**: created with `POST /auth/bootstrap` and
+  `VLM_BOOTSTRAP_TOKEN` (see the installation manual); there is no UI for it.
+- **Roles**: Administrators and Dataset Administrators see Export and Users,
+  create datasets, upload and launch searches. Annotators only review.
 
-> Media caveat: browsers cannot attach an `Authorization` header to `<video
-> src>` requests. A token-protected deployment will therefore reject
-> `/videos/{id}/stream` and `/candidates/{id}/clip` with HTTP 401 unless the
-> backend allows cookie/query auth on those routes. The open development server
-> (`VLM_API_TOKEN` unset) works normally.
+## How v1.2 concepts map to the current API
 
-## Scripts
+The backend does not have the v1.2 Dataset/Search model for videos yet. The
+interface uses what exists today:
 
-| Command           | What it does                                                   |
-| ----------------- | -------------------------------------------------------------- |
-| `npm run dev`     | Vite dev server on port 5173 with the `/api` proxy              |
-| `npm run build`   | `tsc --noEmit` (strict type check), then `vite build` → `dist/` |
-| `npm run preview` | Serve the built app on port 4173 with the same `/api` proxy     |
-| `npm run test`    | `vitest run` — formatting and hash-routing unit tests           |
+| v1.2 concept | Current API |
+| --- | --- |
+| Dataset (name only, DS-2) | Project (`/projects`) — it holds videos, prompts, jobs, candidates, exports |
+| Search (one prompt on every video, PR-1) | One action (`/projects/{id}/actions`) plus one job per video (`POST /projects/{id}/actions/{action_id}/jobs`) |
+| Search status (queued, running, done, partial, failed — DET-3) | Aggregated in the client from the latest job of each video (`src/lib/search.ts`) |
+| Adding videos to a dataset with searches (DS-7) | After upload, a confirmation dialog re-runs every existing search on the new videos only |
+| Accept / reject (REV-3) | `PUT /candidates/{id}/annotation` with `true_positive` / `false_positive` |
+| Decisions are final (REV-3) | Decided candidates are read-only in the UI (the API still allows changes) |
+| One reviewer per video (REV-5) | Derived in the client from the first saved decision on the video (no backend lock yet) |
+| JSON export (EXP-1, EXP-2) | Built in the browser from the reviewed candidates (Design 4.3 proposal format); the worker's ZIP package stays available |
 
-To exercise the full stack from the built files:
-
-```bash
-npm run build
-# restart the backend afterwards: it mounts dist/ at startup
-cd ../backend && ../.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
-# open http://127.0.0.1:8000
-```
+The backend `/datasets` entity (Sprint 3) is not used by these screens yet,
+because videos still belong to projects.
 
 ## Screens and routes
 
-| Route                              | Screen                                                    |
-| ---------------------------------- | --------------------------------------------------------- |
-| `#/`                               | Projects list, create/delete, per-project counts           |
-| `#/projects/:id`                   | Workspace: stats, actions, videos, jobs, exports            |
-| `#/projects/:id/review?job=:jobId` | Review: source player, clip player, labeling, filters       |
-| anything else                      | Not-found screen                                           |
+| Route | Screen | Roles |
+| --- | --- | --- |
+| `#/signin`, `#/forgot-password`, `#/invite/:token` | Sign in, password reset info, invitation acceptance | Public |
+| `#/` | Datasets: cards with videos, searches and review progress; New dataset | All |
+| `#/datasets/:id` | Dataset: MP4 drop zone with progress, video table, searches with status, restart, delete | All (managers can edit) |
+| `#/datasets/:id/searches/new` | New search: prompt, customer examples, optional short name (PR-3), model | Managers |
+| `#/datasets/:id/searches/:searchId` | Search status: steps, progress, per-video jobs with retry / cancel | All |
+| `#/datasets/:id/searches/:searchId/review` | Review screen | All |
+| `#/export?dataset=:id` | Export: dataset, search, include rejected, statistics, JSON download, ZIP package | Managers |
+| `#/users` | Users: list (administrators), invitations | Managers |
 
-The review screen shows a prominent **MOCK CANDIDATES — no video pixels were
-analysed** banner when the job's `adapter_name` is `mock`. No demo data is
-seeded and no placeholder metrics are invented: every number comes from the API.
+Old links (`#/projects/:id`, `#/projects/:id/review?job=…`) open the dataset page.
 
-## Review workflow
+## Review screen
 
-- Selecting a candidate seeks the source `<video>` to `preview_start_seconds`.
-- **Play clip** plays `/api/v1/candidates/{id}/clip` when `clip_status` is
-  `ready`; otherwise the clip error is shown and the same window is played in
-  the source player.
-- Verdicts are saved with `PUT /api/v1/candidates/{id}/annotation`.
-  Unreviewed is the absence of an annotation; **Reset to unreviewed** calls
-  `DELETE`.
-- Optional corrected start/end seconds are validated client-side
-  (`0 <= start < end <= video duration`) and sent together with the annotation.
-- Reviewer name and the auto-advance preference persist in `localStorage`.
-- While a job is `queued` or `running`, the workspace and review screens poll
-  every 2 seconds; the interval is cleared on unmount.
+- One list with the candidates of every video of the search, filtered by status
+  (All, Unreviewed, Accepted, Rejected) with counts, the number of videos, and a
+  sort by confidence or time. There is no filter by video (NFR-7).
+- The **full video** plays from the selected candidate's start; the reviewer can
+  move before and after it (REV-1). A **Clip** view plays the extracted clip.
+- A full-video strip shows every candidate of that video; a zoomed track with
+  draggable start/end handles, ±0.5 s steppers and numeric fields adjusts the
+  bounds (REV-2). The model times stay stored (NFR-5).
+- **Accept / Reject** are equal-size buttons; the decision is final.
+- A **Mock candidates** banner is shown when the search used the `mock` model.
 
-### Keyboard shortcuts (review screen)
+| Key | Action |
+| --- | --- |
+| `A` (or `J`) | Accept |
+| `R` (or `F`) | Reject |
+| `N` | Next unreviewed |
+| `↓` / `↑` | Next / previous candidate |
+| `Space` | Play / pause |
+| `?` | Shortcuts |
 
-| Key       | Action                                 |
-| --------- | -------------------------------------- |
-| `J`       | Save true positive                     |
-| `F`       | Save false positive                    |
-| `Space`   | Play/pause the clip (or source) player |
-| `←` / `↑` | Previous visible candidate             |
-| `→` / `↓` | Next visible candidate                 |
+Shortcuts are disabled while typing in a field.
 
-Shortcuts are disabled while typing in an input, textarea, select or
-contenteditable element. `Space` is left to the browser when a button or link
-has focus so it keeps activating that control.
+## Scripts
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Vite dev server on port 5173 with the `/api` proxy |
+| `npm run build` | `tsc --noEmit` (strict type check), then `vite build` → `dist/` |
+| `npm run preview` | Serve the built app on port 4173 with the same `/api` proxy |
+| `npm run test` | `vitest run` — formatting, routing and search/review logic |
 
 ## Project layout
 
 ```
-frontend/
-  index.html
-  vite.config.ts          dev/preview proxy, build output, vitest config
-  tsconfig.json           strict TypeScript, noEmit
-  src/
-    main.tsx              React root
-    App.tsx               header (health, adapters, API token), routes, footer
-    types.ts              TypeScript mirror of backend/app/schemas.py
-    styles.css            mobile-first CSS, no framework
-    lib/
-      api.ts              typed fetch/XHR wrapper, ApiError, token handling
-      format.ts           timestamps, durations, percent, bytes, dates
-      format.test.ts      formatting unit tests
-      router.ts           hash parsing and route matching
-      router.test.ts      routing unit tests
-      hooks.ts            useApiData (loading/error/reload) and stored prefs
-    components/
-      ui.tsx              chips, banners, stat tiles, progress, aria-live
-      ActionsPanel.tsx    action definitions
-      VideosPanel.tsx     XHR upload with <progress>, video table
-      JobsPanel.tsx       start processing, job history, retry/cancel
-      ExportsPanel.tsx    export creation and download
-    pages/
-      ProjectsPage.tsx
-      ProjectPage.tsx
-      ReviewPage.tsx
+frontend/src/
+  main.tsx                React root
+  App.tsx                 session provider, route table, role guards
+  types.ts                TypeScript mirror of backend/app/schemas.py
+  styles.css              design tokens, components, light/dark, responsive
+  lib/
+    api.ts                typed fetch/XHR client, ApiError, session token
+    session.tsx           sign-in state (signed in / development / signed out)
+    search.ts             search status, review counts, titles, JSON export
+    router.ts             hash routes
+    format.ts, hooks.ts   formatting, data loading and stored preferences
+  components/
+    ui.tsx                icons, frames, chips, notices, dialog, toast
+    Shell.tsx             sidebar layout, theme toggle, sign out
+  pages/
+    AuthPages.tsx  DatasetsPage.tsx  DatasetPage.tsx  NewSearchPage.tsx
+    SearchPage.tsx  ReviewPage.tsx  ExportPage.tsx  UsersPage.tsx
 ```
 
-## Tests
+## Limitations (waiting for the backend)
 
-```bash
-npm run test
-```
-
-The suite covers `formatTimestamp` (mm:ss.mmm and hh:mm:ss.mmm), `formatDuration`
-(hh:mm:ss), `percent`, byte sizes, date rendering, hash/query parsing and route
-matching, including malformed URLs.
-
-## Notes and limitations
-
-- Timestamps are source-video-relative seconds with the backend's half-open
-  `[start, end)` interval; the exact value is available in each timestamp's
-  tooltip.
-- Upload progress uses `XMLHttpRequest` because `fetch` cannot report upload
-  progress.
-- Export downloads are fetched (so the bearer token can be sent) and saved
-  through a temporary object URL; very large archives are buffered in browser
-  memory.
-- The UI targets 375 px and 1440 px widths, uses CSS grid/flex, visible focus
-  styles, labelled controls and `aria-live` announcements for job progress,
-  save results and errors.
+- Password reset (USR-6), role changes and deactivation (USR-7), dataset
+  assignment (USR-3) and invitation emails (USR-5) have no API yet.
+- The API lets Dataset Administrators invite Annotators only (v1.2 also allows
+  Dataset Administrators).
+- REV-3 and REV-5 are enforced in the client only.
+- The JSON export follows the Design 4.3 proposal; the OpenLABEL-based schema is
+  still to be agreed.
+- With sign-in required, the legacy project/video/job routes do not check roles
+  on the server yet, and `<video>` requests cannot send the bearer token
+  (signed media links, R-18).
