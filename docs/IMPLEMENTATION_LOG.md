@@ -4,7 +4,8 @@ Chronological record of what was actually built, changed and measured. Newest la
 
 ## 2026-11-19 — Sprint 3: session auth, invitations and datasets
 
-**Goal:** implement the first Sprint 3 increment (S3-01…S3-05) without breaking the existing demo.
+**PR:** #48 (`feat/auth-datasets`) · **Goal:** implement the first Sprint 3 increment (S3-01…S3-05) without
+breaking the existing demo.
 
 **Code**
 
