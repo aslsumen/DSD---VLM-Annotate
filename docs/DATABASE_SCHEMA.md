@@ -205,9 +205,9 @@ Index: `(search_id, review_status)` for the review list; `(video_id)`.
 Alembic migrations must be additive first (create new tables), then a data migration for existing rows, then
 drop the old tables. No destructive migration before the team agrees.
 
-## 6. Current implemented schema (verified 2026-11-12)
+## 6. Current implemented schema (verified 2026-11-19)
 
-SQLite `data/vlm_annotate.db`, migration `backend/alembic/versions/0001_initial_schema.py`:
+SQLite `data/vlm_annotate.db`, migrations `0001_initial_schema.py` and `d03f1c4ffd30_auth_and_datasets.py`:
 
 | Table | Purpose |
 |---|---|
@@ -218,6 +218,12 @@ SQLite `data/vlm_annotate.db`, migration `backend/alembic/versions/0001_initial_
 | candidates | proposal + preview + clip status + score |
 | annotations | human decision (`true_positive`/`false_positive`), corrections, reviewer, note |
 | dataset_exports | async ZIP exports |
+| users | global role (`administrator`/`dataset_admin`/`annotator`), password hash, lockout state |
+| invitations | single-use email invitation; only the token hash is stored |
+| user_sessions | opaque bearer session; token hash, expiry and revocation |
+| datasets | dataset container for the Sprint 3 access model |
+| dataset_memberships | which user may see/annotate a dataset (roles stay global) |
 
-Migration verified on a fresh SQLite file: 7 tables match `Base.metadata`. The schema is portable to
-PostgreSQL but has not been tested there (R-09).
+Migration `0002` was verified on a fresh SQLite file with `alembic upgrade head` and `alembic check` (no pending
+operations); the API was exercised against that migrated schema without `create_all` (bootstrap → login → create
+dataset). 12 tables total. The schema is portable to PostgreSQL but has not been tested there (R-09).

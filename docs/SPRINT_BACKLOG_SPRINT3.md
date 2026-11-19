@@ -19,11 +19,11 @@ Target 80–85 % of declared capacity once the table is filled.
 
 | ID | Task | Refs | Est. | Owner (role) | Notes |
 |---|---|---|---|---|---|
-| S3-01 | Auth data model + migration: users, invitations, sessions, dataset_assignments | USR-1…5, NFR-11 | 8 | Backend | Global roles, email-only |
-| S3-02 | Auth API: login/logout/refresh, password hashing, session revocation, lockout | NFR-12…14 | 8 | Backend | 2 h inactivity, 5/15 min |
-| S3-03 | Invitation flow + email abstraction (SMTP/provider) | USR-5 | 5 | Backend | Single-use 48 h; Admin + Dataset Admin |
-| S3-04 | RBAC middleware + dataset scoping on every route | USR-2/3/4 | 5 | Backend | Deny by default |
-| S3-05 | Dataset entity + API + assignments (migrate Project) | DS-1/2/3 | 8 | Backend | Data migration for existing rows |
+| S3-01 | Auth data model + migration: users, invitations, sessions, dataset_assignments | USR-1…5, NFR-11 | 8 | Backend | **In review** — `feat/auth-datasets`; migration verified |
+| S3-02 | Auth API: login/logout/refresh, password hashing, session revocation, lockout | NFR-12…14 | 8 | Backend | **In review** — login/logout/session/lockout; refresh pending |
+| S3-03 | Invitation flow + email abstraction (SMTP/provider) | USR-5 | 5 | Backend | **In review** — token returned once; no SMTP transport yet |
+| S3-04 | RBAC middleware + dataset scoping on every route | USR-2/3/4 | 5 | Backend | **Partial** — enforced on auth/dataset routes; legacy routes still bearer |
+| S3-05 | Dataset entity + API + assignments (migrate Project) | DS-1/2/3 | 8 | Backend | **In review** — Dataset + memberships; videos still under Project |
 | S3-06 | Search entity: one prompt over all videos, fan-out jobs, status aggregation | PR-1, DET-3 | 8 | Backend | Partial per-video results |
 | S3-07 | UI: login, invitation acceptance, user management | USR-1…7 | 5 | Frontend | Route guards |
 | S3-08 | UI: datasets list/detail, upload, search launch, search history | DS-1…3, PR-1 | 8 | Frontend | Reuse upload component |
@@ -36,6 +36,9 @@ Target 80–85 % of declared capacity once the table is filled.
 | S3-15 | Carry-over: validate a real 10–30 min video | NFR-4 | 3 | QA | From Sprint 2 |
 | S3-16 | Integration tests: auth, permissions, dataset scoping | NFR-11…14 | 5 | QA | Security-critical |
 | S3-17 | Run held-out composite benchmarks, re-check `min_event_score` (0.5 is provisional), report KPIs | NFR-5 | 5 | ML | Started 2026-11-16 on the RTX 3070 laptop (PB-70); results pending |
+
+**Status 2026-11-19:** S3-01…S3-05 implemented on branch `feat/auth-datasets` (10 new tests, 90 total); JSON
+schema is in PR #47 (docs only).
 
 **Total committed:** ~99 SP. **This is likely more than the team can absorb in two weeks without capacity
 data** (R-22). Triage proposal: S3-01…S3-07 and S3-14 are the minimum; S3-08…S3-13 can slip into Sprint 4 if

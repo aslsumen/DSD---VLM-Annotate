@@ -119,7 +119,22 @@ Not called by the browser. Worker → engine:
 | Jobs | `POST /api/v1/videos/{id}/jobs`, `POST /api/v1/projects/{id}/actions/{action_id}/jobs` (batch), `GET /api/v1/jobs` (filters `project_id`, `video_id`, `action_id`, `status`, `limit`), `GET /api/v1/jobs/{id}`, retry (failed jobs), cancel (queued or running jobs; `409 JOB_NOT_CANCELABLE` otherwise), `GET /api/v1/jobs/{id}/candidates` |
 | Review | `GET /api/v1/projects/{id}/candidates`, `GET /api/v1/candidates/{id}`, `PUT/DELETE /api/v1/candidates/{id}/annotation`, `GET /api/v1/candidates/{id}/clip` |
 | Export | `POST/GET /api/v1/projects/{id}/exports`, `GET/DELETE /api/v1/exports/{id}`, `GET /api/v1/exports/{id}/download` |
+| Auth (Sprint 3) | `POST /api/v1/auth/bootstrap` (`X-Bootstrap-Token`, first admin only), `POST /api/v1/auth/login`, `POST /api/v1/auth/accept-invitation`, `GET /api/v1/auth/me`, `POST /api/v1/auth/logout`, `POST /api/v1/auth/invitations`, `GET /api/v1/auth/users` |
+| Datasets (Sprint 3) | `POST/GET /api/v1/datasets`, `GET /api/v1/datasets/{id}`, `GET/POST /api/v1/datasets/{id}/members` |
 | System | `GET /api/v1/health`, `/api/v1/adapters`, `/api/v1/system/media`, `/api/docs` |
+
+**Session authentication (implemented).** The target contract in §2 uses `/api/auth`; the implementation is
+mounted at `/api/v1/auth`. Passwords are PBKDF2-HMAC-SHA256 with a per-user salt; only SHA-256 hashes of session
+and invitation tokens are stored. Sessions expire after `VLM_AUTH_SESSION_HOURS`; invitations are single-use and
+expire after `VLM_AUTH_INVITATION_HOURS`; `VLM_AUTH_MAX_FAILED_LOGINS` failures lock the account for
+`VLM_AUTH_LOCKOUT_MINUTES`. Enforcement is behind `VLM_AUTH_REQUIRED` (default `false`, so the current demo
+remains open): when enabled, the auth and dataset routes reject anonymous calls with `401 UNAUTHENTICATED`.
+The existing project/video/job routes still use `VLM_API_TOKEN`; migrating them to sessions and signed media URLs
+is the next step (R-18). Refresh tokens, password reset and pagination are not implemented yet. Dataset
+assignment uses `dataset_memberships`; videos still belong to a project until the dataset migration.
+
+Behavioural guarantees of that API (timestamps, unreviewed semantics, error envelope, range streaming) are
+tested by the pytest suite (90 tests on 2026-11-19) and are the part to carry into the new contract.
 
 **Job cancel and lost workers.** `POST /api/v1/jobs/{id}/cancel` works on `queued` and `running` jobs; a running
 worker stops at its next progress tick and its result is discarded. A running job whose worker stops
@@ -140,4 +155,4 @@ events is a successful job with an empty candidate list (the action does not occ
 adapters keep the cap (earliest 12 by start time) and fail a job that yields no candidates.
 
 Behavioural guarantees of that API (timestamps, unreviewed semantics, error envelope, range streaming) are
-tested by the pytest suite (56 tests at Sprint 2 close) and are the part to carry into the new contract.
+tested by the pytest suite (90 tests on 2026-11-19) and are the part to carry into the new contract.

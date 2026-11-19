@@ -2,6 +2,34 @@
 
 Chronological record of what was actually built, changed and measured. Newest last.
 
+## 2026-11-19 — Sprint 3: session auth, invitations and datasets
+
+**Goal:** implement the first Sprint 3 increment (S3-01…S3-05) without breaking the existing demo.
+
+**Code**
+
+- `app/security.py`: PBKDF2-HMAC-SHA256 password hashing (260k iterations, per-user salt) and hashed session
+  tokens; constant-time verification.
+- `app/models.py`: `User`, `Invitation`, `UserSession`, `Dataset`, `DatasetMembership`; global `UserRole`.
+- `app/api/auth.py`: bootstrap, login, logout, me, single-use invitations, accept-invitation, user list;
+  account lockout after failed attempts.
+- `app/api/datasets.py`: dataset CRUD, membership listing/assignment, admin vs dataset-admin scoping.
+- `app/deps.py`: `Principal`, session validation, `require_roles`; `VLM_AUTH_REQUIRED` opt-in (default `false`).
+- Migration `d03f1c4ffd30_auth_and_datasets.py`; verified with `alembic upgrade head` and `alembic check` on a
+  fresh SQLite file, then exercised the API with `create_all` disabled.
+
+**Verification (actual)**
+
+```text
+pytest -q                     90 passed (10 new auth/dataset tests)
+ruff check app tests          clean
+alembic check                 no new upgrade operations
+migrated-schema API check     bootstrap 201, login 200, me 200, dataset 201, list 200
+```
+
+**Not done yet:** login/invitation UI; refresh tokens and password reset; moving project/video/job routes to
+session auth and signed media URLs (R-18); video-to-dataset migration; email transport for invitations.
+
 ## 2026-11-15 — Sprint 2 closeout
 
 **Goal:** close Sprint 2 with verified evidence, review/retrospective slides and the Status deck due 16 Nov.

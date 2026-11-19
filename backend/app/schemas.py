@@ -18,6 +18,7 @@ from .models import (
     ExportStatus,
     JobKind,
     JobStatus,
+    UserRole,
     Verdict,
     VideoStatus,
 )
@@ -272,3 +273,86 @@ class ErrorOut(BaseModel):
     code: str
     message: str
     details: dict[str, object] | None = None
+
+
+# --------------------------------------------------------------------------- #
+# Identity and access (Sprint 3)
+# --------------------------------------------------------------------------- #
+
+
+class BootstrapRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    full_name: str = Field(min_length=1, max_length=200)
+    password: str = Field(min_length=8, max_length=200)
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=1, max_length=200)
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+    full_name: str
+    role: UserRole
+    is_active: bool
+    created_at: datetime
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_at: datetime
+    user: UserOut
+
+
+class InvitationCreate(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    role: UserRole = UserRole.annotator
+
+
+class InvitationCreated(BaseModel):
+    id: int
+    email: str
+    role: UserRole
+    expires_at: datetime
+    # Returned once because no mail transport exists yet; the client must deliver it.
+    token: str
+
+
+class InvitationAccept(BaseModel):
+    token: str = Field(min_length=20, max_length=200)
+    full_name: str = Field(min_length=1, max_length=200)
+    password: str = Field(min_length=8, max_length=200)
+
+
+class DatasetCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=2000)
+
+
+class DatasetOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    description: str
+    created_by_id: int | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DatasetMemberAdd(BaseModel):
+    user_id: int | None = None
+    email: str | None = Field(default=None, max_length=320)
+
+
+class DatasetMemberOut(BaseModel):
+    user_id: int
+    email: str
+    full_name: str
+    role: UserRole
+    created_at: datetime

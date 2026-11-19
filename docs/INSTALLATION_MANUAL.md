@@ -134,6 +134,12 @@ Environment variables (prefix `VLM_`) or a `.env` file at the repository root:
 | `VLM_DATABASE_URL` | `sqlite:///data/vlm_annotate.db` | SQLAlchemy URL; PostgreSQL supported |
 | `VLM_DATA_DIR` | `./data` | Root for `storage/videos`, `storage/clips`, `storage/exports` |
 | `VLM_API_TOKEN` | *(empty)* | When set, all `/api/v1` routes require `Authorization: Bearer <token>`. **Known limitation:** browsers cannot send this header for `<video>` playback, so stream/clip requests will 401 — do not enable it for demos that need video until PB-41 (signed media URLs) lands |
+| `VLM_AUTH_REQUIRED` | `false` | Session auth for the `/api/v1/auth` and `/api/v1/datasets` routes. Set `true` to reject anonymous calls there |
+| `VLM_BOOTSTRAP_TOKEN` | *(empty)* | One-time secret for `POST /api/v1/auth/bootstrap`, which creates the first administrator. Disabled when empty |
+| `VLM_AUTH_SESSION_HOURS` | `12` | Absolute session lifetime |
+| `VLM_AUTH_INVITATION_HOURS` | `48` | Invitation lifetime (single use) |
+| `VLM_AUTH_MAX_FAILED_LOGINS` | `5` | Failures before the account is locked |
+| `VLM_AUTH_LOCKOUT_MINUTES` | `15` | Lockout duration |
 | `VLM_MAX_UPLOAD_BYTES` | `2147483648` (2 GiB) | Upload cap |
 | `VLM_MAX_VIDEO_DURATION_SECONDS` | `14400` (4 h) | Hard duration cap |
 | `VLM_VLM_ADAPTER` | `mock` | Default adapter: `mock` or `videojev` (see 5.1) |
