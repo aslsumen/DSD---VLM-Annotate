@@ -193,3 +193,35 @@ export interface ApiErrorBody {
   message: string;
   details?: Record<string, unknown> | null;
 }
+
+// --------------------------------------------------------------------------- //
+// Accounts (Sprint 3 auth API, `backend/app/api/auth.py`)
+// --------------------------------------------------------------------------- //
+
+/** Global roles (Requirements Definition v1.2, §3.1). */
+export type UserRole = "administrator" | "dataset_admin" | "annotator";
+
+export interface User {
+  id: number;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  token_type: "bearer";
+  expires_at: string;
+  user: User;
+}
+
+export interface InvitationCreated {
+  id: number;
+  email: string;
+  role: UserRole;
+  expires_at: string;
+  /** Returned once: no mail transport exists yet, so the inviter shares the link. */
+  token: string;
+}

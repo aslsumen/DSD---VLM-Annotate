@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
+import shutil
+
 from fastapi import APIRouter, Depends, Header, Query, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from ..adapters.registry import get_adapter
@@ -16,6 +19,7 @@ from ..models import (
     Candidate,
     DatasetExport,
     ExportStatus,
+    JobKind,
     JobStatus,
     ProcessingJob,
     Project,
@@ -35,7 +39,7 @@ from ..schemas import (
     ProjectUpdate,
 )
 from ..services.pipeline import enqueue_candidate_job
-from ..services.storage import LocalStorage
+from ..services.storage import LocalStorage, StorageError
 
 router = APIRouter(tags=["projects"])
 
@@ -326,12 +330,56 @@ def update_action(
 
 
 @router.delete("/actions/{action_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_action(action_id: int, session: Session = Depends(get_db)) -> Response:
+def delete_action(
+    action_id: int,
+    session: Session = Depends(get_db),
+    storage: LocalStorage = Depends(storage_dep),
+) -> Response:
+    """Delete a prompt (a "search") with everything it produced.
+
+    Its candidate jobs, candidates, review decisions (annotations cascade with their
+    candidate), preview clips and engine work directories go with it, so no result
+    is left without a search. A worker still running one of these jobs loses
+    ownership at its next fence and drops its result (ADR-0001 lease).
+    """
     action = session.get(ActionDefinition, action_id)
     if action is None:
         raise ApiError(404, "ACTION_NOT_FOUND", f"action {action_id} does not exist")
+
+    job_ids = list(
+        session.scalars(
+            select(ProcessingJob.id).where(
+                ProcessingJob.action_id == action_id,
+                ProcessingJob.kind == JobKind.candidate_proposal,
+            )
+        )
+    )
+    candidate_filter = Candidate.action_id == action_id
+    if job_ids:
+        candidate_filter = or_(candidate_filter, Candidate.job_id.in_(job_ids))
+    clip_keys = list(
+        session.scalars(
+            select(Candidate.clip_storage_key).where(
+                candidate_filter, Candidate.clip_storage_key.is_not(None)
+            )
+        )
+    )
+
+    # Annotations are removed by the database cascade on candidates.
+    session.execute(delete(Candidate).where(candidate_filter))
+    if job_ids:
+        session.execute(delete(ProcessingJob).where(ProcessingJob.id.in_(job_ids)))
     session.delete(action)
     session.commit()
+
+    for key in clip_keys:
+        if key:
+            storage.delete(key)
+    for job_id in job_ids:
+        with contextlib.suppress(StorageError, OSError):
+            work_dir = storage.path_for(f"engine/job-{job_id}")
+            if work_dir.is_dir():
+                shutil.rmtree(work_dir, ignore_errors=True)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

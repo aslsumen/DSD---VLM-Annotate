@@ -125,3 +125,16 @@ export function formatFps(fps: number | null | undefined): string {
   }
   return `${fps.toFixed(2)} fps`;
 }
+
+/** Clock label used in lists (DET-2: minutes and seconds), e.g. `02:07` or `01:02:07`. */
+export function formatClock(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) {
+    return EMPTY;
+  }
+  const total = Math.max(0, Math.floor(seconds));
+  const secs = total % 60;
+  const minutes = Math.floor(total / 60) % 60;
+  const hours = Math.floor(total / 3600);
+  const clock = `${pad(minutes)}:${pad(secs)}`;
+  return hours > 0 ? `${pad(hours)}:${clock}` : clock;
+}

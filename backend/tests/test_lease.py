@@ -205,6 +205,24 @@ def test_cancel_during_run_drops_result(client, worker, monkeypatch) -> None:
     assert _candidates(job_id) == 0
 
 
+def test_action_deleted_during_run_drops_result_cleanly(client, worker, monkeypatch, caplog) -> None:
+    """Deleting the prompt removes the running job; the worker drops its result without errors."""
+    job_id = _queued_job(client)
+    with db.SessionLocal() as other:
+        action_id = other.get(ProcessingJob, job_id).action_id
+
+    def delete_action_mid_run() -> None:
+        assert client.delete(f"/api/v1/actions/{action_id}").status_code == 204
+
+    with caplog.at_level("INFO"):
+        _run_with(worker, monkeypatch, delete_action_mid_run)
+    with db.SessionLocal() as other:
+        assert other.get(ProcessingJob, job_id) is None
+        assert other.scalars(select(Candidate).where(Candidate.job_id == job_id)).all() == []
+    assert not [record for record in caplog.records if record.levelname == "ERROR"]
+    assert any("result dropped" in record.getMessage() for record in caplog.records)
+
+
 def test_stale_worker_after_reclaim_does_not_overwrite(client, worker, monkeypatch) -> None:
     job_id = _queued_job(client)
     _run_with(worker, monkeypatch, lambda: _patch(job_id, attempts=2, progress=0.0))
