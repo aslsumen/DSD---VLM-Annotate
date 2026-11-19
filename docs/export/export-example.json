@@ -1,0 +1,64 @@
+{
+  "openlabel": {
+    "metadata": {
+      "schema_version": "1.0.0",
+      "name": "VLM Annotate export example",
+      "exported_at": "2026-11-18T04:56:00Z",
+      "reviewer": "tariq.nawaz",
+      "model": "stub-detector v0.1",
+      "dataset": "Warehouse Surveillance",
+      "time_unit": "seconds"
+    },
+    "streams": {
+      "tiger30": {
+        "type": "camera",
+        "uri": "tiger30.mp4",
+        "description": "Warehouse Surveillance dataset video"
+      }
+    },
+    "actions": {
+      "0": {
+        "name": "action_0",
+        "type": "person walking near the loading dock",
+        "stream": "tiger30",
+        "attributes": {
+          "num": [
+            { "name": "t_start_s", "val": 5.6 },
+            { "name": "t_end_s", "val": 15.2 },
+            { "name": "original_t_start_s", "val": 5.4 },
+            { "name": "original_t_end_s", "val": 15.2 },
+            { "name": "score", "val": 0.5 }
+          ],
+          "text": [
+            { "name": "prompt", "val": "person walking near the loading dock" },
+            { "name": "review_status", "val": "accepted" }
+          ],
+          "boolean": [
+            { "name": "score_calibrated", "val": false }
+          ]
+        }
+      },
+      "1": {
+        "name": "action_1",
+        "type": "person walking near the loading dock",
+        "stream": "tiger30",
+        "attributes": {
+          "num": [
+            { "name": "t_start_s", "val": 40.0 },
+            { "name": "t_end_s", "val": 52.3 },
+            { "name": "original_t_start_s", "val": 39.8 },
+            { "name": "original_t_end_s", "val": 52.3 },
+            { "name": "score", "val": 0.5 }
+          ],
+          "text": [
+            { "name": "prompt", "val": "person walking near the loading dock" },
+            { "name": "review_status", "val": "accepted" }
+          ],
+          "boolean": [
+            { "name": "score_calibrated", "val": false }
+          ]
+        }
+      }
+    }
+  }
+}
