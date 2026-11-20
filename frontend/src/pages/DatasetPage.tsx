@@ -3,7 +3,7 @@
  * Design Description v1.2, 5.3): videos with upload, and one row per search.
  */
 import type { DragEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   Dialog,
@@ -19,7 +19,7 @@ import {
 } from "../components/ui";
 import { api, newIdempotencyKey, toApiError, type ApiError } from "../lib/api";
 import { formatBytes, formatClock, formatDate, formatResolution, percent } from "../lib/format";
-import { useApiData } from "../lib/hooks";
+import { useApiData, useSearchPolling } from "../lib/hooks";
 import { navigate } from "../lib/router";
 import {
   deleteSearch,
@@ -170,11 +170,7 @@ export function DatasetPage({ datasetId }: { datasetId: number }) {
     : false;
 
   const reload = data.reload;
-  useEffect(() => {
-    if (!anyActive) return undefined;
-    const timer = window.setInterval(reload, 3000);
-    return () => window.clearInterval(timer);
-  }, [anyActive, reload]);
+  useSearchPolling(data, anyActive, 3000);
 
   async function uploadFiles(files: File[]) {
     if (!data.data || files.length === 0) return;
