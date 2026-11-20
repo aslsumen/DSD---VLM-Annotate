@@ -18,6 +18,8 @@ from .models import (
     ExportStatus,
     JobKind,
     JobStatus,
+    SearchStatus,
+    SearchVideoStatus,
     UserRole,
     Verdict,
     VideoStatus,
@@ -93,7 +95,8 @@ class VideoOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    project_id: int
+    project_id: int | None
+    dataset_id: int | None
     original_filename: str
     content_type: str
     size_bytes: int
@@ -134,7 +137,7 @@ class JobOut(BaseModel):
     id: int
     kind: JobKind
     status: JobStatus
-    project_id: int
+    project_id: int | None
     video_id: int | None
     action_id: int | None
     export_id: int | None
@@ -173,6 +176,7 @@ class CandidateOut(BaseModel):
 
     id: int
     job_id: int
+    search_id: int | None
     video_id: int
     action_id: int | None
     start_seconds: float
@@ -356,3 +360,62 @@ class DatasetMemberOut(BaseModel):
     full_name: str
     role: UserRole
     created_at: datetime
+
+
+# --------------------------------------------------------------------------- #
+# Searches (Sprint 3)
+# --------------------------------------------------------------------------- #
+
+
+class SearchCreate(BaseModel):
+    """Body for POST /datasets/{dataset_id}/searches."""
+
+    prompt: str = Field(min_length=1, max_length=5000)
+    title: str | None = Field(default=None, max_length=200)
+    video_ids: list[int] | None = None
+    adapter_name: str | None = Field(default=None, max_length=100)
+    params: dict[str, object] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _strip(self) -> SearchCreate:
+        self.prompt = self.prompt.strip()
+        if not self.prompt:
+            raise ValueError("prompt must not be blank")
+        if self.title is not None:
+            self.title = self.title.strip() or None
+        return self
+
+
+class SearchVideoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    search_id: int
+    video_id: int
+    job_id: int | None
+    status: SearchVideoStatus
+    error_message: str | None
+
+
+class SearchOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    dataset_id: int
+    prompt: str
+    title: str | None
+    status: SearchStatus
+    created_by_id: int | None
+    created_at: datetime
+    finished_at: datetime | None
+    error_message: str | None
+    total_videos: int = 0
+    queued_videos: int = 0
+    running_videos: int = 0
+    done_videos: int = 0
+    failed_videos: int = 0
+
+
+class SearchDetailOut(SearchOut):
+    videos: list[SearchVideoOut] = []
+

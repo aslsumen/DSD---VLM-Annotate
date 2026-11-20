@@ -35,6 +35,10 @@ from ..models import (
     JobStatus,
     ProcessingJob,
     Project,
+    Search,
+    SearchStatus,
+    SearchVideo,
+    SearchVideoStatus,
     Video,
     VideoStatus,
 )
@@ -60,13 +64,13 @@ def enqueue_candidate_job(
     session: Session,
     *,
     video: Video,
-    action: ActionDefinition,
+    action: ActionDefinition | None,
     adapter_name: str,
     params: dict[str, Any],
     idempotency_key: str | None,
     max_attempts: int,
 ) -> ProcessingJob:
-    if video.project_id != action.project_id:
+    if action is not None and video.project_id != action.project_id:
         raise ApiError(409, "PROJECT_MISMATCH", "video and action belong to different projects")
     if video.status != VideoStatus.ready or not video.duration_seconds:
         raise ApiError(
@@ -85,7 +89,7 @@ def enqueue_candidate_job(
         status=JobStatus.queued,
         project_id=video.project_id,
         video_id=video.id,
-        action_id=action.id,
+        action_id=action.id if action is not None else None,
         adapter_name=adapter_name,
         params_json=json.dumps(params, sort_keys=True),
         max_attempts=max_attempts,
@@ -309,6 +313,7 @@ def execute_job(
     job = session.get(ProcessingJob, job_id)
     if job is None:
         raise ApiError(404, "JOB_NOT_FOUND", "job disappeared before execution")
+    _sync_search_video(session, job, SearchVideoStatus.running)
     try:
         try:
             if job.kind == JobKind.candidate_proposal:
@@ -328,6 +333,7 @@ def execute_job(
             else:  # pragma: no cover - enum guard
                 raise ApiError(500, "UNKNOWN_JOB_KIND", f"unknown job kind {job.kind}")
             _finish(session, job, JobStatus.succeeded)
+            _sync_search_video(session, job, SearchVideoStatus.done)
         except JobInterrupted:
             raise  # must not reach the generic handler below
         except (AdapterError, MediaError, StorageError) as exc:
@@ -339,11 +345,14 @@ def execute_job(
                 settings=settings,
                 retryable=getattr(exc, "retryable", True),
             )
+            _sync_search_video_failure(session, job)
         except ApiError as exc:
             _record_failure(session, job, exc.code, exc, settings=settings, retryable=False)
+            _sync_search_video_failure(session, job)
         except Exception as exc:
             logger.exception("unexpected job failure", extra={"job_id": job_id})
             _record_failure(session, job, "JOB_FAILED", exc, settings=settings, retryable=True)
+            _sync_search_video_failure(session, job)
     except JobInterrupted:
         # Also reached from inside _record_failure.  Leave the row to its new owner/canceler.
         session.rollback()
@@ -373,8 +382,28 @@ def _run_candidate_job(
 ) -> None:
     video = session.get(Video, job.video_id) if job.video_id else None
     action = session.get(ActionDefinition, job.action_id) if job.action_id else None
-    if video is None or action is None:
-        raise ApiError(409, "JOB_PRECONDITION_FAILED", "video or action no longer exists")
+    if video is None:
+        raise ApiError(409, "JOB_PRECONDITION_FAILED", "video no longer exists")
+    # Search-driven jobs (action is None) carry their prompt on the parent Search
+    # linked through SearchVideo.job_id.
+    search_video: SearchVideo | None = None
+    search: Search | None = None
+    if action is None:
+        search_video = session.scalar(
+            select(SearchVideo).where(SearchVideo.job_id == job.id)
+        )
+        search = (
+            session.get(Search, search_video.search_id)
+            if search_video is not None
+            else None
+        )
+        if search is None:
+            raise ApiError(
+                409, "JOB_PRECONDITION_FAILED", "search no longer exists for this job"
+            )
+        action_text = search.prompt
+    else:
+        action_text = action.description
     if not video.duration_seconds:
         metadata = probe.probe(storage.path_for(video.storage_key))
         video.duration_seconds = metadata.duration_seconds
@@ -390,7 +419,7 @@ def _run_candidate_job(
     request = ProposalRequest(
         video_path=storage.path_for(video.storage_key),
         duration_seconds=duration,
-        action_text=action.description,
+        action_text=action_text,
         max_candidates=settings.max_candidates_per_job,
         min_duration_seconds=settings.candidate_min_duration_seconds,
         max_duration_seconds=settings.candidate_max_duration_seconds,
@@ -440,8 +469,9 @@ def _run_candidate_job(
             preview_start, preview_end = start, end
         candidate = Candidate(
             job_id=job.id,
+            search_id=search.id if search is not None else None,
             video_id=video.id,
-            action_id=action.id,
+            action_id=action.id if action is not None else None,
             start_seconds=start,
             end_seconds=end,
             preview_start_seconds=preview_start,
@@ -690,6 +720,89 @@ def _finish(session: Session, job: ProcessingJob, status: JobStatus) -> None:
     session.commit()
 
 
+# --------------------------------------------------------------------------- #
+# SearchVideo status synchronization and Search aggregation
+# --------------------------------------------------------------------------- #
+
+
+def _search_video_for_job(session: Session, job: ProcessingJob) -> SearchVideo | None:
+    return session.scalar(select(SearchVideo).where(SearchVideo.job_id == job.id))
+
+
+def _recompute_search_status(session: Session, search_id: int) -> Search | None:
+    """Derive a Search's aggregated status from its SearchVideo rows.
+
+    Rules (per the S3-06 plan):
+    * queued  — every SearchVideo is queued
+    * running — any SearchVideo is running, OR a mix of queued and done/failed
+    * done    — every SearchVideo is done          -> finished_at set
+    * failed  — every SearchVideo is failed        -> finished_at set
+    * partial — none queued/running, >=1 done, >=1 failed -> finished_at set
+    """
+    search = session.get(Search, search_id)
+    if search is None:
+        return None
+    rows = list(
+        session.scalars(select(SearchVideo).where(SearchVideo.search_id == search_id))
+    )
+    if not rows:
+        return search
+    statuses = {row.status for row in rows}
+
+    all_queued = all(row.status == SearchVideoStatus.queued for row in rows)
+    any_running = SearchVideoStatus.running in statuses
+    all_done = all(row.status == SearchVideoStatus.done for row in rows)
+    all_failed = all(row.status == SearchVideoStatus.failed for row in rows)
+    none_pending = (
+        SearchVideoStatus.queued not in statuses
+        and SearchVideoStatus.running not in statuses
+    )
+    has_done = SearchVideoStatus.done in statuses
+    has_failed = SearchVideoStatus.failed in statuses
+
+    if all_done:
+        search.status, finished = SearchStatus.done, True
+    elif all_failed:
+        search.status, finished = SearchStatus.failed, True
+    elif none_pending and has_done and has_failed:
+        search.status, finished = SearchStatus.partial, True
+    elif any_running:
+        search.status, finished = SearchStatus.running, False
+    elif all_queued:
+        search.status, finished = SearchStatus.queued, False
+    else:
+        # mix of queued and done/failed with no running row
+        search.status, finished = SearchStatus.running, False
+    search.finished_at = _now() if finished else None
+    return search
+
+
+def _sync_search_video(session: Session, job: ProcessingJob, status: SearchVideoStatus) -> None:
+    sv = _search_video_for_job(session, job)
+    if sv is None:
+        return
+    sv.status = status
+    if status in (SearchVideoStatus.running, SearchVideoStatus.done):
+        sv.error_message = None
+    _recompute_search_status(session, sv.search_id)
+    session.commit()
+
+
+def _sync_search_video_failure(session: Session, job: ProcessingJob) -> None:
+    sv = _search_video_for_job(session, job)
+    if sv is None:
+        return
+    if job.status == JobStatus.failed:
+        sv.status = SearchVideoStatus.failed
+        sv.error_message = job.error_message
+    else:
+        # The job was requeued for a retry, so the video is not failed yet.
+        sv.status = SearchVideoStatus.queued
+        sv.error_message = None
+    _recompute_search_status(session, sv.search_id)
+    session.commit()
+
+
 def _record_failure(
     session: Session,
     job: ProcessingJob,
@@ -727,6 +840,7 @@ def fail_job_now(session: Session, job: ProcessingJob, code: str, message: str) 
     if job.kind == JobKind.dataset_export:
         _fail_export(session, job.export_id, message)
     session.commit()
+    _sync_search_video_failure(session, job)
     return job
 
 
