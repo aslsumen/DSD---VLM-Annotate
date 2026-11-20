@@ -145,6 +145,7 @@ cd frontend && npm run build && npm test
 | `table projects already exists` during migration | The API created the schema first. Stop it, delete `data/vlm_annotate.db` (dev only), rerun `alembic upgrade head` |
 | `401 UNAUTHENTICATED` / video will not play | `VLM_API_TOKEN` is set. Unset it for the demo, or use the API only (R-18) |
 | `npm ci` / Vite error about Node | Node is older than 20.19; install Node 22 LTS |
+| `pip install` stalls silently | Stale pip cache (often after a killed install): kill leftover `python.exe` processes. Solution: rerun with `--no-cache-dir` |
 | `ffmpeg not found` | `pip install imageio-ffmpeg` (already in the lockfile) or set `VLM_FFMPEG_BINARY` |
 | Job stays `queued` | The worker is not running: start `python -m app.worker --loop` from `backend/` |
 | Port 8000 in use | Use `--port 8001` and update `frontend/vite.config.ts` proxy |

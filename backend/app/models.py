@@ -133,6 +133,21 @@ class UserRole(enum.StrEnum):
     annotator = "annotator"
 
 
+class SearchStatus(enum.StrEnum):
+    queued = "queued"
+    running = "running"
+    done = "done"
+    partial = "partial"
+    failed = "failed"
+
+
+class SearchVideoStatus(enum.StrEnum):
+    queued = "queued"
+    running = "running"
+    done = "done"
+    failed = "failed"
+
+
 # --------------------------------------------------------------------------- #
 # Entities
 # --------------------------------------------------------------------------- #
@@ -181,8 +196,11 @@ class Video(Base):
     __tablename__ = "videos"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    project_id: Mapped[int] = mapped_column(
-        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    project_id: Mapped[int | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    dataset_id: Mapped[int | None] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"), nullable=True, index=True
     )
     original_filename: Mapped[str] = mapped_column(String(512), nullable=False)
     storage_key: Mapped[str] = mapped_column(String(512), nullable=False, unique=True)
@@ -268,6 +286,9 @@ class Candidate(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     job_id: Mapped[int] = mapped_column(
         ForeignKey("processing_jobs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    search_id: Mapped[int | None] = mapped_column(
+        ForeignKey("searches.id", ondelete="CASCADE"), nullable=True, index=True
     )
     video_id: Mapped[int] = mapped_column(
         ForeignKey("videos.id", ondelete="CASCADE"), nullable=False, index=True
@@ -458,3 +479,54 @@ class DatasetMembership(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, nullable=False)
+
+
+class Search(Base):
+    """A prompt run against a dataset, split into one SearchVideo per video."""
+
+    __tablename__ = "searches"
+    __table_args__ = (
+        Index("ix_searches_dataset_status", "dataset_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dataset_id: Mapped[int] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    status: Mapped[SearchStatus] = mapped_column(
+        _enum(SearchStatus, "search_status"), nullable=False, default=SearchStatus.queued
+    )
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class SearchVideo(Base):
+    """One video's slice of a :class:`Search`, tying it to a processing job."""
+
+    __tablename__ = "search_videos"
+    __table_args__ = (
+        UniqueConstraint("search_id", "video_id", name="uq_search_video"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    search_id: Mapped[int] = mapped_column(
+        ForeignKey("searches.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    video_id: Mapped[int] = mapped_column(
+        ForeignKey("videos.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("processing_jobs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    status: Mapped[SearchVideoStatus] = mapped_column(
+        _enum(SearchVideoStatus, "search_video_status"),
+        nullable=False,
+        default=SearchVideoStatus.queued,
+    )
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
