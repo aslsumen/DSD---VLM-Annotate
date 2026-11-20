@@ -4,11 +4,12 @@
  * One prompt runs on every ready video of the dataset: the client creates the
  * prompt (ActionDefinition) and queues one job per video with the batch endpoint.
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { ErrorNotice, Frame, Loading, Notice, PageHeader } from "../components/ui";
-import { api, newIdempotencyKey, toApiError, type ApiError } from "../lib/api";
+import { api, toApiError, type ApiError } from "../lib/api";
 import { useApiData } from "../lib/hooks";
+import { prepareSearch } from "../lib/operations";
 import { navigate } from "../lib/router";
 import { promptTitle, uniqueName } from "../lib/search";
 
@@ -36,6 +37,8 @@ export function NewSearchPage({ datasetId }: { datasetId: number }) {
   const [name, setName] = useState("");
   const [adapter, setAdapter] = useState("");
   const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
+  const [pending, setPending] = useState<Awaited<ReturnType<typeof prepareSearch>> | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
 
   if (data.loading && !data.data) {
@@ -59,20 +62,26 @@ export function NewSearchPage({ datasetId }: { datasetId: number }) {
   const adapterInfo = adapters.adapters.find((item) => item.name === chosenAdapter) ?? null;
   const trimmed = prompt.trim();
   const autoTitle = promptTitle(trimmed);
+  const canSubmit = pending !== null || (trimmed.length >= 3 && ready.length > 0);
+  const lockInputs = busy || pending !== null;
 
   async function run() {
+    if (submitting.current || !canSubmit) return;
+    submitting.current = true;
     setBusy(true);
     setError(null);
     try {
-      const action = await api.createAction(datasetId, {
+      const launch = pending ?? (await prepareSearch(datasetId, {
         name: uniqueName(name.trim() || autoTitle, actions.map((item) => item.name)),
         description: trimmed,
-      });
-      await api.createActionJobs(datasetId, action.id, { adapter: chosenAdapter }, newIdempotencyKey());
-      navigate(`/datasets/${datasetId}/searches/${action.id}`);
+      }, chosenAdapter));
+      setPending(launch);
+      await launch.enqueue();
+      navigate(`/datasets/${datasetId}/searches/${launch.action.id}`);
     } catch (failure) {
       setError(toApiError(failure));
       setBusy(false);
+      submitting.current = false;
     }
   }
 
@@ -93,7 +102,7 @@ export function NewSearchPage({ datasetId }: { datasetId: number }) {
           className="stack"
           onSubmit={(event) => {
             event.preventDefault();
-            if (trimmed.length >= 3 && ready.length > 0) void run();
+            void run();
           }}
         >
           <div className="field">
@@ -103,6 +112,7 @@ export function NewSearchPage({ datasetId }: { datasetId: number }) {
               className="input input--prompt"
               value={prompt}
               maxLength={5000}
+              disabled={lockInputs}
               onChange={(event) => setPrompt(event.target.value)}
               placeholder="e.g. A person is putting on a helmet."
             />
@@ -119,6 +129,7 @@ export function NewSearchPage({ datasetId }: { datasetId: number }) {
                   key={example}
                   type="button"
                   className="example-chip"
+                  disabled={lockInputs}
                   onClick={() => setPrompt(example)}
                 >
                   {example}
@@ -135,6 +146,7 @@ export function NewSearchPage({ datasetId }: { datasetId: number }) {
               className="input"
               maxLength={190}
               value={name}
+              disabled={lockInputs}
               onChange={(event) => setName(event.target.value)}
               placeholder={trimmed ? autoTitle : "Generated from the prompt"}
             />
@@ -145,6 +157,7 @@ export function NewSearchPage({ datasetId }: { datasetId: number }) {
               id="search-model"
               className="input"
               value={chosenAdapter}
+              disabled={lockInputs}
               onChange={(event) => setAdapter(event.target.value)}
             >
               {adapters.adapters.map((item) => (
@@ -165,14 +178,22 @@ export function NewSearchPage({ datasetId }: { datasetId: number }) {
           {adapterInfo?.requires_gpu ? (
             <Notice>This model runs on the worker’s GPU. A search can take a long time on a laptop.</Notice>
           ) : null}
-          {error ? <ErrorNotice error={error} title="The search could not be started" /> : null}
+          {error ? (
+            <ErrorNotice
+              error={error}
+              title={pending ? "Search saved, but queueing could not be confirmed" : "The search could not be started"}
+            />
+          ) : null}
+          {pending && error ? (
+            <a href={`#/datasets/${datasetId}/searches/${pending.action.id}`}>Open the saved search</a>
+          ) : null}
           <div className="form-actions">
             <button
               type="submit"
               className="btn btn-primary btn-lg"
-              disabled={trimmed.length < 3 || ready.length === 0 || busy}
+              disabled={!canSubmit || busy}
             >
-              {busy ? "Starting…" : "Run search"}
+              {busy ? "Starting…" : pending ? "Retry starting search" : "Run search"}
             </button>
             <a className="btn btn-ghost" href={`#/datasets/${datasetId}`}>
               Cancel
