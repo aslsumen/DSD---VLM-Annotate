@@ -122,7 +122,7 @@ The API accepts such jobs without the engine; a worker without it fails the job 
 
 ```powershell
 # Windows
-.\.venv\Scripts\python.exe -m pytest backend -q                 # 80 tests
+.\.venv\Scripts\python.exe -m pytest backend -q                 # 103 tests
 .\.venv\Scripts\python.exe -m ruff check backend\app backend\tests
 .\.venv\Scripts\python.exe scripts\smoke_e2e.py                 # real ffmpeg, 26/26 checks
 cd frontend; npm run build; npm test
@@ -175,11 +175,11 @@ traceback when you ask for help.
 ```text
 backend/
   app/                 FastAPI app, models, services, adapters, worker
-    api/               REST routers (projects, videos, jobs, candidates, exports)
+    api/               REST routers (auth, datasets, searches, projects, videos, jobs, candidates, exports)
     services/          storage, media (ffmpeg), pipeline (queue/export)
     adapters/          VLMAdapter boundary: mock, videojev (real), Qwen2.5-VL (stub)
   alembic/             database migrations (initial schema verified)
-  tests/               80 pytest tests
+  tests/               103 pytest tests (incl. search fan-out / status / scoping)
 frontend/              React + TypeScript + Vite UI
 video_grounding/       zero-shot grounding engine (VideoJev-4B), see video_grounding/README.md
 presentations/         versioned decks (PPTX + editable Markdown source)

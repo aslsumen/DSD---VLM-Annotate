@@ -24,7 +24,7 @@ Target 80–85 % of declared capacity once the table is filled.
 | S3-03 | Invitation flow + email abstraction (SMTP/provider) | USR-5 | 5 | Backend | **In review** — token returned once; no SMTP transport yet |
 | S3-04 | RBAC middleware + dataset scoping on every route | USR-2/3/4 | 5 | Backend | **Partial** — enforced on auth/dataset routes; legacy routes still bearer |
 | S3-05 | Dataset entity + API + assignments (migrate Project) | DS-1/2/3 | 8 | Backend | **In review** — Dataset + memberships; videos still under Project |
-| S3-06 | Search entity: one prompt over all videos, fan-out jobs, status aggregation | PR-1, DET-3 | 8 | Backend | Partial per-video results |
+| S3-06 | Search entity: one prompt over all videos, fan-out jobs, status aggregation | PR-1, DET-3 | 8 | Backend | **Implemented 2026-11-20** — models + migration (`e5b9c3d7a2f1`, `c9f0d3a1b2e4`), `POST /datasets/{id}/searches` fan-out, worker sync, aggregated status, read endpoints; tests added 2026-11-21 |
 | S3-07 | UI: login, invitation acceptance, user management | USR-1…7 | 5 | Frontend | Route guards |
 | S3-08 | UI: datasets list/detail, upload, search launch, search history | DS-1…3, PR-1 | 8 | Frontend | Reuse upload component |
 | S3-09 | Cross-video review list, accepted/rejected vocabulary, review flags | REV-1…4 | 5 | Frontend | Pagination |
@@ -34,11 +34,16 @@ Target 80–85 % of declared capacity once the table is filled.
 | S3-13 | KPI harness: recall, R@IoU, complete clip, boundary adjustment | NFR-5 | 5 | ML | First measurements done 2026-11-16 (engine `eval` CLI; Charades-STA reference only, composites in S3-17); reviewer boundary-adjustment KPI not built |
 | S3-14 | Alpha deck + evidence + upload checklist | D-19 | 5 | Scrum Master | Upload 2026-11-30 |
 | S3-15 | Carry-over: validate a real 10–30 min video | NFR-4 | 3 | QA | From Sprint 2 |
-| S3-16 | Integration tests: auth, permissions, dataset scoping | NFR-11…14 | 5 | QA | Security-critical |
+| S3-16 | Integration tests: auth, permissions, dataset scoping | NFR-11…14 | 5 | QA | Security-critical. **Done 2026-11-21** — `backend/tests/test_searches.py` (9 tests) covers search fan-out, status aggregation, role + dataset scoping; full suite 103 passed |
 | S3-17 | Run held-out composite benchmarks, re-check `min_event_score` (0.5 is provisional), report KPIs | NFR-5 | 5 | ML | Started 2026-11-16 on the RTX 3070 laptop (PB-70); results pending |
 
 **Status 2026-11-19:** S3-01…S3-05 implemented in PR #48 (10 new tests, 90 total); JSON schema is in PR #47
 (docs only).
+
+**Status 2026-11-20/21:** S3-06 implemented (Search/SearchVideo models + migrations `e5b9c3d7a2f1` +
+`c9f0d3a1b2e4`, search fan-out endpoint, worker status sync + aggregation, dataset video upload/listing, read
+endpoints). `backend/tests/test_searches.py` (9 tests) added for S3-16. Search `Idempotency-Key`, re-run-on-new-videos,
+and dataset-scoped exports remain open.
 
 **Total committed:** ~99 SP. **This is likely more than the team can absorb in two weeks without capacity
 data** (R-22). Triage proposal: S3-01…S3-07 and S3-14 are the minimum; S3-08…S3-13 can slip into Sprint 4 if

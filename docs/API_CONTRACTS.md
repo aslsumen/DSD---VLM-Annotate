@@ -141,7 +141,7 @@ auth and search routes are added **additively under `/api/v1`** rather than behi
 paths that change no frozen endpoint — §8's "decide in Sprint 3" is resolved in favour of extending `/api/v1`.
 
 Behavioural guarantees of that API (timestamps, unreviewed semantics, error envelope, range streaming) are
-tested by the pytest suite (90 tests on 2026-11-19) and are the part to carry into the new contract.
+tested by the pytest suite (103 tests on 2026-11-21) and are the part to carry into the new contract.
 
 **Job cancel and lost workers.** `POST /api/v1/jobs/{id}/cancel` works on `queued` and `running` jobs; a running
 worker stops at its next progress tick and its result is discarded. A running job whose worker stops
@@ -162,4 +162,4 @@ events is a successful job with an empty candidate list (the action does not occ
 adapters keep the cap (earliest 12 by start time) and fail a job that yields no candidates.
 
 Behavioural guarantees of that API (timestamps, unreviewed semantics, error envelope, range streaming) are
-tested by the pytest suite (90 tests on 2026-11-19) and are the part to carry into the new contract.
+tested by the pytest suite (103 tests on 2026-11-21) and are the part to carry into the new contract.

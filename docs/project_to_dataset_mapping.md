@@ -156,9 +156,10 @@ tables, columns and routes. The `/api/v1` vs `/api/v2` question is settled: the 
    merged code has not dropped it. `use_case` never existed in code. Flag this when the schema is next revised.
 6. **Search/SearchVideo are now implemented.** `Search`/`SearchVideo` models and tables exist
    (`backend/app/models.py:484-532`, migration `e5b9c3d7a2f1`), with fan-out and read endpoints in
-   `backend/app/api/searches.py` and worker synchronisation in `backend/app/services/pipeline.py`. Not done yet:
-   there are **no automated tests** for the search endpoints or the status-aggregation rules (S3-16 covers this),
-   and the "re-run searches on newly added videos" behaviour from v1.2 is still unimplemented.
+   `backend/app/api/searches.py` and worker synchronisation in `backend/app/services/pipeline.py`. Automated
+   tests were added 2026-11-21 in `backend/tests/test_searches.py` (9 tests: fan-out, status aggregation, role +
+   dataset scoping). Not done yet: the "re-run searches on newly added videos" behaviour from v1.2, a search
+   `Idempotency-Key`, and dataset-scoped exports.
 7. **Identity default changed.** The old `annotations.reviewer` column still defaults to `"anonymous"`
    (`backend/app/models.py:358`) and remains a plain `String(100)`, but all *new* tables use integer FKs to `users.id`.
    The two schemes coexist during transition; the `String(100)` reviewer column is legacy-only and should not be

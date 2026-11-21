@@ -234,4 +234,5 @@ schema without `create_all` (bootstrap → login → create dataset). **14 table
 
 `search_videos` is the join that replaced the "one job per video" view: a `Search` aggregates the status of its
 `SearchVideo` rows, while each row keeps pointing at the underlying `processing_jobs` job that the worker executes.
-There are no automated tests for this layer yet (S3-16).
+Automated tests for this layer live in `backend/tests/test_searches.py` (added 2026-11-21: fan-out, status
+aggregation, role + dataset scoping).
