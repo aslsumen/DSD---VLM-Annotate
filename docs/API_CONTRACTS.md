@@ -114,8 +114,8 @@ Not called by the browser. Worker → engine:
 
 | Area | Endpoints |
 |---|---|
-| Projects/actions | `POST/GET /api/v1/projects`, `GET/PATCH/DELETE /api/v1/projects/{id}`, `POST/GET /api/v1/projects/{id}/actions`, `PATCH/DELETE /api/v1/actions/{id}` (delete removes the action with its candidate jobs, candidates, annotations, clips and engine work directories; a worker still running one of those jobs drops its result at the next lease fence) |
-| Videos | `POST/GET /api/v1/projects/{id}/videos`, `GET/DELETE /api/v1/videos/{id}`, `GET /api/v1/videos/{id}/stream` |
+| Projects/actions | `POST/GET /api/v1/projects`, `GET/PATCH/DELETE /api/v1/projects/{id}` (delete also removes its videos' `engine/features/video-<id>` and its jobs' `engine/job-<id>` directories), `POST/GET /api/v1/projects/{id}/actions`, `PATCH/DELETE /api/v1/actions/{id}` (delete removes the action with its candidate jobs, candidates, annotations, clips and engine work directories, but not the video's feature cache; a worker still running one of those jobs drops its result at the next lease fence) |
+| Videos | `POST/GET /api/v1/projects/{id}/videos`, `GET/DELETE /api/v1/videos/{id}` (delete also removes `engine/features/video-<id>` and the `engine/job-<id>` directories of its jobs), `GET /api/v1/videos/{id}/stream` |
 | Jobs | `POST /api/v1/videos/{id}/jobs`, `POST /api/v1/projects/{id}/actions/{action_id}/jobs` (batch), `GET /api/v1/jobs` (filters `project_id`, `video_id`, `action_id`, `status`, `limit`), `GET /api/v1/jobs/{id}`, retry (failed jobs), cancel (queued or running jobs; `409 JOB_NOT_CANCELABLE` otherwise), `GET /api/v1/jobs/{id}/candidates` |
 | Review | `GET /api/v1/projects/{id}/candidates`, `GET /api/v1/candidates/{id}`, `PUT/DELETE /api/v1/candidates/{id}/annotation`, `GET /api/v1/candidates/{id}/clip` |
 | Export | `POST/GET /api/v1/projects/{id}/exports`, `GET/DELETE /api/v1/exports/{id}`, `GET /api/v1/exports/{id}/download` |

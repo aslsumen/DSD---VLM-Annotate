@@ -34,7 +34,7 @@ local storage. Without a token, the API returns `401 UNAUTHENTICATED`.
 3. Select **Create project**. The card shows counts of videos, candidates, reviewed items and exports.
 
 Deleting a project removes its videos, clips, jobs, labels and exports. The confirmation dialog is deliberate:
-there is no undo.
+there is no undo. Deleting a video or a project also deletes the data the worker derived from it.
 
 ## 4. Define the action
 
@@ -68,6 +68,9 @@ The original filename is kept as metadata; the stored file gets a generated name
 5. The list refreshes automatically every two seconds while something is queued or running.
 
 If no worker is running, jobs stay queued — this is the most common setup mistake.
+
+A second search on a video you already searched runs faster, because the worker reuses what it computed from the
+video the first time.
 
 ## 7. Review candidates
 

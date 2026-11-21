@@ -17,7 +17,8 @@ Historical spec name: `SPEC_ZeroShot_Video_Event_Grounding_MVP_v1.1` (not includ
   returned by `predict_video`, so the adapter calls the three steps itself.
 - Feature cache (`feature_cache.py`, `feature_cache.dir`): `encode_video` output plus `record` are stored per window under
   sha256(clip bytes, fps, max_frames, context, model id/revision, attention, torch/transformers versions); a later
-  prompt on the same video reloads them instead of decoding and encoding again. The features do not depend on the
+  prompt on the same video reloads them instead of decoding and encoding again. `FeatureCache(root, max_bytes, subdir=None)`
+  keeps entries in `root/subdir` (one per video in the product) while the `max_bytes` LRU cap covers all of `root`. The features do not depend on the
   prompt, so results are identical. `raw_response["feature_source"]` is `encoded`, `memory` or `disk`.
 - `prepare_video(processor, path, *, fps, max_frames, context) -> (pixel_values, record)`,
   `record = {frames, fps, grid_thw, tokens, score_times, score_bounds, sampled_duration}`.

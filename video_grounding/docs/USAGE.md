@@ -62,7 +62,7 @@ YAML overrides only the specified fields; omitted fields use `settings.py` defau
 | Export | `export.cut_clips` | true; disabling it still produces event JSON |
 | Export | `pre_roll` / `post_roll` | 0.5 seconds each |
 | Retry | `retry.max_attempts` / `oom_ladder` | 3 / [48, 32, 24, 16, 12, 8, 4] |
-| Feature cache | `feature_cache.dir` / `max_gb` | `~/.cache/video_grounding/features` / 50; encoded window features are reused by later prompts on the same video (least recently used entries are deleted above the cap); `dir: null` disables it. Results are identical with or without it |
+| Feature cache | `feature_cache.dir` / `max_gb` | `~/.cache/video_grounding/features` / 50; encoded window features are reused by later prompts on the same video (least recently used entries are deleted above the cap); `dir: null` disables it. The product adapter instead puts it under the backend data dir, one subdirectory per video (`engine/features/video-<id>`, removed with the video), with the same global cap. Results are identical with or without it |
 
 VideoJev frame counts depend on window duration, fps, and max_frames. When the requested count exceeds the cap, effective sampling density is reduced uniformly over the clip. To increase density, check both fps and the frame cap; keep window duration and stride unchanged for a density comparison. OOM recovery can still reduce frames: inspect `metrics.json` (`oom_downgrades`) and actual sampling metadata in `window_predictions.jsonl`. Denser sampling does not guarantee better accuracy.
 
