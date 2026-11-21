@@ -47,8 +47,8 @@ disk, so a later prompt on the same video skips decoding and visual encoding. Wh
 pays for is per-prompt scoring, clip cutting, and refine tiles at positions no earlier prompt used.
 Results do not change: an 8-prompt scan of `-AwyG1JcMp8` with an empty and then a warm cache gave
 probabilities identical to the old code on all 180 window predictions and the same 28 events (scan
-wall time 897 s empty, 664 s warm). That video's 65 windows took 1.9 GB of cache (about 30 MB per
-window).
+wall time 897 s empty, 664 s warm). That scan's 65 entries (15 coarse windows and 50 refine
+tiles) took 1.9 GB of cache, about 29 MB per entry.
 
 ## Earlier measurements (2026-11-08, old sampling: 1 fps, 8 frames, context 8192)
 Kept as a record of the first L1 run; do not use them for current speed.

@@ -110,7 +110,7 @@ same model and sampling settings:
 - adding a new search to a project whose videos were already searched;
 - "Run pending searches" over existing videos;
 - re-running or retrying a search;
-- inside one search, refine tiles that an earlier step of the same search already encoded.
+- engine CLI scans with several prompts, which share refine tiles at the same positions.
 
 **Not used:**
 
@@ -128,8 +128,9 @@ same 5-7 min video took 43-53% less time
 scoring, refine tiles at new positions, clip cutting, or backend preview extraction.
 
 **Where and how big.** `data/storage/engine/features/video-<id>/` in the product (engine CLI:
-`~/.cache/video_grounding/features`). About 30 MB per 30 s window, roughly 5 GB per hour of video for the coarse
-scan, plus refine tiles per search. The cap is global across all videos (`feature_cache.max_gb`, default 50)
+`~/.cache/video_grounding/features`). Measured: one 8-prompt search of a 307 s cooking video left 1.9 GB
+(15 coarse windows and 50 refine tiles, about 29 MB per entry); size grows with video length and with the
+number of refine tiles. The cap is global across all videos (`feature_cache.max_gb`, default 50)
 and evicts the least recently used entries.
 
 **Deletion.** Deleting a video or a project removes its features and its `engine/job-<id>/` work dirs. Deleting

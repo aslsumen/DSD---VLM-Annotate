@@ -177,7 +177,7 @@ always turns off Gemini verification and engine clip cutting, whatever the YAML 
 
 The adapter also caches each video's visual features under `data/storage/engine/features/video-<id>/`, so later
 searches on the same video run faster. Size the data volume for the cap (`feature_cache.max_gb`, default 50 GB;
-about 5 GB per hour of searched video, least recently used entries are evicted). To disable or shrink it, set
+least recently used entries are evicted; a 5 min video searched once took about 2 GB). To disable or shrink it, set
 `feature_cache: {dir: null}` or a smaller `max_gb` in the YAML named by `VLM_VIDEOJEV_CONFIG`. Details:
 [ARCHITECTURE.md](ARCHITECTURE.md#visual-feature-cache).
 
