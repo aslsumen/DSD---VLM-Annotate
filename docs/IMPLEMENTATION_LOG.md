@@ -2,6 +2,40 @@
 
 Chronological record of what was actually built, changed and measured. Newest last.
 
+## 2026-11-20/21 — Search & SearchVideo: models, migration, fan-out, worker sync, dataset videos, tests
+
+**Goal:** implement the Sprint 3 Search layer (S3-06): one free-text prompt over all ready videos of a dataset,
+fan-out to per-video jobs, worker status synchronisation, aggregate search status, and dataset-scoped video
+upload/listing — without breaking the legacy project/action/job path.
+
+**Code**
+
+- `app/models.py`: `Search` + `SearchVideo` tables; `SearchStatus` (`queued|running|done|partial|failed`) and
+  `SearchVideoStatus` (`queued|running|done|failed`) enums; `Video.dataset_id` and `Candidate.search_id` (nullable
+  FK) added; `Video.project_id` and `ProcessingJob.project_id` relaxed to nullable for dataset-only searches.
+- `app/schemas.py`: `SearchCreate`, `SearchOut`, `SearchDetailOut`, `SearchVideoOut`; `VideoOut.project_id` and
+  `JobOut.project_id` made optional; `CandidateOut.search_id` added.
+- `app/api/searches.py` (new): `POST /datasets/{id}/searches` (fan-out, 202), `GET /searches/{id}` (aggregated
+  status + counts + per-video list), `GET /searches/{id}/candidates` (review-state/verdict filters).
+- `app/api/datasets.py`: `POST/GET /datasets/{id}/videos` (upload via the shared `ingest_video` helper, list).
+- `app/api/videos.py`: upload logic extracted into `ingest_video(file, *, subdir, project_id, dataset_id, ...)`;
+  `upload_video` is now a thin project wrapper.
+- `app/services/pipeline.py`: `enqueue_candidate_job` accepts `action=None`; `_run_candidate_job` sources the
+  prompt from `Search` via `SearchVideo` when there is no action and stamps `Candidate.search_id`; worker syncs
+  `SearchVideo` status and recomputes parent `Search.status`/`finished_at` on start/success/failure.
+- Migrations: `e5b9c3d7a2f1_search_and_search_video.py` (searches + search_videos + video/candidate nullable FK
+  columns) and `c9f0d3a1b2e4_nullable_processing_job_project.py` (processing_jobs.project_id nullable).
+- `tests/test_searches.py` (new, 9 tests): fan-out skips non-ready videos and stamps `search_id`; requested-video
+  filtering + auto title; out-of-dataset video rejection; zero-ready-videos → `done`; status aggregation
+  transitions; partial (one fails) and failed (all fail) searches; role + dataset scoping.
+
+**Verification (actual):** `pytest -q` → **103 passed** (2026-11-21; 9 new search tests on top of the prior 94).
+Run from `backend/`: `..\.venv\Scripts\python.exe -m alembic upgrade head` then
+`..\.venv\Scripts\python.exe -m pytest -q`.
+
+**Not done yet:** re-running existing searches on newly added videos (v1.2 SearchVideo behaviour); search
+`Idempotency-Key` (the legacy batch endpoint has it); dataset-scoped exports; `DELETE /datasets/{id}/members/{user_id}`.
+
 ## 2026-11-19 — Sprint 3: session auth, invitations and datasets
 
 **PR:** #48 (`feat/auth-datasets`) · **Goal:** implement the first Sprint 3 increment (S3-01…S3-05) without

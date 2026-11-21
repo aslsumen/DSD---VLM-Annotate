@@ -122,7 +122,7 @@ The API accepts such jobs without the engine; a worker without it fails the job 
 
 ```powershell
 # Windows
-.\.venv\Scripts\python.exe -m pytest backend -q                 # 80 tests
+.\.venv\Scripts\python.exe -m pytest backend -q                 # 103 tests
 .\.venv\Scripts\python.exe -m ruff check backend\app backend\tests
 .\.venv\Scripts\python.exe scripts\smoke_e2e.py                 # real ffmpeg, 26/26 checks
 cd frontend; npm run build; npm test
@@ -145,6 +145,7 @@ cd frontend && npm run build && npm test
 | `table projects already exists` during migration | The API created the schema first. Stop it, delete `data/vlm_annotate.db` (dev only), rerun `alembic upgrade head` |
 | `401 UNAUTHENTICATED` / video will not play | `VLM_API_TOKEN` is set. Unset it for the demo, or use the API only (R-18) |
 | `npm ci` / Vite error about Node | Node is older than 20.19; install Node 22 LTS |
+| `pip install` stalls silently | Stale pip cache (often after a killed install): kill leftover `python.exe` processes. Solution: rerun with `--no-cache-dir` |
 | `ffmpeg not found` | `pip install imageio-ffmpeg` (already in the lockfile) or set `VLM_FFMPEG_BINARY` |
 | Job stays `queued` | The worker is not running: start `python -m app.worker --loop` from `backend/` |
 | Port 8000 in use | Use `--port 8001` and update `frontend/vite.config.ts` proxy |
@@ -174,11 +175,11 @@ traceback when you ask for help.
 ```text
 backend/
   app/                 FastAPI app, models, services, adapters, worker
-    api/               REST routers (projects, videos, jobs, candidates, exports)
+    api/               REST routers (auth, datasets, searches, projects, videos, jobs, candidates, exports)
     services/          storage, media (ffmpeg), pipeline (queue/export)
     adapters/          VLMAdapter boundary: mock, videojev (real), Qwen2.5-VL (stub)
   alembic/             database migrations (initial schema verified)
-  tests/               80 pytest tests
+  tests/               103 pytest tests (incl. search fan-out / status / scoping)
 frontend/              React + TypeScript + Vite UI
 video_grounding/       zero-shot grounding engine (VideoJev-4B), see video_grounding/README.md
 presentations/         versioned decks (PPTX + editable Markdown source)

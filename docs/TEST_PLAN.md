@@ -22,7 +22,7 @@ real-model accuracy (handled by the model evaluation protocol and `video_groundi
 
 ```powershell
 # from the repository root
-.\.venv\Scripts\python.exe -m pytest backend -q                 # 56 tests
+.\.venv\Scripts\python.exe -m pytest backend -q                 # 103 tests
 .\.venv\Scripts\python.exe -m ruff check backend\app backend\tests
 .\.venv\Scripts\python.exe scripts\smoke_e2e.py                 # real ffmpeg, writes evidence JSON
 cd frontend; npm ci; npm run build; npm test
@@ -41,6 +41,7 @@ cd frontend; npm ci; npm run build; npm test
 | Security/adapters | `backend/tests/test_security.py` | FR-28, FR-21, adapter gating | 4 |
 | VideoJev adapter | `backend/tests/test_videojev.py` (fake engine, no torch) | exhaustive pipeline, batch endpoint, resume, cancel | added 2026-11-16 |
 | Heartbeat lease | `backend/tests/test_lease.py` | PB-28 / R-07 | added 2026-11-16 |
+| Searches | `backend/tests/test_searches.py` | search fan-out, status aggregation, role + dataset scoping | added 2026-11-21 (S3-06/S3-16) |
 | Frontend unit | `frontend/src/lib/format.test.ts` | timestamp formatting | see frontend report |
 
 ## 4. Coverage of the riskiest behaviours
@@ -72,7 +73,7 @@ cd frontend; npm ci; npm run build; npm test
 | Live server probe | `uvicorn` on :8010 | **PASS** — `/health` ok, `/` 200 HTML, `/api/v1/projects` 200, `/api/docs` 200 |
 | **Re-verification at Sprint 2 close (2026-11-15)** | pytest, `npm test`, smoke | **PASS** — 56 backend, 21 UI, 26/26 smoke; evidence `docs/evidence/smoke-e2e-20261115-180704.json` |
 
-> Results above are the Sprint 2 baseline (2026-11-05/15). Since then the backend suite grew to 80 tests (`test_videojev.py`, `test_lease.py`; 2026-11-16, not re-run for this document). The engine has its own suite (`video_grounding/tests`, 44 tests on macOS at the last count in `EVALUATION.md`).
+> Results above are the Sprint 2 baseline (2026-11-05/15). Since then the backend suite grew to 80 tests (`test_videojev.py`, `test_lease.py`; 2026-11-16, not re-run for this document), then to 90 tests with the auth/dataset PR #48 (2026-11-19), and to **103 tests** with `test_searches.py` (9 tests, 2026-11-21 — all green). The engine has its own suite (`video_grounding/tests`, 44 tests on macOS at the last count in `EVALUATION.md`).
 
 > Warnings are reported, not hidden: `StarletteDeprecationWarning: Using httpx with starlette.testclient is
 > deprecated` comes from FastAPI 0.162 / Starlette 1.10 and does not affect application behaviour.

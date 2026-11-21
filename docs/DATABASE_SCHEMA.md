@@ -205,25 +205,34 @@ Index: `(search_id, review_status)` for the review list; `(video_id)`.
 Alembic migrations must be additive first (create new tables), then a data migration for existing rows, then
 drop the old tables. No destructive migration before the team agrees.
 
-## 6. Current implemented schema (verified 2026-11-19)
+## 6. Current implemented schema (verified 2026-11-20)
 
-SQLite `data/vlm_annotate.db`, migrations `0001_initial_schema.py` and `d03f1c4ffd30_auth_and_datasets.py`:
+SQLite `data/vlm_annotate.db`, migrations `0001_initial_schema.py`, `d03f1c4ffd30_auth_and_datasets.py`,
+`e5b9c3d7a2f1_search_and_search_video.py` and `c9f0d3a1b2e4_nullable_processing_job_project.py`:
 
 | Table | Purpose |
 |---|---|
 | projects | project container (≈ dataset) |
 | action_definitions | natural-language prompt per project |
-| videos | uploaded source, storage key, checksum, duration, resolution, status |
-| processing_jobs | DB queue + provenance (`queued/running/succeeded/failed/canceled`, attempts, idempotency) |
-| candidates | proposal + preview + clip status + score |
+| videos | uploaded source, storage key, checksum, duration, resolution, status; `project_id` now nullable, `dataset_id` nullable FK |
+| processing_jobs | DB queue + provenance (`queued/running/succeeded/failed/canceled`, attempts, idempotency); `project_id` now nullable for dataset searches |
+| candidates | proposal + preview + clip status + score; `search_id` nullable FK |
 | annotations | human decision (`true_positive`/`false_positive`), corrections, reviewer, note |
-| dataset_exports | async ZIP exports |
+| dataset_exports | async ZIP exports (still project-scoped) |
 | users | global role (`administrator`/`dataset_admin`/`annotator`), password hash, lockout state |
 | invitations | single-use email invitation; only the token hash is stored |
 | user_sessions | opaque bearer session; token hash, expiry and revocation |
 | datasets | dataset container for the Sprint 3 access model |
 | dataset_memberships | which user may see/annotate a dataset (roles stay global) |
+| searches | one free-text prompt run over a dataset; `status` (`queued`/`running`/`done`/`partial`/`failed`), auto `title` |
+| search_videos | one row per (search, video): `search_id`, `video_id`, nullable `job_id -> processing_jobs.id`, per-video `status` |
 
-Migration `0002` was verified on a fresh SQLite file with `alembic upgrade head` and `alembic check` (no pending
-operations); the API was exercised against that migrated schema without `create_all` (bootstrap → login → create
-dataset). 12 tables total. The schema is portable to PostgreSQL but has not been tested there (R-09).
+Migrations `0002` (`d03f1c4ffd30`) and `0003` (`e5b9c3d7a2f1`) were verified on a fresh SQLite file with
+`alembic upgrade head` and `alembic check` (no pending operations); the API was exercised against that migrated
+schema without `create_all` (bootstrap → login → create dataset). **14 tables total**, migration head is
+`c9f0d3a1b2e4`. The schema is portable to PostgreSQL but has not been tested there (R-09).
+
+`search_videos` is the join that replaced the "one job per video" view: a `Search` aggregates the status of its
+`SearchVideo` rows, while each row keeps pointing at the underlying `processing_jobs` job that the worker executes.
+Automated tests for this layer live in `backend/tests/test_searches.py` (added 2026-11-21: fan-out, status
+aggregation, role + dataset scoping).

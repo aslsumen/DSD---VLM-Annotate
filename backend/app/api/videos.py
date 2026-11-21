@@ -55,7 +55,30 @@ async def upload_video(
     settings: Settings = Depends(settings_dep),
 ) -> Video:
     get_project_or_404(session, project_id)
+    return await ingest_video(
+        file,
+        subdir=f"videos/{project_id}",
+        project_id=project_id,
+        dataset_id=None,
+        session=session,
+        storage=storage,
+        probe=probe,
+        settings=settings,
+    )
 
+
+async def ingest_video(
+    file: UploadFile,
+    *,
+    subdir: str,
+    project_id: int | None,
+    dataset_id: int | None,
+    session: Session,
+    storage: LocalStorage,
+    probe: MediaProbe,
+    settings: Settings,
+) -> Video:
+    """Validate, store and probe one upload; attach it to a project or a dataset."""
     original_name = Path(file.filename or "upload").name
     extension = Path(original_name).suffix.lower()
     if extension not in settings.allowed_video_extensions:
@@ -93,7 +116,7 @@ async def upload_video(
     try:
         stored = storage.save_stream(
             file.file,
-            subdir=f"videos/{project_id}",
+            subdir=subdir,
             suffix=extension,
             max_bytes=settings.max_upload_bytes,
         )
@@ -135,6 +158,7 @@ async def upload_video(
 
     video = Video(
         project_id=project_id,
+        dataset_id=dataset_id,
         original_filename=original_name,
         storage_key=stored.key,
         content_type=file.content_type or "video/mp4",
