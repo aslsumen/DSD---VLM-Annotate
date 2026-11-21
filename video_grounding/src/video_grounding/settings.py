@@ -82,6 +82,11 @@ class Retry(_Section):
     oom_ladder: list[int] = [48, 32, 24, 16, 12, 8, 4]
 
 
+class FeatureCacheCfg(_Section):
+    dir: str | None = "~/.cache/video_grounding/features"  # None disables the cache
+    max_gb: float = 50.0
+
+
 class Settings(_Section):
     runtime: Runtime = Runtime()
     model: ModelCfg = ModelCfg()
@@ -91,6 +96,7 @@ class Settings(_Section):
     fusion: Fusion = Fusion()
     export: Export = Export()
     retry: Retry = Retry()
+    feature_cache: FeatureCacheCfg = FeatureCacheCfg()
 
 
 def load_settings(path: str | Path) -> Settings:
@@ -104,5 +110,6 @@ def dump_settings(s: Settings) -> str:
 def config_hash(s: Settings) -> str:
     # mode="json" stringifies dict keys, so {0: "6GiB", "cpu": ..} sorts without a TypeError
     # verify only adds verdicts on top of events: changing it must not block resume or change event ids
-    canon = json.dumps(s.model_dump(mode="json", exclude={"verify"}), sort_keys=True, separators=(",", ":"))
+    # feature_cache never changes results, so it must not block resume or change event ids either
+    canon = json.dumps(s.model_dump(mode="json", exclude={"verify", "feature_cache"}), sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canon.encode()).hexdigest()

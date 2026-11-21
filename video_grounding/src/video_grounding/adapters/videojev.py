@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import gc
+import hashlib
+import json
 import sys
 import time
 
@@ -34,11 +36,14 @@ class VideoJevBackend:
 
     def __init__(self, model_path: str, model_id: str, model_revision: str, context_tokens: int = 8192,
                  device_map: str | dict = "auto", max_memory: dict | None = None,
-                 attn_implementation: str = "flash_attention_2", threshold: float = 0.25):
+                 attn_implementation: str = "flash_attention_2", threshold: float = 0.25,
+                 feature_cache=None):
         self.model_path, self.model_id, self.model_revision = model_path, model_id, model_revision
         self.context_tokens, self.device_map = context_tokens, device_map
         self.max_memory = dict(max_memory) if max_memory else None  # own copy: accelerate rewrites values in place
         self.attn_implementation, self.threshold = attn_implementation, threshold
+        self.feature_cache = feature_cache
+        self._env = ""
         self._model = self._processor = self._prepare_video = None
         self._key = self._features = self._record = None  # last window's encoded features
 
@@ -46,7 +51,9 @@ class VideoJevBackend:
         if self._model is not None:  # the backend worker keeps the model loaded across jobs
             return
         import torch
+        import transformers
         from transformers import AutoModel, AutoProcessor
+        self._env = f"torch={torch.__version__} transformers={transformers.__version__}"
         self._processor = AutoProcessor.from_pretrained(self.model_path, revision=self.model_revision, trust_remote_code=True)
         kw = {"max_memory": dict(self.max_memory)} if self.max_memory else {}
         device_map = self.device_map
@@ -76,6 +83,18 @@ class VideoJevBackend:
         dmap["head"] = 0
         return dmap
 
+    def _feature_key(self, window: Window) -> str:
+        # Content key: the clip's bytes, so any change in source video, window bounds or cutter settings misses
+        # automatically. It relies on a deterministic re-encode (libx264 output is the same for the same input,
+        # args and thread count on one host); a non-deterministic cut only costs hits, never correctness.
+        h = hashlib.sha256()
+        with open(window.clip_path, "rb") as f:
+            while chunk := f.read(1 << 20):
+                h.update(chunk)
+        h.update(json.dumps([1, window.fps, window.max_frames, self.context_tokens, self.model_id,  # 1 = key format version
+                             self.model_revision, self.attn_implementation, self._env]).encode())
+        return h.hexdigest()
+
     def _drop_cache(self) -> None:
         self._key = self._features = self._record = None
 
@@ -84,7 +103,7 @@ class VideoJevBackend:
         if self._model is None:
             raise RuntimeError("VideoJevBackend.load() has not been called")
         cuda = torch.cuda.is_available()
-        key = (window.clip_path, window.fps, window.max_frames)
+        key = self._feature_key(window)
         question = {"id": query_id, "task": "grounding", "query": query}
         try:
             if cuda:
@@ -92,17 +111,26 @@ class VideoJevBackend:
                     torch.cuda.reset_peak_memory_stats(i)
             t0 = time.perf_counter()
             with torch.inference_mode():  # same three steps as model.predict_video, features cached per window
+                source = "memory"
                 if key != self._key:
                     self._drop_cache()
-                    pixels, record = self._prepare_video(
-                        self._processor, window.clip_path, fps=window.fps, max_frames=window.max_frames,
-                        context=self.context_tokens)
-                    features = self._model.encode_video(pixels, torch.tensor([record["grid_thw"]]))
+                    hit = self.feature_cache.get(key) if self.feature_cache else None
+                    if hit:
+                        source = "disk"
+                        features, record = hit["features"].to(hit["device"]), hit["record"]
+                    else:
+                        source = "encoded"
+                        pixels, record = self._prepare_video(
+                            self._processor, window.clip_path, fps=window.fps, max_frames=window.max_frames,
+                            context=self.context_tokens)
+                        features = self._model.encode_video(pixels, torch.tensor([record["grid_thw"]]))
+                        if self.feature_cache:
+                            self.feature_cache.put(key, features, record)
                     self._key, self._features, self._record = key, features, record
                 prediction = self._model.predict_features(
                     self._processor, self._features, self._record, [question],
                     context=self.context_tokens, threshold=self.threshold)[0]
-            extras = {"context_tokens": self.context_tokens,
+            extras = {"context_tokens": self.context_tokens, "feature_source": source,
                       "inference_ms": (time.perf_counter() - t0) * 1000,
                       "peak_vram_bytes": max(torch.cuda.max_memory_allocated(i)
                                              for i in range(torch.cuda.device_count())) if cuda else None}
