@@ -62,6 +62,7 @@ YAML 只覆盖写出的字段，其余使用 `settings.py` 默认值；未知字
 | 导出 | `export.cut_clips` | true；关闭时仍生成事件 JSON |
 | 导出 | `pre_roll` / `post_roll` | 各 0.5 秒 |
 | 重试 | `retry.max_attempts` / `oom_ladder` | 3 / [48, 32, 24, 16, 12, 8, 4] |
+| 特征缓存 | `feature_cache.dir` / `max_gb` | `~/.cache/video_grounding/features` / 50；同一视频换提示词时复用已编码的窗口特征，超过上限先删最久未用的；`dir: null` 关闭。开不开缓存结果都相同 |
 
 VideoJev 的目标帧数同时受窗口时长、fps 和 max_frames 约束：超过上限时在整段内均匀降低有效采样率。提高密度必须同时检查 fps 与帧数上限；保持窗口和步长不变才能比较密度变化。显存不足仍可能降帧，实际情况看 `metrics.json` 的 `oom_downgrades` 和 `window_predictions.jsonl` 的采样元数据。更密集采样不保证更高准确率。
 
