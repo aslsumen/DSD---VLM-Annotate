@@ -53,6 +53,8 @@ class ProposalRequest:
     # Optional hooks for long-running adapters: a per-job directory that survives
     # retries of the same job (resumable engines) and a 0..1 progress callback.
     work_dir: Path | None = None
+    # Per-video directory for the adapter's reusable visual features; deleting the video removes it.
+    feature_cache_dir: Path | None = None
     progress: Callable[[float], None] | None = None
 
 

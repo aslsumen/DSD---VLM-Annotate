@@ -56,6 +56,40 @@ def test_eviction_is_lru(tmp_path):
     assert sum(p.stat().st_size for p in (tmp_path / "c").iterdir()) <= size * 3.5
 
 
+def test_subdir_put_get(tmp_path):
+    c = FeatureCache(tmp_path, 10**9, subdir="video-1")
+    c.put("k", feats(), {"a": 1})
+    assert (tmp_path / "video-1" / "k.pt").is_file()
+    assert c.get("k")["record"] == {"a": 1}
+    assert FeatureCache(tmp_path, 10**9, subdir="video-2").get("k") is None
+
+
+def test_eviction_is_global_across_subdirs(tmp_path):
+    probe = FeatureCache(tmp_path / "probe", 10**9)
+    probe.put("x", feats(), {})
+    size = (tmp_path / "probe" / "x.pt").stat().st_size
+    root = tmp_path / "c"
+    a, b = (FeatureCache(root, int(size * 2.5), subdir=f"video-{i}") for i in (1, 2))
+    a.put("a1", feats(1), {})
+    b.put("b1", feats(2), {})
+    for i, p in enumerate([root / "video-1" / "a1.pt", root / "video-2" / "b1.pt"]):
+        os.utime(p, (1000 + i, 1000 + i))
+    assert a.get("a1") is not None  # refreshes a1: b1 is now the globally oldest
+    a.put("a2", feats(3), {})
+    assert {p.name for p in root.rglob("*.pt")} == {"a1.pt", "a2.pt"}
+    assert b.get("b1") is None
+
+
+def test_deleting_one_subdir_keeps_the_other(tmp_path):
+    import shutil
+    a, b = (FeatureCache(tmp_path, 10**9, subdir=f"video-{i}") for i in (1, 2))
+    a.put("k", feats(1), {})
+    b.put("k", feats(2), {})
+    shutil.rmtree(tmp_path / "video-1")
+    assert a.get("k") is None
+    assert torch.equal(b.get("k")["features"], feats(2))
+
+
 def test_put_failure_never_raises(tmp_path):
     blocker = tmp_path / "file"
     blocker.write_text("x")

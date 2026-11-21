@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from tests.conftest import create_project, make_video_bytes
+from tests.conftest import (
+    create_action,
+    create_project,
+    make_engine_dirs,
+    make_video_bytes,
+    upload_video,
+)
 
 
 def test_upload_ready_video(client, probe) -> None:
@@ -88,3 +94,23 @@ def test_delete_video_removes_rows_and_file(client) -> None:
     assert client.delete(f"/api/v1/videos/{upload['id']}").status_code == 204
     assert client.get(f"/api/v1/videos/{upload['id']}").status_code == 404
     assert client.get(f"/api/v1/projects/{project['id']}/videos").json() == []
+
+
+def test_delete_video_removes_its_engine_dirs_only(client) -> None:
+    project = create_project(client)
+    action = create_action(client, project["id"])
+    v1, v2 = upload_video(client, project["id"]), upload_video(client, project["id"], "b.mp4")
+    jobs = {
+        v["id"]: client.post(
+            f"/api/v1/videos/{v['id']}/jobs", json={"action_id": action["id"]}
+        ).json()["id"]
+        for v in (v1, v2)
+    }
+    storage = client.app.state.storage
+    make_engine_dirs(storage, jobs.values(), [v1["id"], v2["id"]])
+
+    assert client.delete(f"/api/v1/videos/{v1['id']}").status_code == 204
+    assert not storage.path_for(f"engine/features/video-{v1['id']}").exists()
+    assert not storage.path_for(f"engine/job-{jobs[v1['id']]}").exists()
+    assert storage.path_for(f"engine/features/video-{v2['id']}").is_dir()
+    assert storage.path_for(f"engine/job-{jobs[v2['id']]}").is_dir()

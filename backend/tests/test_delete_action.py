@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tests.conftest import create_action, create_project, upload_video
+from tests.conftest import create_action, create_project, make_engine_dirs, upload_video
 
 
 def _run_search(client, worker, project_id: int, action_id: int) -> list[dict]:
@@ -70,3 +70,18 @@ def test_queued_job_of_a_deleted_action_is_never_executed(client, worker) -> Non
     assert client.delete(f"/api/v1/actions/{action['id']}").status_code == 204
     assert client.get(f"/api/v1/jobs/{job['id']}").status_code == 404
     assert worker.run_once() is False
+
+
+def test_delete_action_removes_job_dirs_but_keeps_video_features(client) -> None:
+    project = create_project(client)
+    action = create_action(client, project["id"])
+    video = upload_video(client, project["id"])
+    job_id = client.post(
+        f"/api/v1/videos/{video['id']}/jobs", json={"action_id": action["id"]}
+    ).json()["id"]
+    storage = client.app.state.storage
+    make_engine_dirs(storage, [job_id], [video["id"]])
+
+    assert client.delete(f"/api/v1/actions/{action['id']}").status_code == 204
+    assert not storage.path_for(f"engine/job-{job_id}").exists()
+    assert storage.path_for(f"engine/features/video-{video['id']}").is_dir()

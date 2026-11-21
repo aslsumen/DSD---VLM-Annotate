@@ -233,3 +233,13 @@ def accept_invitation(
     )
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def make_engine_dirs(storage, job_ids=(), video_ids=()) -> None:
+    """Create the engine work / feature-cache dirs a real search leaves behind."""
+    from app.services.pipeline import engine_job_key, feature_cache_key
+
+    keys = [*map(engine_job_key, job_ids), *map(feature_cache_key, video_ids)]
+    for key in keys:
+        (storage.path_for(key)).mkdir(parents=True)
+        (storage.path_for(key) / "x.bin").write_bytes(b"x")

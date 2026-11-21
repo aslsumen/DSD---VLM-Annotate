@@ -22,7 +22,7 @@ from ..errors import ApiError
 from ..models import ActionDefinition, Candidate, ProcessingJob, Video, VideoStatus
 from ..schemas import JobCreate, JobOut, VideoOut
 from ..services.media import MediaError, MediaProbe
-from ..services.pipeline import enqueue_candidate_job
+from ..services.pipeline import enqueue_candidate_job, remove_engine_files
 from ..services.storage import LocalStorage, StorageError
 from .files import range_file_response
 
@@ -185,6 +185,7 @@ def delete_video(
             )
         )
     )
+    job_ids = list(session.scalars(select(ProcessingJob.id).where(ProcessingJob.video_id == video_id)))
     storage_key = video.storage_key
     session.delete(video)
     session.commit()
@@ -192,6 +193,9 @@ def delete_video(
     for key in clip_keys:
         if key:
             storage.delete(key)
+    # ponytail: a search still running on this video may write a few entries back into its feature
+    # dir before the worker notices the deleted job; the global LRU cap removes them later.
+    remove_engine_files(storage, job_ids, [video_id])
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
