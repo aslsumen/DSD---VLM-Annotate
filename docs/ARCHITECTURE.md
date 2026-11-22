@@ -123,7 +123,7 @@ same model and sampling settings:
 - when `feature_cache.dir: null`.
 
 **Saves vs. does not save.** It saves decoding and visual encoding: on the 8 GB laptop a later search on the
-same 5-7 min video took 43-53% less time
+same 5-7 min video took 39-53% less time
 ([`video_grounding/docs/PERFORMANCE.md`](../video_grounding/docs/PERFORMANCE.md)). It does not save per-search
 scoring, refine tiles at new positions, clip cutting, or backend preview extraction.
 
@@ -137,7 +137,7 @@ and evicts the least recently used entries.
 a search keeps the video's features (other searches use them). Deleting the whole features directory is always
 safe: it only costs speed.
 
-**Tests:** 80 backend (pytest), 21 UI (vitest), real-ffmpeg smoke 26/26; adapter tests use a fake engine (`backend/tests/test_videojev.py`), the engine has its own tests (`video_grounding/tests`); real-model `scripts/smoke_videojev.py` on the RTX 3070 laptop is pending (2026-11-16).
+**Tests:** 98 backend (pytest; on macOS the Windows-path case `test_path_for_rejects_traversal[..\\escape.mp4]` fails, as it does on main), 21 UI (vitest), real-ffmpeg smoke 26/26; adapter tests use a fake engine (`backend/tests/test_videojev.py`), the engine has its own tests (`video_grounding/tests`). The real model ran through the API and worker on the RTX 3070 laptop on 2026-11-22: two videos, two prompts each, with video and project deletes clearing the feature cache (`video_grounding/docs/PERFORMANCE.md`).
 
 ## 4. Gap and migration plan
 

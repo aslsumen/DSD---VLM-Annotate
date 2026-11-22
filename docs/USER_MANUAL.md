@@ -115,7 +115,7 @@ include unreviewed items.
 
 | Limitation | Effect | Planned |
 |---|---|---|
-| Mock candidate generation (default adapter) | Intervals are plausible but arbitrary | Use the `videojev` adapter on a GPU worker; real-model smoke and product-footage validation pending |
+| Mock candidate generation (default adapter) | Intervals are plausible but arbitrary | Use the `videojev` adapter on a GPU worker (it ran through the product on public test videos on 2026-11-22); validation on product footage pending |
 | Real detector quality | Held-out benchmark results pending; on Charades-STA (reference only, in-domain) recall was 0.690 vs the 0.85 target and short events were missed most | Human review of every candidate; validation on product footage |
 | Single worker | One long job delays others | Parallel workers with PostgreSQL (later) |
 | No multi-user accounts | One shared optional token | Deferred (OPT-06) |

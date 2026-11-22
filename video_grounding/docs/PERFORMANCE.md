@@ -41,6 +41,15 @@ model, so compare the two prompt-B columns.
 |---|---|---|---|---|---|
 | YouCook2 `-AwyG1JcMp8` | 307 s | 195 s (0.64×) | 95 s (0.31×) | 201 s (0.65×) | 53% |
 | ROAD `2014-06-25-16-45-34_stereo_centre_02` | 394.5 s | 504 s (1.28×) | 223 s (0.57×) | 390 s (0.99×) | 43% |
+| YouCook2 `-AwyG1JcMp8`, rerun 2026-11-22 | 307 s | 231 s (0.75×) | 97 s (0.32×) | 178 s (0.58×) | 46% |
+| ROAD `2014-06-25-16-45-34_stereo_centre_02`, rerun 2026-11-22 | 394.5 s | 322 s (0.82×) | 186 s (0.47×) | 303 s (0.77×) | 39% |
+
+The 2026-11-22 rows rerun the same videos on main plus the per-video cache (`engine/features/video-<id>/`
+under the data dir), in one worker, so only the first YouCook2 job loads the model. Each video was
+uploaded once and given prompt A, then prompt B as a second action; the video was then deleted (its
+cache dir and job dirs were gone), uploaded again and given prompt B with an empty cache. Prompt B
+returned the same candidates (times and scores) warm and cold, and deleting the project removed the
+second cache dir.
 
 The feature cache (`feature_cache` in USAGE.md) stores each window's visual features on the worker's
 disk, so a later prompt on the same video skips decoding and visual encoding. What a warm cache still
