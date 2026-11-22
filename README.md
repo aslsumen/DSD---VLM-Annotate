@@ -108,7 +108,7 @@ Read more: [Architecture](docs/ARCHITECTURE.md) · [Design Description](docs/DES
 
 Sprint 2 closed on **2026-11-15**. The increment is a runnable, tested **technical prototype** with mock
 candidates — accounts, global roles, datasets, searches and OpenLABEL JSON are the Sprint 3 scope. The
-real detector is the opt-in `videojev` adapter (VideoJev-4B; Charades-STA reference numbers only, held-out composite results pending;
+real detector is the opt-in `videojev` adapter (VideoJev-4B; held-out long videos: cooking recall 0.86 (CI 0.81–0.90) and CCR 0.78, driving recall 0.47 and CCR 0.82, against targets of 0.85 for both, so not met;
 see [MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md)).
 
 Course artifacts are tracked in [docs/course/DSD_DELIVERABLES_REGISTER.md](docs/course/DSD_DELIVERABLES_REGISTER.md).

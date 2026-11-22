@@ -83,7 +83,7 @@ Status column: **I** implemented in the current repository · **P** partial · *
 
 | ID | Requirement | Priority | Source | Status |
 |---|---|---|---|---|
-| DET-1 | Zero-shot detection without training a model for the event | Must | CP/CM | **P** (`videojev` adapter integrated 2026-11-16; mock is still the default; real-model smoke on the 8 GB laptop pending; KPI check on held-out composite benchmarks pending, Charades-STA is reference only) |
+| DET-1 | Zero-shot detection without training a model for the event | Must | CP/CM | **P** (`videojev` adapter integrated 2026-11-16; mock is still the default; real-model smoke on the 8 GB laptop pending; KPI check on held-out long videos 2026-11-22: recall 0.86 cooking (CI 0.81–0.90, not confirmed) / 0.47 driving vs 0.85, CCR 0.78 / 0.82 vs 0.85, targets not met, see `video_grounding/docs/EVALUATION.md`; Charades-STA is reference only) |
 | DET-2 | Each candidate has start/end timestamps in the video, in minutes and seconds | Must | CP/CM | **I** (stored in seconds; UI formats) |
 | DET-3 | Search runs in the background; user sees queued/running/done/failed and can leave the page | Must | CM/T | **I** (per-video jobs; dataset-level search missing) |
 | DET-4 | Confidence score shown when available; candidates sortable by it | Could | T | **I** (score stored/sorted) |
@@ -146,7 +146,7 @@ Status column: **I** implemented in the current repository · **P** partial · *
 ## 5. Detection engine requirements (ENG-1…ENG-13)
 
 These refine DET-1/DET-2 and are owned by the detection-engine workstream (Design Description v1.1 §6.1).
-**Status (2026-11-16): engine code exists (`video_grounding/`, integrated as the `videojev` adapter); per-requirement status not re-assessed. KPI check against the targets is pending on the held-out composite benchmarks (Charades-STA is reference only, in-domain), see `video_grounding/docs/EVALUATION.md`.**
+**Status (2026-11-16): engine code exists (`video_grounding/`, integrated as the `videojev` adapter); per-requirement status not re-assessed. The KPI check on the held-out long-video benchmark ran 2026-11-20 to 22 (Charades-STA is reference only, in-domain): recall 0.86 cooking (CI 0.81–0.90, not confirmed) and 0.47 driving vs 0.85, CCR 0.78 and 0.82 vs 0.85, targets not met; see `video_grounding/docs/EVALUATION.md`.**
 
 | ID | Requirement (short) | Priority |
 |---|---|---|
@@ -174,6 +174,23 @@ These refine DET-1/DET-2 and are owned by the detection-engine workstream (Desig
 | Event recall | Share of manually marked events found (a candidate overlaps the event at temporal IoU ≥ 0.3), on a fully watched sample | ≥ 0.85 |
 | False candidates on absent prompts | Candidates returned for prompts whose event never happens in the videos (reviewer time wasted) | Reported; target TBD |
 | R@IoU 0.3/0.5/0.7, mIoU | Strict boundary overlap; diagnostic only | Reported, no target |
+| Engine real-time factor (RTF) | For one video × one prompt, engine wall-clock processing time divided by that video’s duration; RTF < 1 means faster than the video duration | Required reporting; target TBD after 10–30 min video measurements |
+| Upload-to-candidates latency | Elapsed time from upload completion to candidates and their preview clips being available, or a successful zero-candidate result; includes queueing and backend work | Required reporting; target TBD after 10–30 min video measurements |
+| Per-stage processing time | Seconds spent in queueing, model loading, coarse scan, refinement, optional verification, preview extraction and result persistence | Required reporting; diagnostic, no separate target |
+
+For speed measurements, use **one video × one prompt per job** and report actual processing seconds and
+seconds / video duration for that pair. Do not use multi-prompt job totals or divide them by prompt count to
+infer product speed. Record the exact prompt, hardware (GPU/VRAM and CPU/RAM), code/model revision, video
+duration/resolution, config, verification setting, model-loaded state and initial video-cache state. Separate
+model cold starts, model-warm/cache-empty searches and searches reusing visual features. Report Recall and
+complete clip rate under the same configuration. Start processing immediately after upload for the latency
+benchmark; report upload transfer and manual delays separately. Report failed jobs and missing preview clips.
+For repeated runs of the same pair and state, report sample count, median and p90; for a single observation,
+report its individual value without a percentile claim.
+
+Backend job processing time (`finished_at − started_at`) excludes pre-claim queueing and is reported as a
+single-prompt job time/RTF, separately from full engine RTF and upload-to-candidates latency. Current measured
+pairs, prompts, model/cache states and sample sizes are in [the speed report](../video_grounding/docs/EVALUATION.md#speed-kpis).
 
 *2026-11-16: R@IoU=0.5 ≥ 0.70 dropped as a target. This is an engineering tool, not a research benchmark: candidates only need to land in a reasonable range, because reviewers correct and confirm the span. Whether a span is good enough is measured by the complete clip rate (2 s tolerance per end) and the boundary adjustment.*
 

@@ -126,7 +126,7 @@ To verify a completed job, stop any writers, enable `verify` in that job's `conf
 
 Ground-truth labels are shaped as `{"events":[{"query_id":"open_door","start_sec":12.5,"end_sec":18.0}]}`; times are source-video seconds. `eval` reports temporal-IoU recall.
 
-Accuracy benchmarks live in `scripts/`: `composite_bench.py` (held-out YouCook2 and BDD-X composites, the main accuracy check) and `charades_sta.py` (reference only: VideoJev was trained on Charades-STA). Methods and results: [EVALUATION.md](EVALUATION.md).
+Accuracy benchmarks live in `scripts/`: `heldout_bench.py` (held-out YouCook2 and ROAD long videos, one scan job per video, the main accuracy check), `composite_bench.py` (earlier small composites, kept as a history check) and `charades_sta.py` (reference only: VideoJev was trained on Charades-STA). Methods and results: [EVALUATION.md](EVALUATION.md).
 
 ## Outputs, retention, and cleanup
 

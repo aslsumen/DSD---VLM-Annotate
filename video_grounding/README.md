@@ -12,7 +12,7 @@ Video + prompts → probe → VideoJev coarse scan → candidate fusion → Vide
 ```
 
 - **VideoJev-4B** locates one or more event intervals. Supports multiple prompts, resumable jobs, and frame-count downgrades after GPU out-of-memory errors.
-- **Gemini verification is optional.** It runs after refinement and before export, using the Decisions API with `gemini-decision-1`. Negative verdicts go into an audit list; candidates that could not be verified are kept and flagged for human review. It is on in `default.yaml` and `rtx3070.yaml` but **off in the product adapter** (`verify.enabled=false`): on Charades-STA (a reference set, in-domain for VideoJev) it removed 37 of 171 false events and cost recall; the held-out composite benchmarks, which include absent prompts, will re-check this (results pending, see [Evaluation](docs/EVALUATION.md)); the human reviewer takes its place and no footage leaves the machine.
+- **Gemini verification is optional.** It runs after refinement and before export, using the Decisions API with `gemini-decision-1`. Negative verdicts go into an audit list; candidates that could not be verified are kept and flagged for human review. It is on in `default.yaml` and `rtx3070.yaml` but **off in the product adapter** (`verify.enabled=false`): on Charades-STA (a reference set, in-domain for VideoJev) it removed 37 of 171 false events and cost recall; on the earlier small composites, which include absent prompts, it kept every true cooking event and cut events per prompt by about 85%, but on driving it lost 9/34 true events (see [Evaluation](docs/EVALUATION.md)); the human reviewer takes its place and no footage leaves the machine.
 - The standalone Qwen3-VL-4B verifier experiment is not part of the current pipeline; its model is not required. VideoJev's own processor and dependencies are still required.
 
 ## Documentation
@@ -23,7 +23,7 @@ Video + prompts → probe → VideoJev coarse scan → candidate fusion → Vide
 | [Python API](docs/API.md) | `run_scan` / `resume` / `export`, progress callback, `events.json` fields |
 | [Internal engineering contracts](docs/CONTRACTS.md) | Time semantics, model adapter, fusion, persistence, and module interfaces |
 | [Compatibility](docs/COMPATIBILITY.md) | Verified GPU/dependency combinations and platform issues |
-| [Evaluation](docs/EVALUATION.md) | Test methods (held-out composite benchmarks first, Charades-STA as reference), dataset experiments, and quality limitations |
+| [Evaluation](docs/EVALUATION.md) | Test methods (held-out long-video benchmark first, Charades-STA as reference), dataset experiments, and quality limitations |
 | [Performance](docs/PERFORMANCE.md) | Measured latency, memory use, and CPU offload |
 
 ## Quick start

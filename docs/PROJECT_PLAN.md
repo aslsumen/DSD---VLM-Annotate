@@ -34,7 +34,7 @@ candidates with playable previews, TP/FP review with an explicit unreviewed stat
 provenance, responsive UI.
 
 **Alpha** (2026-11-29): real VLM inference on representative footage (VideoJev-4B via the `videojev` adapter, ADR-0007,
-replacing the earlier windowed Qwen2.5-VL plan; integrated 2026-11-16, held-out composite benchmarks running since 2026-11-16, results pending; Charades-STA is reference only, real-model smoke
+replacing the earlier windowed Qwen2.5-VL plan; integrated 2026-11-16, held-out long-video benchmark measured 2026-11-22: recall 0.86 cooking (CI 0.81–0.90) / 0.47 driving vs target 0.85, driving weak; Charades-STA is reference only, real-model smoke
 on the project laptop pending), evaluation metrics, reliability work.
 
 **Beta → Final**: acceptance tests, installation/deployment docs, hardening, final report.
@@ -51,7 +51,7 @@ multi-camera, audio, analytics (see backlog OPT-01…OPT-06).
 | Unreviewed never becomes negative | No code path can produce a negative from a missing label | PASS (schema design + tests) |
 | Export usable outside the app | ZIP with manifest, CSV, clips | PASS (26/26 smoke checks) |
 | Reproducible install | Documented commands on a clean machine | Windows verified; other OS untested |
-| Real model quality | Measured recall/precision on a ground-truth set | Held-out composite benchmarks running since 2026-11-16, **results pending** (`video_grounding/docs/EVALUATION.md`); Charades-STA (recall 0.690 at the time) is reference only, VideoJev was trained on it; **product footage NOT MEASURED** (Alpha gate) |
+| Real model quality | Measured recall/precision on a ground-truth set | Held-out long-video benchmark measured 2026-11-20 to 22 (VideoJev-4B, verify off; YouCook2 33 videos, ROAD 20): recall 0.86 [0.81, 0.90] cooking, 0.47 [0.39, 0.56] driving vs target 0.85; CCR 0.78 / 0.82 vs 0.85; cooking recall meets the target only as a point estimate, the other three miss; absent prompts still give 3.5 (cooking) and 8.4 (driving) candidates (`video_grounding/docs/EVALUATION.md`); earlier small composites (2026-11-17) are superseded; Charades-STA (recall 0.690 at the time) is reference only, VideoJev was trained on it; **product footage NOT MEASURED** (Alpha gate) |
 
 ## 6. Delivery schedule (course calendar)
 
