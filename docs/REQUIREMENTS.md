@@ -116,13 +116,13 @@ Status column: **I** implemented in the current repository · **P** partial · *
 
 | ID | Requirement | Priority | Source | Status |
 |---|---|---|---|---|
-| USR-1 | Personal account; **sign in with email** (no username, CE-2) | Must | CE/T | **N** |
-| USR-2 | Two base roles with the permissions in §2; **roles are global** | Must | CM/CE | **N** |
-| USR-3 | Administrator assigns datasets to any user; users see only assigned datasets | Must | CM/CE | **N** |
-| USR-4 | Dataset Administrator: almost all rights within own datasets; sees all annotators; assigns only within own datasets; **may invite users (CE-2)** | Should | CE-2 | **N** |
-| USR-5 | Administrator (and Dataset Admin) enters email + role; system sends a single-use invitation; person sets password; account created | Must | T/CE-2 | **N** |
+| USR-1 | Personal account; **sign in with email** (no username, CE-2) | Must | CE/T | **P** (login/session API; UI pending) |
+| USR-2 | Two base roles with the permissions in §2; **roles are global** | Must | CM/CE | **P** (global roles enforced on auth/dataset routes; legacy routes pending) |
+| USR-3 | Administrator assigns datasets to any user; users see only assigned datasets | Must | CM/CE | **P** (dataset memberships; annotators filtered) |
+| USR-4 | Dataset Administrator: almost all rights within own datasets; sees all annotators; assigns only within own datasets; **may invite users (CE-2)** | Should | CE-2 | **P** (create dataset + invite annotators; UI pending) |
+| USR-5 | Administrator (and Dataset Admin) enters email + role; system sends a single-use invitation; person sets password; account created | Must | T/CE-2 | **P** (single-use 48 h token; no mail transport yet) |
 | USR-6 | Password reset by email | Should | T | **N** |
-| USR-7 | Deactivate a user | Should | T | **N** |
+| USR-7 | Deactivate a user | Should | T | **N** (field exists, no endpoint) |
 
 ## 4. Non-functional requirements
 
@@ -243,7 +243,8 @@ invitation.
 | DET-2/3/4 | `services/pipeline.py`, `worker.py`, `models.ProcessingJob/Candidate` | `test_flow.py`, `test_worker.py` |
 | REV-1…4 | `api/candidates.py`, `frontend/src/pages/ReviewPage.tsx` | `test_flow.py`, UI E2E report |
 | EXP-1/2 | `services/pipeline.py` (ZIP export) — **needs rewrite to JSON** | `test_flow.py` |
-| USR-1…7 | only optional shared bearer token (`app/main.py`) — **needs full auth** | `test_security.py` |
+| USR-1…5 | `api/auth.py`, `security.py`, `deps.py`, `models.User/Invitation/UserSession` | `test_auth.py` |
+| DS-1/2/3 (access) | `api/datasets.py`, `models.Dataset/DatasetMembership` | `test_datasets.py`, `test_auth.py` |
 | NFR-8 | generated storage keys, deletion, token | `test_storage.py` |
 
 > The **authoritative submission** for 2026-11-13 is the team's PDF (v1.1 or a regenerated v1.2). This

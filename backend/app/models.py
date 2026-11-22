@@ -125,6 +125,14 @@ class ExportStatus(enum.StrEnum):
     failed = "failed"
 
 
+class UserRole(enum.StrEnum):
+    """Global roles (customer decision, 2026-11-09): never per-dataset."""
+
+    administrator = "administrator"
+    dataset_admin = "dataset_admin"
+    annotator = "annotator"
+
+
 # --------------------------------------------------------------------------- #
 # Entities
 # --------------------------------------------------------------------------- #
@@ -357,3 +365,96 @@ class DatasetExport(Base):
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
     job: Mapped[ProcessingJob | None] = relationship(back_populates="export", uselist=False)
+
+
+# --------------------------------------------------------------------------- #
+# Identity and access (Sprint 3)
+# --------------------------------------------------------------------------- #
+
+
+class User(Base):
+    __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("email", name="uq_user_email"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    full_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[UserRole] = mapped_column(
+        _enum(UserRole, "user_role"), nullable=False, default=UserRole.annotator
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    failed_login_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, default=utcnow, onupdate=utcnow, nullable=False
+    )
+
+
+class Invitation(Base):
+    """Single-use, time-limited invitation; only the token hash is stored."""
+
+    __tablename__ = "invitations"
+    __table_args__ = (UniqueConstraint("token_hash", name="uq_invitation_token"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
+    role: Mapped[UserRole] = mapped_column(_enum(UserRole, "invitation_role"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, nullable=False)
+
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+    __table_args__ = (UniqueConstraint("token_hash", name="uq_session_token"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, nullable=False)
+
+
+class Dataset(Base):
+    """A collection of videos owned by one or more Dataset Administrators."""
+
+    __tablename__ = "datasets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, default=utcnow, onupdate=utcnow, nullable=False
+    )
+
+
+class DatasetMembership(Base):
+    """Which users may see and annotate a dataset (roles remain global)."""
+
+    __tablename__ = "dataset_memberships"
+    __table_args__ = (
+        UniqueConstraint("dataset_id", "user_id", name="uq_dataset_membership"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dataset_id: Mapped[int] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, nullable=False)

@@ -1,0 +1,207 @@
+{
+  "generated_at": "2026-11-19T19:04:52+0100",
+  "environment": "windows-local",
+  "workspace": "C:\\Users\\tonig\\AppData\\Local\\Temp\\vlm-annotate-smoke-jxql80av",
+  "duration_seconds": 7.29,
+  "checks_passed": 26,
+  "checks_total": 26,
+  "checks": [
+    {
+      "check": "ffmpeg produced a source video",
+      "status": "PASS",
+      "detail": {
+        "bytes": 3685191
+      }
+    },
+    {
+      "check": "upload accepted",
+      "status": "PASS",
+      "detail": "{\"id\":1,\"project_id\":1,\"original_filename\":\"synthetic_2min.mp4\",\"content_type\":\"video/mp4\",\"size_bytes\":3685191,\"checksum_sha256\":\"28b7e526e521ac8358061c26ba6908b8d6ed2b3374859f828f8033fca2fca3f4\",\"duration_seconds\":120.0,\"width\":640,\"height\":360,\"fps\":25.0,\"status\":\"ready\",\"error_message\":null,\"cre"
+    },
+    {
+      "check": "real ffmpeg probe found the duration",
+      "status": "PASS",
+      "detail": 120.0
+    },
+    {
+      "check": "job accepted asynchronously (202)",
+      "status": "PASS",
+      "detail": "{\"id\":1,\"kind\":\"candidate_proposal\",\"status\":\"queued\",\"project_id\":1,\"video_id\":1,\"action_id\":1,\"export_id\":null,\"progress\":0.0,\"attempts\":0,\"max_attempts\":3,\"adapter_name\":\"mock\",\"adapter_version\":null,\"error_code\":null,\"error_message\":null,\"available_at\":\"2026-11-19T18:04:50.532173Z\",\"created_at\":"
+    },
+    {
+      "check": "worker processed one job",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "check": "job succeeded",
+      "status": "PASS",
+      "detail": {
+        "id": 1,
+        "kind": "candidate_proposal",
+        "status": "succeeded",
+        "project_id": 1,
+        "video_id": 1,
+        "action_id": 1,
+        "export_id": null,
+        "progress": 1.0,
+        "attempts": 1,
+        "max_attempts": 3,
+        "adapter_name": "mock",
+        "adapter_version": "1.0.0",
+        "error_code": null,
+        "error_message": null,
+        "available_at": "2026-11-19T18:04:50.532173Z",
+        "created_at": "2026-11-19T18:04:50.534723Z",
+        "started_at": "2026-11-19T18:04:50.545607Z",
+        "finished_at": "2026-11-19T18:04:52.520401Z"
+      }
+    },
+    {
+      "check": "candidates returned",
+      "status": "PASS",
+      "detail": 4
+    },
+    {
+      "check": "candidate 1 interval inside the source video",
+      "status": "PASS",
+      "detail": [
+        5.108,
+        24.239
+      ]
+    },
+    {
+      "check": "candidate 2 interval inside the source video",
+      "status": "PASS",
+      "detail": [
+        51.395,
+        58.409
+      ]
+    },
+    {
+      "check": "candidate 3 interval inside the source video",
+      "status": "PASS",
+      "detail": [
+        71.962,
+        76.164
+      ]
+    },
+    {
+      "check": "candidate 4 interval inside the source video",
+      "status": "PASS",
+      "detail": [
+        108.829,
+        115.955
+      ]
+    },
+    {
+      "check": "all preview clips extracted with real ffmpeg",
+      "status": "PASS",
+      "detail": [
+        "ready",
+        "ready",
+        "ready",
+        "ready"
+      ]
+    },
+    {
+      "check": "clip endpoint serves mp4 bytes",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "bytes": 390761
+      }
+    },
+    {
+      "check": "extracted clip is decodable and has the expected duration",
+      "status": "PASS",
+      "detail": {
+        "clip_duration": 21.16,
+        "expected": 21.131
+      }
+    },
+    {
+      "check": "annotation stored",
+      "status": "PASS",
+      "detail": "{\"id\":1,\"job_id\":1,\"video_id\":1,\"action_id\":1,\"start_seconds\":5.108,\"end_seconds\":24.239,\"preview_start_seconds\":4.108,\"preview_end_seconds\":25.239,\"rank\":1,\"score\":0.955,\"model_notes\":\"MOCK PROPOSAL \u2014 no video pixels were analysed. slot=1/4\",\"clip_status\":\"ready\",\"clip_error\":null,\"review_state\":\"r"
+    },
+    {
+      "check": "export queued",
+      "status": "PASS",
+      "detail": "{\"export\":{\"id\":1,\"project_id\":1,\"format\":\"zip\",\"status\":\"queued\",\"include_unreviewed\":false,\"item_count\":0,\"size_bytes\":null,\"error_message\":null,\"created_at\":\"2026-11-19T18:04:52.757388Z\",\"finished_at\":null,\"has_file\":false},\"job\":{\"id\":2,\"kind\":\"dataset_export\",\"status\":\"queued\",\"project_id\":1,\"v"
+    },
+    {
+      "check": "worker processed the export",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "check": "export ready",
+      "status": "PASS",
+      "detail": {
+        "id": 1,
+        "project_id": 1,
+        "format": "zip",
+        "status": "ready",
+        "include_unreviewed": false,
+        "item_count": 1,
+        "size_bytes": 375608,
+        "error_message": null,
+        "created_at": "2026-11-19T18:04:52.757388Z",
+        "finished_at": "2026-11-19T18:04:52.843459Z",
+        "has_file": true
+      }
+    },
+    {
+      "check": "export contains exactly the reviewed item",
+      "status": "PASS",
+      "detail": 1
+    },
+    {
+      "check": "export downloadable",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "check": "archive has manifest, labels and clip",
+      "status": "PASS",
+      "detail": [
+        "manifest.json",
+        "labels.csv",
+        "README.txt",
+        "clips/candidate_00001.mp4"
+      ]
+    },
+    {
+      "check": "archive carries the corrected boundaries",
+      "status": "PASS",
+      "detail": {
+        "start_seconds": 5.608,
+        "end_seconds": 8.608
+      }
+    },
+    {
+      "check": "archive preserves the model proposal separately",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "check": "provenance labels the mock adapter",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "check": "one clip inside the archive",
+      "status": "PASS",
+      "detail": [
+        "clips/candidate_00001.mp4"
+      ]
+    },
+    {
+      "check": "archived clip is non-trivial",
+      "status": "PASS",
+      "detail": 390761
+    }
+  ],
+  "note": "Candidate intervals come from the deterministic MOCK adapter: no pixels were analysed. Probe, clip extraction, annotation, export and archive verification are real."
+}

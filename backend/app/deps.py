@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import secrets
+from dataclasses import dataclass
+from datetime import timedelta
 
 from fastapi import Depends, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .config import Settings, get_settings
 from .db import get_db
 from .errors import ApiError
-from .models import ProcessingJob, Project, Video
+from .models import ProcessingJob, Project, User, UserRole, UserSession, Video, utcnow
+from .security import hash_token
 from .services.media import FFmpegClipExtractor, FFmpegMediaProbe
 from .services.storage import LocalStorage
 
@@ -54,6 +58,93 @@ def get_project_or_404(session: Session, project_id: int) -> Project:
     return project
 
 
+@dataclass(frozen=True)
+class Principal:
+    """The caller identity for one request.
+
+    ``user is None`` only in development when authentication is disabled: the
+    caller is then treated as a synthetic administrator so the demo keeps
+    working without accounts.
+    """
+
+    user: User | None
+    role: UserRole
+    is_authenticated: bool
+
+
+def _bearer_token(request: Request) -> str | None:
+    scheme, _, token = request.headers.get("authorization", "").partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        return None
+    return token
+
+
+def get_current_principal(
+    request: Request,
+    session: Session = Depends(get_db),
+) -> Principal:
+    settings: Settings = request.app.state.settings
+    token = _bearer_token(request)
+
+    if token:
+        record = session.scalar(
+            select(UserSession).where(UserSession.token_hash == hash_token(token))
+        )
+        now = utcnow()
+        if (
+            record is not None
+            and record.revoked_at is None
+            and record.expires_at > now
+        ):
+            user = session.get(User, record.user_id)
+            if user is not None and user.is_active:
+                if record.last_seen_at < now - timedelta(seconds=60):
+                    record.last_seen_at = now
+                    session.commit()
+                return Principal(user=user, role=user.role, is_authenticated=True)
+        raise ApiError(
+            401,
+            "INVALID_SESSION",
+            "the session token is invalid, revoked or expired",
+            {"hint": "sign in again to obtain a new token"},
+        )
+
+    if settings.auth_required:
+        raise ApiError(
+            401,
+            "UNAUTHENTICATED",
+            "sign-in is required for this endpoint",
+            {"hint": "POST /api/v1/auth/login and send Authorization: Bearer <token>"},
+        )
+    return Principal(user=None, role=UserRole.administrator, is_authenticated=False)
+
+
+def require_roles(*allowed: UserRole):
+    """Dependency factory: administrator always passes, others must be listed."""
+
+    allowed_set = frozenset(allowed)
+
+    def _dependency(principal: Principal = Depends(get_current_principal)) -> Principal:
+        if principal.role == UserRole.administrator or principal.role in allowed_set:
+            return principal
+        raise ApiError(
+            403,
+            "FORBIDDEN",
+            "your role is not allowed to perform this action",
+            {"required_roles": sorted(role.value for role in allowed_set)},
+        )
+
+    return _dependency
+
+
+def require_authenticated(
+    principal: Principal = Depends(get_current_principal),
+) -> Principal:
+    if not principal.is_authenticated or principal.user is None:
+        raise ApiError(401, "UNAUTHENTICATED", "sign-in is required for this endpoint")
+    return principal
+
+
 def get_video_or_404(session: Session, video_id: int) -> Video:
     video = session.get(Video, video_id)
     if video is None:
@@ -69,12 +160,16 @@ def get_job_or_404(session: Session, job_id: int) -> ProcessingJob:
 
 
 __all__ = [
+    "Principal",
     "extractor_dep",
+    "get_current_principal",
     "get_db",
     "get_job_or_404",
     "get_project_or_404",
     "get_video_or_404",
     "probe_dep",
+    "require_authenticated",
+    "require_roles",
     "require_token",
     "settings_dep",
     "storage_dep",

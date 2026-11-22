@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__, db
-from .api import candidates, exports, health, jobs, projects, videos
+from .api import auth, candidates, datasets, exports, health, jobs, projects, videos
 from .config import REPO_ROOT, Settings, get_settings
 from .deps import require_token
 from .errors import error_body, register_error_handlers
@@ -92,8 +92,13 @@ def create_app(
         Base.metadata.create_all(bind=db.engine)
 
     app.include_router(health.router, prefix="/api/v1")
+    # Login / invitation acceptance / one-time bootstrap must stay reachable
+    # without a session; everything else lives on the protected router.
+    app.include_router(auth.public_router, prefix="/api/v1")
 
     protected = APIRouter(dependencies=[Depends(require_token)])
+    protected.include_router(auth.router)
+    protected.include_router(datasets.router)
     protected.include_router(projects.router)
     protected.include_router(videos.router)
     protected.include_router(jobs.router)

@@ -11,40 +11,148 @@ playable clips and auditable provenance.
 > silently become a negative.
 
 **Course:** Distributed Software Development (DSD) 2026/2027 · **Customer:** Gordan Kreković / Visage
-Technologies · **Status:** Sprint 2 vertical slice (2026-11-05) — see [Status](#status).
+Technologies · **Status:** Sprint 3 (November 2026) — mock adapter is the default, the `videojev` real adapter is
+integrated; see [Status](#status).
 
 ---
 
-## Quick start (Windows, verified)
+## Prerequisites
+
+| Requirement | Version | Notes |
+|---|---|---|
+| Python | **3.12 – 3.14** | `python --version` (Windows) / `python3 --version` (macOS/Linux) |
+| Node.js | **≥ 20.19** (22 LTS recommended) | `node --version` — Vite 7 fails on older Node |
+| npm | bundled with Node | `npm --version` |
+| git | any recent version | to clone the repository |
+| NVIDIA GPU (optional) | CUDA-capable | **only** for the real `video_grounding` engine; the web app runs without it |
+
+The web app (API + worker + UI) needs **no GPU**: the default adapter is `mock`. The real engine
+(`video_grounding/`) is optional and currently documented for **Linux/WSL2**; see
+[Run the GPU engine](#run-the-gpu-engine-optional).
+
+## 1. Clone
+
+```bash
+git clone https://github.com/aslsumen/DSD---VLM-Annotate.git
+cd DSD---VLM-Annotate
+```
+
+Work on `main`. The old `backend` branch was merged through PR #42; do not use it for new work.
+
+## 2. Run the web app (no GPU)
+
+**Fast path (Windows PowerShell or macOS/Linux):** a setup script installs everything, migrates the database and
+builds the UI.
+
+```powershell
+# Windows
+powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+```
+
+```bash
+# macOS / Linux
+bash scripts/setup.sh
+```
+
+Then start the two processes:
+
+```powershell
+# Windows — terminal 1: API
+cd backend
+..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+# Windows — terminal 2: worker
+cd backend
+..\.venv\Scripts\python.exe -m app.worker --loop
+```
+
+```bash
+# macOS / Linux — terminal 1: API
+cd backend
+../.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+# macOS / Linux — terminal 2: worker
+cd backend
+../.venv/bin/python -m app.worker --loop
+```
+
+Open <http://127.0.0.1:8000> (UI) and <http://127.0.0.1:8000/api/docs> (API). The setup script already built
+`frontend/dist`; if you change the UI, rebuild it and restart the API (it mounts `dist/` at startup).
+
+**Manual path** (if you prefer to see every step):
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r backend\requirements.lock.txt
-Copy-Item .env.example .env
-
 cd backend
 ..\.venv\Scripts\python.exe -m alembic upgrade head
-..\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000     # terminal 1
-..\.venv\Scripts\python.exe -m app.worker --loop                   # terminal 2
-
+..\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000      # terminal 1
+..\.venv\Scripts\python.exe -m app.worker --loop                    # terminal 2
 cd ..\frontend
 npm ci
-npm run build          # then reload http://127.0.0.1:8000
-# or: npm run dev      # http://127.0.0.1:5173 with API proxy
+npm run build
 ```
 
-- App: <http://127.0.0.1:8000> · API docs: <http://127.0.0.1:8000/api/docs>
-- Health: <http://127.0.0.1:8000/api/v1/health>
-- Detailed setup, configuration and troubleshooting: [docs/INSTALLATION_MANUAL.md](docs/INSTALLATION_MANUAL.md)
+> **Migration order matters.** Always run `alembic upgrade head` **before** starting the API for the first time.
+> The API has `VLM_AUTO_CREATE_SCHEMA=true`, so starting it on an empty database creates the tables *without*
+> Alembic's version row; a later migration then fails with `table ... already exists`. Fix: stop the API, delete
+> the development database (`data/vlm_annotate.db`, it contains no real data), run `alembic upgrade head`, and
+> start the API again.
+
+> **Keep `VLM_API_TOKEN` unset for demos.** Browsers cannot send the bearer header to `<video>`, so enabling the
+> token makes source-video and clip playback return 401 (known limitation R-18).
+
+## 3. Run the GPU engine (optional)
+
+`video_grounding/` is the real zero-shot detector (VideoJev-4B). It is **not** needed to run or demo the web
+app, which defaults to the labelled `mock` adapter. The engine requires **Linux or WSL2**, an NVIDIA GPU with
+CUDA, `uv`, and several GB of model weights; it is **not** supported by the Windows instructions above (do not
+use `.venv/bin/...` paths on Windows).
+
+Start here:
+
+- [video_grounding/README.md](video_grounding/README.md) — pipeline, quick start
+- [video_grounding/docs/COMPATIBILITY.md](video_grounding/docs/COMPATIBILITY.md) — verified CUDA/torch/driver matrix
+- [video_grounding/docs/USAGE.md](video_grounding/docs/USAGE.md) — configuration, CLI, troubleshooting
+
+The adapter is enabled only in the worker: `VLM_VLM_ADAPTER=videojev VLM_VIDEOJEV_CONFIG=video_grounding/configs/<file>.yaml`.
+The API accepts such jobs without the engine; a worker without it fails the job with `ADAPTER_UNAVAILABLE`.
 
 ## Verify the build
 
 ```powershell
+# Windows
 .\.venv\Scripts\python.exe -m pytest backend -q                 # 80 tests
 .\.venv\Scripts\python.exe -m ruff check backend\app backend\tests
 .\.venv\Scripts\python.exe scripts\smoke_e2e.py                 # real ffmpeg, 26/26 checks
 cd frontend; npm run build; npm test
 ```
+
+```bash
+# macOS / Linux
+./.venv/bin/python -m pytest backend -q
+./.venv/bin/python -m ruff check backend/app backend/tests
+./.venv/bin/python scripts/smoke_e2e.py
+cd frontend && npm run build && npm test
+```
+
+## Troubleshooting
+
+| Symptom | Cause / fix |
+|---|---|
+| `ModuleNotFoundError: No module named 'app'` | Run from `backend/` (where `app/` lives) or use the venv interpreter explicitly |
+| `no such table: projects` | Run `alembic upgrade head` before starting the API |
+| `table projects already exists` during migration | The API created the schema first. Stop it, delete `data/vlm_annotate.db` (dev only), rerun `alembic upgrade head` |
+| `401 UNAUTHENTICATED` / video will not play | `VLM_API_TOKEN` is set. Unset it for the demo, or use the API only (R-18) |
+| `npm ci` / Vite error about Node | Node is older than 20.19; install Node 22 LTS |
+| `ffmpeg not found` | `pip install imageio-ffmpeg` (already in the lockfile) or set `VLM_FFMPEG_BINARY` |
+| Job stays `queued` | The worker is not running: start `python -m app.worker --loop` from `backend/` |
+| Port 8000 in use | Use `--port 8001` and update `frontend/vite.config.ts` proxy |
+| Windows cannot install the engine | Expected: use WSL2/Linux + CUDA + `uv`; the web app does not need the engine |
+| `database is locked` | Close extra API/worker processes or other DB tools |
+
+Still stuck: include your **OS**, `python --version`, `node --version`, the exact command and the full error
+traceback when you ask for help.
 
 ## What works today
 
@@ -55,7 +163,7 @@ cd frontend; npm run build; npm test
 | Range streaming for source video and clips | Working, tested |
 | Asynchronous jobs: queue, worker, progress, retries, cancel, idempotency | Working, tested |
 | Candidate intervals with proposal/preview separation | Working, tested |
-| True/false-positive review, corrections, explicit unreviewed | Working (API), UI in progress |
+| True/false-positive review, corrections, explicit unreviewed | Working (API + UI), tested |
 | Dataset export: manifest, labels.csv, clips, provenance | Working, tested |
 | Responsive web UI | Working — build + 21 unit tests + a headless-Chrome end-to-end pass (reported, not committed as a test) |
 | **Real VLM inference** | **Integrated, not yet validated on product footage** — `videojev` adapter (VideoJev-4B, worker GPU); mock stays the default |
@@ -84,7 +192,7 @@ docs/
   evidence/            real smoke-test JSON evidence
   *.md                 requirements, design, architecture, API, schema,
                        model evaluation, test plan, manuals, risks, backlogs
-scripts/               smoke_e2e.py, smoke_videojev.py (real model, GPU host), render_burndown.py
+scripts/               setup.ps1, setup.sh, smoke_e2e.py, smoke_videojev.py (GPU host), render_burndown.py
 ```
 
 ## Design in one minute
@@ -106,10 +214,13 @@ Read more: [Architecture](docs/ARCHITECTURE.md) · [Design Description](docs/DES
 
 ## Status
 
-Sprint 2 closed on **2026-11-15**. The increment is a runnable, tested **technical prototype** with mock
-candidates — accounts, global roles, datasets, searches and OpenLABEL JSON are the Sprint 3 scope. The
-real detector is the opt-in `videojev` adapter (VideoJev-4B; held-out long videos: cooking recall 0.86 (CI 0.81–0.90) and CCR 0.78, driving recall 0.47 and CCR 0.82, against targets of 0.85 for both, so not met;
-see [MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md)).
+Sprint 3 runs from 2026-11-16 to the Alpha gate on 2026-11-29. It has added session sign-in, invitations,
+dataset membership and a redesigned search and review interface. OpenLABEL JSON remains in scope for Sprint 3.
+
+The mock adapter is the default. The opt-in `videojev` adapter runs the VideoJev-4B engine on Linux/WSL2.
+On held-out long videos, cooking recall reached 0.86 (CI 0.81–0.90) and driving recall reached 0.47.
+Complete-clip rates were 0.78 for cooking and 0.82 for driving, both below the 0.85 target.
+See [MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md) for the results and the Charades-STA reference.
 
 Course artifacts are tracked in [docs/course/DSD_DELIVERABLES_REGISTER.md](docs/course/DSD_DELIVERABLES_REGISTER.md).
 Known gap: the official `Guidelines (SCRUM, Presentations)` files are behind a FER login wall, so decks are
@@ -121,14 +232,14 @@ provisional ([checklist](docs/course/OFFICIAL_GUIDELINES_CHECKLIST.md)).
 |---|---|
 | Install / configure / troubleshoot | [INSTALLATION_MANUAL.md](docs/INSTALLATION_MANUAL.md) |
 | Use the product | [USER_MANUAL.md](docs/USER_MANUAL.md) |
-| Requirements (28 FR, 14 NFR) | [REQUIREMENTS.md](docs/REQUIREMENTS.md) |
+| Requirements (27 FR, 14 NFR) | [REQUIREMENTS.md](docs/REQUIREMENTS.md) |
 | Tests and actual results | [TEST_PLAN.md](docs/TEST_PLAN.md) |
 | Risks | [RISK_REGISTER.md](docs/RISK_REGISTER.md) |
 | Backlog / sprint plan / burndown | [PRODUCT_BACKLOG.md](docs/PRODUCT_BACKLOG.md), [SPRINT_BACKLOG.md](docs/SPRINT_BACKLOG.md), [SPRINT_BURNDOWN.md](docs/SPRINT_BURNDOWN.md) |
 | **Customer decisions (latest emails)** | [CUSTOMER_DECISIONS.md](docs/customer/CUSTOMER_DECISIONS.md) |
 | **Client meeting brief (13 Nov 2026)** | [CLIENT_MEETING_BRIEF_2026-11-13.md](docs/CLIENT_MEETING_BRIEF_2026-11-13.md) · [DOCX](docs/CLIENT_MEETING_BRIEF_2026-11-13.docx) · [PDF](docs/CLIENT_MEETING_BRIEF_2026-11-13.pdf) |
 | **As-built prototype baseline (2026-11-05)** | [IMPLEMENTED_BASELINE_2026-11-05.md](docs/as-built/IMPLEMENTED_BASELINE_2026-11-05.md) |
-| Weekly reports | [week-01](docs/weekly-reports/week-01.md), [week-02](docs/weekly-reports/week-02.md) |
+| Weekly reports | [week-01](docs/weekly-reports/week-01.md), [week-02](docs/weekly-reports/week-02.md), [week-03](docs/weekly-reports/week-03.md) |
 | Decisions | [docs/decisions/](docs/decisions/) |
 | Decks and upload checklist | [presentations/README.md](presentations/README.md) |
 

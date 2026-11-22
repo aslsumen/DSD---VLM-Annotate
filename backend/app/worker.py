@@ -18,6 +18,7 @@ import sys
 import threading
 
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import ObjectDeletedError
 
 from .adapters.registry import get_adapter
 from .config import Settings, get_settings
@@ -74,8 +75,9 @@ class JobWorker:
             return True
 
     def _run_claimed(self, session: Session, job: ProcessingJob) -> None:
+        job_id, kind = job.id, job.kind
         adapter = None
-        if job.kind == JobKind.candidate_proposal:
+        if kind == JobKind.candidate_proposal:
             try:
                 adapter = get_adapter(job.adapter_name, self.settings)
             except ApiError as exc:
@@ -83,14 +85,19 @@ class JobWorker:
                 return
         execute_job(
             session,
-            job.id,
+            job_id,
             storage=self.storage,
             probe=self.probe,
             extractor=self.extractor,
             adapter=adapter,
             settings=self.settings,
         )
-        logger.info("job %s (%s) finished with status=%s", job.id, job.kind.value, job.status.value)
+        try:
+            status = job.status.value
+        except ObjectDeletedError:
+            # The job was deleted while it ran (its action or video was deleted).
+            status = "deleted"
+        logger.info("job %s (%s) finished with status=%s", job_id, kind.value, status)
 
     def _beat(self, job_id: int, attempts: int, stop: threading.Event) -> None:
         """Touch the job every interval so a long silent adapter step is not reaped."""
