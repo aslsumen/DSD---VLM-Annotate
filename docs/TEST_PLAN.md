@@ -87,10 +87,10 @@ video playback (`<video>` cannot send the bearer header — R-18).
 
 | Gap | Impact | Plan |
 |---|---|---|
-| No real 10–30 min video processed | NFR-02 claims unproven | S2-17 by 2026-11-13 |
+| No 10–30 min customer video run through the web flow | NFR-02 claims unproven | S2-17 by 2026-11-13 |
 | Browser E2E is not committed as a repeatable test | Regressions can slip | Add Playwright in Sprint 4 (PB-42) |
 | Retry/cancel/zip-download not browser-tested | Lower confidence in edge paths | Manual pass before 2026-11-15 gate |
-| Real-model run on the project laptop and on product footage not done | Core value unproven on product data. 2026-11-16: `videojev` adapter integrated, adapter tests use a fake engine; the engine's KPI check on held-out composite benchmarks is running (pending; Charades-STA is reference only, `video_grounding/docs/EVALUATION.md`); `scripts/smoke_videojev.py` on the RTX 3070 laptop pending | Sprint 3 Alpha gate, measured evidence |
+| Real-model validation on product footage | The 52-second public-clip web smoke passed on the RTX 3070 laptop on 2026-11-23. Held-out long-video recall was 0.86 for cooking and 0.47 for driving, with complete-clip rates of 0.78 and 0.82. See the [release notes](RELEASE_NOTES.md) and [evaluation report](../video_grounding/docs/EVALUATION.md) | Sprint 3 Alpha gate, measured evidence |
 | No load/concurrency test | Single-worker assumption undocumented | Documented; revisit with Postgres |
 | Postgres untested | Portability claim | Add CI job when deployment needs it |
 | Token mode breaks media playback (R-18) | Cannot deploy protected | Signed media URLs (PB-41) before any protected deployment |

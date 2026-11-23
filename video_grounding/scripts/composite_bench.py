@@ -143,9 +143,14 @@ def prep(name: str, d: Path) -> None:
                     raw.write_bytes(z.read(f"bdd100k/videos/100k/train/{v}.mov"))
     else:
         raise SystemExit(f"unknown benchmark {name!r}")
+    _assemble(d, labels, prompts, name)
+
+
+def _assemble(d: Path, labels: dict[str, list], prompts: dict[str, str], name: str) -> None:
+    """Normalise d/src/<video>.* and concatenate them into d/video.mp4 with prompts.json and gt.json."""
     events, offsets, parts, t = [], {}, [], 0.0
     for v, segs in labels.items():
-        raw = next((d / "src").glob(f"{v}.*"))
+        raw = next(p for p in (d / "src").glob(f"{v}.*") if p.stem == v)  # not .norm.mp4 / .tmp.mp4 / .part leftovers
         dur = _normalise(raw, d / "src" / f"{v}.norm.mp4")
         offsets[v] = t
         parts.append(f"file '{(d / 'src' / f'{v}.norm.mp4').resolve()}'")
@@ -200,7 +205,9 @@ def score(d: Path, run: str = "run") -> dict:
                      "false_events": sum(not hit(e) for e in ver),
                      "absent_events_removed": sum(e["query_id"] in absent and p_of(e) < 0.5 for e in ver),
                      "absent_events": sum(e["query_id"] in absent for e in ver)}
-    res["timing_s"] = json.loads((d / run / "manifest.json").read_text()).get("timings", {})
+    t = res["timing_s"] = json.loads((d / run / "manifest.json").read_text()).get("timings", {})
+    # RTF as the product runs it: verify is off in the adapter; model load is not in the manifest
+    res["rtf_no_verify"] = round(sum(t.get(k, 0.0) for k in ("scan_s", "refine_s", "export_s")) / doc["video_duration_sec"], 2)
     return res
 
 

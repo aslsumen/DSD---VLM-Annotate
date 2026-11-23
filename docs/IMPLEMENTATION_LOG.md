@@ -206,8 +206,9 @@ verify: recall 0.690, precision 0.768, R1@0.5 0.460, mIoU 0.437. Rerun at the ne
 precision 0.737, R1@0.5 0.507, mIoU 0.486, queries with no event 12.3% → 1.1%, scan + refine 0.66× the video
 duration. All three SPEC targets missed (`video_grounding/docs/EVALUATION.md`).
 *Note 2026-11-16 (later): Charades-STA is in-domain for VideoJev, so these numbers are reference only and
-`min_event_score` 0.5 is provisional. Main accuracy benchmarks are now the held-out composites
-(`video_grounding/scripts/composite_bench.py`), running, results pending.*
+`min_event_score` 0.5 is provisional. Main accuracy benchmarks are now held-out sets: first the small
+composites (2026-11-17 entry), then the long-video benchmark (`video_grounding/scripts/heldout_bench.py`,
+2026-11-22 entry), which is the current KPI source.*
 
 **Decisions:** [ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md) (VideoJev-4B is the first
 real detector; supersedes the ADR-0004 Alpha target), ADR-0001 amendment (heartbeat lease). Gemini verify exists in
@@ -215,6 +216,68 @@ the engine but is off in the adapter. `mock` stays the default adapter.
 
 **Open items:** real-model smoke (`scripts/smoke_videojev.py`) on the RTX 3070 laptop; product-footage validation
 (10-30 min videos); peak VRAM at current sampling not recorded; test counts in docs not re-run at this commit.
+
+## 2026-11-17 — Held-out composite benchmark results (VideoJev-4B)
+
+**Goal:** check the SPEC targets on data VideoJev was not trained on (PB-70, S3-17).
+
+**Commands run:** `video_grounding/scripts/composite_bench.py` on `youcook2_a`, `youcook2_b`, `bddx`; RTX 3070
+Laptop 8 GB, `configs/rtx3070.yaml`, current defaults (`min_event_score` 0.5), found = IoU ≥ 0.3.
+
+**Results (actual, before verify, which is what the product runs):**
+
+| Benchmark | GT | Recall | Precision | CCR | Events per prompt |
+|---|---|---|---|---|---|
+| `bddx` (driving) | 72 | 0.472 | 0.228 | 0.941 | 21.3 |
+| `youcook2_a` (cooking) | 12 | 1.000 | 0.048 | 0.833 | 20.8 |
+| `youcook2_b` (cooking) | 12 | 0.750 | 0.044 | 0.778 | 17.2 |
+
+Pooled recall 0.573 (55/96); cooking only 0.875 (21/24). Targets (recall ≥ 0.85, CCR ≥ 0.85) are **not met**
+overall: recall only on `youcook2_a`, CCR only on `bddx`. Driving is the weak domain (lane change 2/10, stop for
+lead vehicle 0/10); cooking finds the steps but floods the reviewer with false candidates. Optional Gemini verify
+keeps every true cooking event and cuts events per prompt by about 85% (to about 3), but on driving it loses 9/34
+true events, so it stays off in the product. Scan and refinement together took about 6× the video duration for the 18-prompt batch. A parallel experiment
+shared the laptop. Details:
+`video_grounding/docs/EVALUATION.md`.
+
+**Open items:** driving recall and cooking precision (PB-71); `min_event_score` 0.5 still provisional, not re-tuned
+on the composites (PB-72); product-footage validation.
+*Note 2026-11-22: superseded by the long-video benchmark below; these composites had 24 and 72 GT events (recall
+CI about ±0.13).*
+
+## 2026-11-22 — Held-out long-video benchmark results (VideoJev-4B)
+
+**Goal:** replace the small composites as the KPI source (PB-70). The user judged them too small to be reliable:
+24 cooking and 72 driving GT events, recall CIs of about ±0.13. Switched 2026-11-20.
+
+**Commands run:** `video_grounding/scripts/heldout_bench.py` `select`, `prep`, `score`. One scan job per video, no
+concatenation. YouCook2 validation split: 33 videos, 3.65 h, 300 steps, 29 recipes; prompts are the video's own steps
+plus 3 absent steps from other recipes (12.1 per video). ROAD (ego-action labels at 12 fps): 20 videos, 2.75 h, 238
+events; prompts are the six ego actions plus the absent prompt "the ego vehicle collides with another vehicle".
+Videos are 5 to 30 min. RTX 3070 Laptop 8 GB with about 3 GB offloaded, `configs/rtx3070.yaml`, Gemini verify off,
+engine defaults (coarse 1 fps / 32 frames, refine 2 fps / 64 frames, `min_event_score` 0.5). Run 2026-11-20 10:40 to
+2026-11-22 01:31, 0 failed units. Selections: `video_grounding/benchmarks/heldout_youcook2.json`, `heldout_road.json`.
+
+**Results (actual, 95% bootstrap CI over videos):**
+
+| | YouCook2 | ROAD |
+|---|---|---|
+| Recall | 0.86 [0.81, 0.90] (258/300) | 0.47 [0.39, 0.56] (112/238) |
+| CCR | 0.78 [0.70, 0.85] | 0.82 [0.72, 0.91] |
+| Mean boundary adjustment | 4.2 s [3.5, 5.0] | 7.9 s [5.6, 11.1] |
+| Candidates per present / absent prompt | 5.9 / 3.5 | 9.2 / 8.4 |
+| Total time ÷ video length (all prompts in one job) | 5.72 | 4.71 |
+
+ROAD recall by prompt: turn right 42/48, turn left 32/54, stop 35/100, overtake 3/12, move left 0/12, move right
+0/12. Targets (recall ≥ 0.85, CCR ≥ 0.85): cooking recall 0.86 meets it as a point estimate but the lower bound is
+0.81, so it is not confirmed; cooking CCR 0.78 misses. Driving misses widely: turns are found, lateral moves
+(0/24), overtakes and most stops are not, and absent prompts give almost as many candidates as present ones, so the
+model barely tells present from absent on driving. On cooking, absent prompts give fewer candidates than present
+ones. The composite results (cooking 0.875, driving 0.47) agree in direction and are superseded. These timings measure multi-prompt benchmark jobs. The separate [single-prompt measurements](../video_grounding/docs/EVALUATION.md#speed-kpis)
+report the elapsed job time for each video and prompt.
+
+**Open items:** driving recall and absent-prompt false candidates (PB-71); `min_event_score` sweep (PB-72);
+product-footage validation.
 
 ## Template for the next entry
 

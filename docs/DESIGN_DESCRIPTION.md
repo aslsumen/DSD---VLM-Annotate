@@ -127,8 +127,7 @@ deactivated, not deleted.
 
 - **Model:** VideoJev-4B (Apache-2.0, Qwen3.5-4B base, revision pinned in
   `video_grounding/src/video_grounding/adapters/videojev.py`) is the self-hosted detector. **Gemini API** is an
-  optional verify stage (`gemini-decision-1`, key supplied by the customer), off in the product adapter: on
-  Charades-STA (reference set) it removed few false events and cost recall (`video_grounding/docs/EVALUATION.md`). Qwen-VL is a
+  optional verify stage (`gemini-decision-1`, key supplied by the customer), off in the product adapter (why: §8.1). Qwen-VL is a
   registered stub. Backends sit behind `GroundingBackend`.
 - **Pipeline:** probe → 30 s windows / 20 s stride → cut ≤720p window clips → sample 1 FPS (≤32 frames) →
   score curve → map to source time → fuse on a 0.5 s grid with edge weighting → hysteresis (0.25/0.15) →
@@ -141,6 +140,20 @@ deactivated, not deleted.
   succeeded windows.
 - **Hardware profiles:** `reference_gpu`, `dev_low_vram` (8 GB laptop, `configs/rtx3070.yaml`, CPU offload; OOM ladder lowers the frame count),
   `replay` (CI without GPU).
+
+### 8.1 Why the engine is built this way
+
+Charades-STA numbers below are reference only: VideoJev was trained on it (`video_grounding/docs/EVALUATION.md`).
+
+| Decision point | Choice | Why (evidence) |
+|---|---|---|
+| Detector | A temporal-grounding model (VideoJev-4B), not a captioning VLM | It returns a per-frame score curve, so boundaries come from scores rather than from text the model writes; it runs on the 8 GB dev GPU with CPU offload (ADR-0007). |
+| Long videos | Overlapping 30 s windows, 20 s stride | One model call sees at most 32 frames. Overlap means an event cut by one window edge is seen whole by its neighbour; fusion down-weights window edges. |
+| Two passes | Cheap coarse scan (1 fps / 32), then refine only around candidates (2 fps / 64) | The coarse pass decides *where*, refine decides *the boundaries*, so dense sampling is paid only near events. Doubling coarse sampling (0.5 → 1 fps) raised recall 0.598 → 0.672 and halved queries with no event (21.3% → 10.9%). Refining at 4 fps / 120 frames did not help (R1@0.5 0.440 vs 0.486) and cost 1.6× the refine time, so 2 fps stays. |
+| Turning a curve into events | 0.5 s grid, hysteresis 0.25 / 0.15, then `min_event_score` | Hysteresis keeps a noisy curve from splitting one action into fragments. Narrower fusion (higher segment threshold, trimming to 50% of peak) made every length bin worse: wide events come from the model scoring a long stretch high, not from fusion. `min_event_score` 0.9 → 0.5 gave recall +8.1 points and cut queries with no event 12.3% → 1.1% for −3.1 points precision; checked on the held-out long videos (3.5 candidates per absent cooking prompt, 8.4 per absent driving prompt): kept, but on driving it does not separate present from absent prompts. |
+| Verify stage | Optional yes/no check *after* refine that can only remove events | It asks about the final clip, so it judges what the reviewer would see, costs one call per event, and can never move a boundary. Added because of false events on other test sets: on one YouCook2 composite the model proposed 134 false events next to 13 true ones, and absent prompts (actions not in the video) still produced events. Qwen3-VL-4B (offline) fixed the absent prompts but did not help on driving footage. `gemini-decision-1` removed 197/220 false cooking events with 0/26 true ones lost, and all 88 absent-prompt events. |
+| Verify default | Off; always off in the product adapter | On driving footage it cost recall (BDD-X: 8/36 true events lost; Nexar crashes: 1/8 kept). On Charades, where every query happens, it removed 35% of false events for −14 points recall. The human reviewer already removes false events, and keeping it off means no footage leaves the machine. |
+| Failure handling | SQLite journal per window, stable `event_id`, OOM ladder | Hours-long jobs resume after a crash (a real run killed with `kill -9` at unit 189 resumed from there); an OOM lowers the frame count instead of failing the job. |
 
 ## 9. Export format — proposal for the customer (Q4)
 
@@ -224,7 +237,7 @@ is documented in `docs/API_CONTRACTS.md`; it will be migrated, not maintained in
 
 | Decision | Options | Depends on |
 |---|---|---|
-| Detection model | VideoJev-4B chosen as first real detector (ADR-0007); Gemini verify optional/off; Qwen-VL stub | KPI results (held-out composite benchmarks running since 2026-11-16; Charades-STA is reference only, see EVALUATION.md), product-footage validation |
+| Detection model | VideoJev-4B chosen as first real detector (ADR-0007); Gemini verify optional/off; Qwen-VL stub | Held-out long videos 2026-11-22: recall 0.86 cooking / 0.47 driving vs 0.85, targets not met or not confirmed (EVALUATION.md); Charades-STA is reference only; product-footage validation |
 | Compute | Gemini API / 12 GB laptop / 24 GB GPU / AWS | Customer + supervisors |
 | Hosting | Customer / university / cloud | Supervisors |
 | JSON schema | Team proposal §9 / customer example | Customer (by 2026-11-17) |
@@ -252,3 +265,4 @@ is documented in `docs/API_CONTRACTS.md`; it will be migrated, not maintained in
 | 1.0 (repo) | 2026-11-05 | First repository design: project/action vertical slice |
 | **1.2 (repo)** | **2026-11-12** | Aligned to team v1.1 + CE-2: global roles, Dataset Admin invitations, email-only accounts, dataset/search model, JSON export proposal, engine service, honest implementation status |
 | 1.3 (repo) | 2026-11-16 | Engine is a library in the GPU worker (ADR-0007), `videojev` adapter integrated (real-model smoke pending), pipeline and defaults updated, Gemini verify off in the adapter |
+| 1.4 (repo) | 2026-11-22 | §8.1: each engine design decision with the evidence behind it, including why verify runs after refine |

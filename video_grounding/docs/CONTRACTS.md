@@ -45,7 +45,7 @@ Historical spec name: `SPEC_ZeroShot_Video_Event_Grounding_MVP_v1.1` (not includ
   floor 0.05 at an inner window edge). A window edge that lies on the video start or end truncates
   nothing, so it is not treated as an edge. `max_weight < 0.5` at an event boundary sets
   `boundary_near_window_edge`.
-- Events whose `raw_score_max` is below `fusion.min_event_score` (default 0.5, provisional: chosen on Charades-STA for VideoJev-4B, to be re-checked on the held-out composites)
+- Events whose `raw_score_max` is below `fusion.min_event_score` (default 0.5, provisional: chosen on Charades-STA for VideoJev-4B, checked on the held-out long-video benchmark, which keeps 3.5 candidates per absent cooking prompt and 8.4 per absent driving prompt, see EVALUATION.md)
   are dropped before refinement and export. events.json lists each query's events by descending
   `raw_score_max`, so reviewers see the likely ones first.
 

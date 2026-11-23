@@ -82,7 +82,8 @@ def _kpis(preds: list[dict], gts: list[dict]) -> dict:
             for q in gq]  # standard Charades-STA R1: the highest-scoring event per query, IoU 0 when none
     out = {k: m[k] for k in ("n_pred", "event_recall", "event_precision", "temporal_miou", "R@IoU0.3", "R@IoU0.5",
                              "R@IoU0.7", "start_err_p50", "start_err_p90", "end_err_p50", "end_err_p90")}
-    out.update(complete_clip_rate=r["complete_clip_rate"], preds_per_query=len(preds) / len(gts),
+    out.update(complete_clip_rate=r["complete_clip_rate"], boundary_adjust_mean=r["boundary_adjust_mean"],
+               preds_per_query=len(preds) / len(gts),
                queries_without_pred=sum(q not in pq for q in gq) / len(gq),
                R1_mIoU=statistics.fmean(top1), **{f"R1@{t}": sum(x >= t for x in top1) / len(top1)
                                                   for t in (0.3, 0.5, 0.7)})
@@ -126,6 +127,9 @@ def score(data: Path, runs: str = "runs") -> dict:
     tm = [json.loads((data / runs / v / "manifest.json").read_text()).get("timings", {}) for v in docs]
     res["timing_mean_s"] = {k: round(statistics.fmean(t.get(k, 0) for t in tm), 2)
                             for k in ("scan_s", "refine_s", "verify_s", "export_s")}
+    # RTF as the product runs it (verify off in the adapter); model load is not in the manifest
+    res["rtf_no_verify"] = round(sum(t.get(k, 0) for t in tm for k in ("scan_s", "refine_s", "export_s"))
+                                 / res["video_sec"], 2)
     return res
 
 
