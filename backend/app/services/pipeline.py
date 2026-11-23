@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
 import json
 import logging
+import shutil
 import tempfile
 import zipfile
+from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -50,6 +53,24 @@ EXPORT_SCHEMA_VERSION = "1.0"
 # --------------------------------------------------------------------------- #
 # Enqueue
 # --------------------------------------------------------------------------- #
+
+
+def engine_job_key(job_id: int) -> str:
+    return f"engine/job-{job_id}"
+
+
+def feature_cache_key(video_id: int) -> str:
+    return f"engine/features/video-{video_id}"
+
+
+def remove_engine_files(
+    storage: LocalStorage, job_ids: Iterable[int] = (), video_ids: Iterable[int] = ()
+) -> None:
+    """Remove engine work dirs (per job) and visual-feature dirs (per video); missing is fine."""
+    keys = [*map(engine_job_key, job_ids), *map(feature_cache_key, video_ids)]
+    for key in keys:
+        with contextlib.suppress(StorageError, OSError):
+            shutil.rmtree(storage.path_for(key), ignore_errors=True)
 
 
 def _now() -> datetime:
@@ -387,6 +408,7 @@ def _run_candidate_job(
     job.adapter_version = adapter.version
     _set_progress(session, job, 0.05)
 
+    job_id, video_id = job.id, video.id
     request = ProposalRequest(
         video_path=storage.path_for(video.storage_key),
         duration_seconds=duration,
@@ -396,10 +418,16 @@ def _run_candidate_job(
         max_duration_seconds=settings.candidate_max_duration_seconds,
         params=json.loads(job.params_json or "{}"),
         # Stable per job id so a resumable engine can pick up where a failed attempt stopped.
-        work_dir=storage.path_for(f"engine/job-{job.id}"),
+        work_dir=storage.path_for(engine_job_key(job_id)),
+        feature_cache_dir=storage.path_for(feature_cache_key(video_id)),
         progress=lambda fraction: _set_progress(session, job, 0.05 + 0.30 * fraction),
     )
-    proposals = adapter.propose(request)
+    try:
+        proposals = adapter.propose(request)
+    finally:
+        # A running adapter can write files after the API has removed the video and its directories.
+        if not request.video_path.is_file():
+            remove_engine_files(storage, [job_id], [video_id])
     # Exhaustive adapters report every occurrence they find; none means "does not occur".
     exhaustive = getattr(adapter, "exhaustive", False)
     if not proposals and not exhaustive:

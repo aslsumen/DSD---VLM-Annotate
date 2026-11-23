@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import types
+from dataclasses import replace
 from pathlib import Path
 from typing import ClassVar
 
@@ -41,6 +42,7 @@ class FakeEngine:
     calls: ClassVar[list[tuple]] = []
     backends = 0
     unloaded = 0
+    cache_dir: str | None = "~/fc"
 
 
 @pytest.fixture()
@@ -48,9 +50,12 @@ def engine(monkeypatch):
     FakeEngine.events, FakeEngine.scan_complete, FakeEngine.fail = [], True, None
     FakeEngine.resume_mismatch, FakeEngine.calls = False, []
     FakeEngine.backends = FakeEngine.unloaded = 0
+    FakeEngine.cache_dir = "~/fc"
     vj._BACKENDS.clear()
 
     class Backend:
+        feature_cache = "unset"
+
         def unload(self) -> None:
             FakeEngine.unloaded += 1
 
@@ -62,6 +67,10 @@ def engine(monkeypatch):
         if FakeEngine.fail:
             raise FakeEngine.fail
         return {"events": FakeEngine.events, "scan_complete": FakeEngine.scan_complete}
+
+    class FeatureCache:
+        def __init__(self, root, max_bytes, subdir=None):
+            self.root, self.max_bytes, self.subdir = Path(root), max_bytes, subdir
 
     class ResumeMismatch(ValueError):
         pass
@@ -84,16 +93,22 @@ def engine(monkeypatch):
         "video_grounding": types.ModuleType("video_grounding"),
         "video_grounding.adapters": types.ModuleType("video_grounding.adapters"),
         "video_grounding.adapters.base": types.SimpleNamespace(make_backend=make_backend),
+        "video_grounding.feature_cache": types.SimpleNamespace(FeatureCache=FeatureCache),
         "video_grounding.models": types.SimpleNamespace(Query=lambda id_, text: (id_, text)),
         "video_grounding.scheduler": types.SimpleNamespace(
             ResumeMismatch=ResumeMismatch, resume=resume, run_scan=run_scan
         ),
         "video_grounding.settings": types.SimpleNamespace(
             Settings=lambda: _Section(
-                export=_Section(cut_clips=True), verify=_Section(enabled=True)
+                export=_Section(cut_clips=True),
+                verify=_Section(enabled=True),
+                feature_cache=_Section(dir=FakeEngine.cache_dir, max_gb=2.0),
             ),
             load_settings=lambda path: _Section(
-                export=_Section(cut_clips=True), verify=_Section(enabled=True), path=path
+                export=_Section(cut_clips=True),
+                verify=_Section(enabled=True),
+                feature_cache=_Section(dir=FakeEngine.cache_dir, max_gb=2.0),
+                path=path,
             ),
         ),
     }
@@ -182,6 +197,31 @@ def test_job_interrupted_propagates_and_keeps_backend_loaded(engine, tmp_path) -
         vj.VideoJevAdapter().propose(_request(tmp_path, progress=cancelled))
     assert engine.unloaded == 0
     assert len(vj._BACKENDS) == 1  # the next job reuses the loaded model
+
+
+def test_feature_cache_is_set_per_call_from_request_or_engine_config(engine, tmp_path) -> None:
+    adapter = vj.VideoJevAdapter()
+    backend = None
+
+    def cache_after(request):
+        nonlocal backend
+        adapter.propose(request)
+        (backend,) = vj._BACKENDS.values()
+        return backend.feature_cache
+
+    # Product: root is engine/features, one subdir per video, global cap from the engine config.
+    per_video = tmp_path / "engine" / "features" / "video-7"
+    fc = cache_after(replace(_request(tmp_path), feature_cache_dir=per_video))
+    assert (fc.root, fc.subdir, fc.max_bytes) == (per_video.parent, "video-7", 2_000_000_000)
+    # The shared backend is re-pointed for the next video.
+    fc = cache_after(replace(_request(tmp_path), feature_cache_dir=per_video.with_name("video-8")))
+    assert fc.subdir == "video-8"
+    # No per-video dir: the engine-config location.
+    fc = cache_after(_request(tmp_path))
+    assert (fc.root, fc.subdir) == (Path("~/fc").expanduser(), None)
+    # dir: null disables the cache even when the product offers a per-video dir.
+    engine.cache_dir = None
+    assert cache_after(replace(_request(tmp_path), feature_cache_dir=per_video)) is None
 
 
 def test_missing_engine_is_unavailable(monkeypatch, tmp_path) -> None:

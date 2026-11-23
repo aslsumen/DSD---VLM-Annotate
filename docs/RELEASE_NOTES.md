@@ -10,6 +10,9 @@ Development snapshot after v0.2.0-dev; not a course release.
   ([ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md)). Opt-in with `VLM_VLM_ADAPTER=videojev` on a
   GPU worker; `mock` stays the default. Exhaustive: all events kept, zero events is success. Resumes from a per-job
   engine directory on retry; Gemini verify and engine clip cutting are always off.
+- **Visual feature cache** for the `videojev` adapter: a later search on the same video skips decode + encode
+  (38.6–45.5% less time for two matched video/prompt pairs on the 8 GB laptop). Stored per video under `data/storage/engine/features/`, removed when the
+  video or project is deleted ([ARCHITECTURE.md](ARCHITECTURE.md#visual-feature-cache)).
 - **Batch job endpoint** `POST /projects/{id}/actions/{action_id}/jobs` (one job per video).
 - **Heartbeat lease** — crashed workers' jobs are requeued as `WORKER_LOST` (ADR-0001 amendment); running jobs can
   be cancelled.
