@@ -102,7 +102,8 @@ class VideoJevBackend:
         import torch
         if self._model is None:
             raise RuntimeError("VideoJevBackend.load() has not been called")
-        cuda = torch.cuda.is_available()
+        # The CUDA allocator has stats only after a CUDA model or tensor has initialized it.
+        cuda = torch.cuda.is_initialized()
         key = self._feature_key(window)
         question = {"id": query_id, "task": "grounding", "query": query}
         try:
