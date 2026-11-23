@@ -1,0 +1,1364 @@
+{
+ "fps": 12,
+ "prompts": {
+  "stop": "the ego vehicle is stopped",
+  "turn_left": "the ego vehicle turns left",
+  "turn_right": "the ego vehicle turns right",
+  "move_left": "the ego vehicle moves over to the left, changing lanes",
+  "move_right": "the ego vehicle moves over to the right, changing lanes",
+  "overtake": "the ego vehicle overtakes another vehicle",
+  "absent_collision": "the ego vehicle collides with another vehicle"
+ },
+ "videos": [
+  {
+   "id": "2014-06-25-16-45-34_stereo_centre_02",
+   "drive_id": "1HMvOjZTWR4rmY5j5w3_1CHeZeQva7jQd",
+   "split": "trainval",
+   "duration": 394.5,
+   "events": [
+    {
+     "query_id": "move_left",
+     "start_sec": 17.166666666666668,
+     "end_sec": 20.166666666666668
+    },
+    {
+     "query_id": "move_left",
+     "start_sec": 287.1666666666667,
+     "end_sec": 291.6666666666667
+    },
+    {
+     "query_id": "move_right",
+     "start_sec": 11.916666666666666,
+     "end_sec": 15.166666666666666
+    },
+    {
+     "query_id": "overtake",
+     "start_sec": 14.416666666666666,
+     "end_sec": 14.666666666666666
+    },
+    {
+     "query_id": "overtake",
+     "start_sec": 111.41666666666667,
+     "end_sec": 112.91666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 68.66666666666667,
+     "end_sec": 83.41666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 244.91666666666666,
+     "end_sec": 270.4166666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 308.6666666666667,
+     "end_sec": 348.1666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 385.1666666666667,
+     "end_sec": 387.1666666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 86.91666666666667,
+     "end_sec": 91.16666666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 204.16666666666666,
+     "end_sec": 213.16666666666666
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 352.4166666666667,
+     "end_sec": 358.1666666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 170.91666666666666,
+     "end_sec": 176.16666666666666
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 388.1666666666667,
+     "end_sec": 392.6666666666667
+    }
+   ]
+  },
+  {
+   "id": "2014-06-26-09-53-12_stereo_centre_02",
+   "drive_id": "10ediu7xl-WtFPeqGkzH-o68-rNL2Iq4B",
+   "split": "trainval",
+   "duration": 500.0,
+   "events": [
+    {
+     "query_id": "move_right",
+     "start_sec": 442.0,
+     "end_sec": 445.25
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 0.08333333333333333,
+     "end_sec": 14.5
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 239.0,
+     "end_sec": 357.75
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 431.5,
+     "end_sec": 435.5
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 46.0,
+     "end_sec": 52.5
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 174.25,
+     "end_sec": 182.0
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 230.25,
+     "end_sec": 239.0
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 388.25,
+     "end_sec": 395.0
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 430.0,
+     "end_sec": 431.5
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 435.5,
+     "end_sec": 441.25
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 73.5,
+     "end_sec": 79.75
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 136.5,
+     "end_sec": 142.0
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 364.0,
+     "end_sec": 370.75
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 446.25,
+     "end_sec": 451.0
+    }
+   ]
+  },
+  {
+   "id": "2014-07-14-14-49-50_stereo_centre_01",
+   "drive_id": "1lB7iuk4PtqlDPpyPidDIBg6PJAuDgSI_",
+   "split": "trainval",
+   "duration": 500.0833333333333,
+   "events": [
+    {
+     "query_id": "stop",
+     "start_sec": 27.5,
+     "end_sec": 69.5
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 174.75,
+     "end_sec": 198.0
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 210.75,
+     "end_sec": 222.25
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 409.5,
+     "end_sec": 423.5
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 485.5,
+     "end_sec": 500.0833333333333
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 1.75,
+     "end_sec": 6.75
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 227.5,
+     "end_sec": 231.0
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 79.25,
+     "end_sec": 82.5
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 269.0,
+     "end_sec": 273.0
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 356.25,
+     "end_sec": 365.25
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 428.0,
+     "end_sec": 431.5
+    }
+   ]
+  },
+  {
+   "id": "2014-07-14-15-42-55_stereo_centre_03",
+   "drive_id": "195LAmX9jkQP3PfwcVKUtwvr-mqbSbU-6",
+   "split": "trainval",
+   "duration": 500.0,
+   "events": [
+    {
+     "query_id": "move_left",
+     "start_sec": 282.9166666666667,
+     "end_sec": 285.1666666666667
+    },
+    {
+     "query_id": "move_left",
+     "start_sec": 362.9166666666667,
+     "end_sec": 364.4166666666667
+    },
+    {
+     "query_id": "move_left",
+     "start_sec": 386.1666666666667,
+     "end_sec": 390.1666666666667
+    },
+    {
+     "query_id": "move_right",
+     "start_sec": 365.6666666666667,
+     "end_sec": 368.1666666666667
+    },
+    {
+     "query_id": "move_right",
+     "start_sec": 381.4166666666667,
+     "end_sec": 383.6666666666667
+    },
+    {
+     "query_id": "overtake",
+     "start_sec": 93.66666666666667,
+     "end_sec": 94.41666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 0.0,
+     "end_sec": 32.416666666666664
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 70.41666666666667,
+     "end_sec": 78.66666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 113.91666666666667,
+     "end_sec": 127.41666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 159.66666666666666,
+     "end_sec": 191.66666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 296.4166666666667,
+     "end_sec": 307.4166666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 318.6666666666667,
+     "end_sec": 324.4166666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 335.1666666666667,
+     "end_sec": 355.4166666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 463.1666666666667,
+     "end_sec": 467.4166666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 490.4166666666667,
+     "end_sec": 500.0
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 200.16666666666666,
+     "end_sec": 204.66666666666666
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 209.41666666666666,
+     "end_sec": 213.41666666666666
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 421.1666666666667,
+     "end_sec": 426.1666666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 37.666666666666664,
+     "end_sec": 42.166666666666664
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 376.4166666666667,
+     "end_sec": 379.9166666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 469.4166666666667,
+     "end_sec": 472.9166666666667
+    }
+   ]
+  },
+  {
+   "id": "2014-08-08-13-15-11_stereo_centre_01",
+   "drive_id": "10dMM3n-4CKwxyRN0GHMIJ0nHkNWcUn6O",
+   "split": "trainval",
+   "duration": 500.0833333333333,
+   "events": [
+    {
+     "query_id": "move_left",
+     "start_sec": 306.6666666666667,
+     "end_sec": 309.4166666666667
+    },
+    {
+     "query_id": "move_left",
+     "start_sec": 334.6666666666667,
+     "end_sec": 340.6666666666667
+    },
+    {
+     "query_id": "move_right",
+     "start_sec": 2.1666666666666665,
+     "end_sec": 10.666666666666666
+    },
+    {
+     "query_id": "move_right",
+     "start_sec": 302.1666666666667,
+     "end_sec": 305.1666666666667
+    },
+    {
+     "query_id": "overtake",
+     "start_sec": 305.1666666666667,
+     "end_sec": 306.6666666666667
+    },
+    {
+     "query_id": "overtake",
+     "start_sec": 489.4166666666667,
+     "end_sec": 500.0833333333333
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 0.0,
+     "end_sec": 2.1666666666666665
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 44.416666666666664,
+     "end_sec": 134.41666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 164.66666666666666,
+     "end_sec": 168.91666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 207.66666666666666,
+     "end_sec": 218.16666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 224.41666666666666,
+     "end_sec": 259.6666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 413.6666666666667,
+     "end_sec": 432.9166666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 160.91666666666666,
+     "end_sec": 164.66666666666666
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 168.91666666666666,
+     "end_sec": 173.66666666666666
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 259.6666666666667,
+     "end_sec": 264.4166666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 352.9166666666667,
+     "end_sec": 356.4166666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 470.1666666666667,
+     "end_sec": 479.4166666666667
+    }
+   ]
+  },
+  {
+   "id": "2014-11-14-16-34-33_stereo_centre_06",
+   "drive_id": "1l5zvHqQeaLnCcsy0SYNDHOAJUHvm45HG",
+   "split": "trainval",
+   "duration": 500.0,
+   "events": [
+    {
+     "query_id": "move_left",
+     "start_sec": 424.1666666666667,
+     "end_sec": 426.1666666666667
+    },
+    {
+     "query_id": "move_right",
+     "start_sec": 432.6666666666667,
+     "end_sec": 435.1666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 0.0,
+     "end_sec": 9.916666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 76.41666666666667,
+     "end_sec": 143.91666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 171.91666666666666,
+     "end_sec": 276.1666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 319.6666666666667,
+     "end_sec": 358.4166666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 400.9166666666667,
+     "end_sec": 406.1666666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 365.1666666666667,
+     "end_sec": 375.1666666666667
+    }
+   ]
+  },
+  {
+   "id": "2014-11-18-13-20-12_stereo_centre_05",
+   "drive_id": "13Uty6yg3X2DQy18njt1LoLOa3y1YJd3i",
+   "split": "trainval",
+   "duration": 500.0,
+   "events": [
+    {
+     "query_id": "overtake",
+     "start_sec": 37.916666666666664,
+     "end_sec": 43.916666666666664
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 0.0,
+     "end_sec": 1.6666666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 152.91666666666666,
+     "end_sec": 164.41666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 186.41666666666666,
+     "end_sec": 193.91666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 196.41666666666666,
+     "end_sec": 198.91666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 215.16666666666666,
+     "end_sec": 220.16666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 271.9166666666667,
+     "end_sec": 295.9166666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 329.1666666666667,
+     "end_sec": 408.4166666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 93.91666666666667,
+     "end_sec": 99.66666666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 31.666666666666668,
+     "end_sec": 35.916666666666664
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 165.41666666666666,
+     "end_sec": 169.66666666666666
+    }
+   ]
+  },
+  {
+   "id": "2014-11-21-16-07-03_stereo_centre_01",
+   "drive_id": "1qbc3azl35Qr8p6sJRTyDz-fdhmPvBjCG",
+   "split": "trainval",
+   "duration": 500.0833333333333,
+   "events": [
+    {
+     "query_id": "stop",
+     "start_sec": 0.0,
+     "end_sec": 49.416666666666664
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 72.66666666666667,
+     "end_sec": 90.41666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 104.66666666666667,
+     "end_sec": 145.91666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 194.66666666666666,
+     "end_sec": 199.16666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 290.6666666666667,
+     "end_sec": 316.9166666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 460.6666666666667,
+     "end_sec": 494.6666666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 63.416666666666664,
+     "end_sec": 68.41666666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 145.91666666666666,
+     "end_sec": 152.66666666666666
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 226.66666666666666,
+     "end_sec": 231.41666666666666
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 49.416666666666664,
+     "end_sec": 55.166666666666664
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 326.6666666666667,
+     "end_sec": 332.6666666666667
+    }
+   ]
+  },
+  {
+   "id": "2014-11-25-09-18-32_stereo_centre_04",
+   "drive_id": "1YmWs5u-rDlBGvq6VjNgBGCKRcvXA_MLI",
+   "split": "trainval",
+   "duration": 500.0,
+   "events": [
+    {
+     "query_id": "move_left",
+     "start_sec": 496.25,
+     "end_sec": 498.0
+    },
+    {
+     "query_id": "move_right",
+     "start_sec": 483.25,
+     "end_sec": 485.25
+    },
+    {
+     "query_id": "overtake",
+     "start_sec": 485.25,
+     "end_sec": 486.5
+    },
+    {
+     "query_id": "overtake",
+     "start_sec": 495.25,
+     "end_sec": 496.25
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 0.08333333333333333,
+     "end_sec": 42.0
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 55.25,
+     "end_sec": 128.75
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 156.75,
+     "end_sec": 239.25
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 326.0,
+     "end_sec": 349.75
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 420.0,
+     "end_sec": 466.0
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 362.5,
+     "end_sec": 368.25
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 370.75,
+     "end_sec": 376.25
+    }
+   ]
+  },
+  {
+   "id": "2014-12-09-13-21-02_stereo_centre_01",
+   "drive_id": "1MtC4sxuUwGV9eWyl-HSY7jn-sVol03vd",
+   "split": "trainval",
+   "duration": 500.0833333333333,
+   "events": [
+    {
+     "query_id": "move_right",
+     "start_sec": 489.1666666666667,
+     "end_sec": 491.1666666666667
+    },
+    {
+     "query_id": "move_right",
+     "start_sec": 496.6666666666667,
+     "end_sec": 497.9166666666667
+    },
+    {
+     "query_id": "overtake",
+     "start_sec": 491.1666666666667,
+     "end_sec": 496.6666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 0.0,
+     "end_sec": 26.416666666666668
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 90.66666666666667,
+     "end_sec": 93.41666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 120.66666666666667,
+     "end_sec": 124.91666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 171.41666666666666,
+     "end_sec": 205.91666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 207.41666666666666,
+     "end_sec": 219.16666666666666
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 93.41666666666667,
+     "end_sec": 102.66666666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 335.4166666666667,
+     "end_sec": 340.1666666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 237.91666666666666,
+     "end_sec": 244.16666666666666
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 382.9166666666667,
+     "end_sec": 388.9166666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 446.4166666666667,
+     "end_sec": 454.4166666666667
+    }
+   ]
+  },
+  {
+   "id": "2015-02-03-08-45-10_stereo_centre_02",
+   "drive_id": "1dvYoPDjnqi__AjoX2y-qnVYu9cY_ZcEi",
+   "split": "trainval",
+   "duration": 500.0,
+   "events": [
+    {
+     "query_id": "move_left",
+     "start_sec": 153.41666666666666,
+     "end_sec": 156.41666666666666
+    },
+    {
+     "query_id": "overtake",
+     "start_sec": 89.41666666666667,
+     "end_sec": 103.16666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 162.41666666666666,
+     "end_sec": 164.16666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 325.6666666666667,
+     "end_sec": 350.1666666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 3.6666666666666665,
+     "end_sec": 9.916666666666666
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 356.1666666666667,
+     "end_sec": 361.4166666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 446.9166666666667,
+     "end_sec": 456.6666666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 57.666666666666664,
+     "end_sec": 64.16666666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 156.41666666666666,
+     "end_sec": 162.41666666666666
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 164.16666666666666,
+     "end_sec": 176.91666666666666
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 268.6666666666667,
+     "end_sec": 280.9166666666667
+    }
+   ]
+  },
+  {
+   "id": "2015-02-03-19-43-11_stereo_centre_04",
+   "drive_id": "1zjcvsLVMov-YM_QOPgBHyEX7egxl-sls",
+   "split": "trainval",
+   "duration": 500.0,
+   "events": [
+    {
+     "query_id": "stop",
+     "start_sec": 8.666666666666666,
+     "end_sec": 59.416666666666664
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 116.66666666666667,
+     "end_sec": 130.41666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 428.4166666666667,
+     "end_sec": 469.4166666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 0.0,
+     "end_sec": 3.1666666666666665
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 64.41666666666667,
+     "end_sec": 71.16666666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 270.9166666666667,
+     "end_sec": 277.9166666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 212.41666666666666,
+     "end_sec": 214.91666666666666
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 327.4166666666667,
+     "end_sec": 335.4166666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 372.1666666666667,
+     "end_sec": 377.6666666666667
+    }
+   ]
+  },
+  {
+   "id": "2015-02-06-13-57-16_stereo_centre_02",
+   "drive_id": "11dLFJhDZmFa2xcMKQCi0dakJx3Nj2hl9",
+   "split": "trainval",
+   "duration": 500.0,
+   "events": [
+    {
+     "query_id": "stop",
+     "start_sec": 51.166666666666664,
+     "end_sec": 54.416666666666664
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 95.66666666666667,
+     "end_sec": 113.66666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 229.41666666666666,
+     "end_sec": 240.66666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 309.6666666666667,
+     "end_sec": 331.4166666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 475.1666666666667,
+     "end_sec": 487.1666666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 487.6666666666667,
+     "end_sec": 492.4166666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 54.416666666666664,
+     "end_sec": 59.166666666666664
+    }
+   ]
+  },
+  {
+   "id": "2015-02-13-09-16-26_stereo_centre_02",
+   "drive_id": "13rMbjJZp6dSmDC4-5Vtu0W2XhumPNSQJ",
+   "split": "trainval",
+   "duration": 500.0,
+   "events": [
+    {
+     "query_id": "stop",
+     "start_sec": 0.0,
+     "end_sec": 15.416666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 74.16666666666667,
+     "end_sec": 78.91666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 159.91666666666666,
+     "end_sec": 167.16666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 227.41666666666666,
+     "end_sec": 254.66666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 373.6666666666667,
+     "end_sec": 376.9166666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 23.666666666666668,
+     "end_sec": 31.166666666666668
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 378.4166666666667,
+     "end_sec": 387.4166666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 479.9166666666667,
+     "end_sec": 491.1666666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 78.91666666666667,
+     "end_sec": 85.91666666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 167.16666666666666,
+     "end_sec": 176.66666666666666
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 321.1666666666667,
+     "end_sec": 331.9166666666667
+    }
+   ]
+  },
+  {
+   "id": "2015-02-13-09-16-26_stereo_centre_05",
+   "drive_id": "1NUUqGImP5_4VDcs4ocOT_cyDmsnuYF39",
+   "split": "trainval",
+   "duration": 500.0,
+   "events": [
+    {
+     "query_id": "move_left",
+     "start_sec": 15.166666666666666,
+     "end_sec": 17.416666666666668
+    },
+    {
+     "query_id": "move_right",
+     "start_sec": 9.416666666666666,
+     "end_sec": 12.166666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 50.416666666666664,
+     "end_sec": 56.416666666666664
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 169.41666666666666,
+     "end_sec": 184.66666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 210.41666666666666,
+     "end_sec": 277.6666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 299.6666666666667,
+     "end_sec": 305.4166666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 119.91666666666667,
+     "end_sec": 125.16666666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 366.9166666666667,
+     "end_sec": 373.1666666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 426.1666666666667,
+     "end_sec": 433.1666666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 18.916666666666668,
+     "end_sec": 25.666666666666668
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 65.16666666666667,
+     "end_sec": 70.91666666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 187.41666666666666,
+     "end_sec": 191.66666666666666
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 308.4166666666667,
+     "end_sec": 316.4166666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 401.4166666666667,
+     "end_sec": 409.6666666666667
+    }
+   ]
+  },
+  {
+   "id": "2015-02-24-12-32-19_stereo_centre_04",
+   "drive_id": "1XSw5S3aRfYfKxn_KwZPg-aLmsl5HkAne",
+   "split": "trainval",
+   "duration": 500.0,
+   "events": [
+    {
+     "query_id": "stop",
+     "start_sec": 2.4166666666666665,
+     "end_sec": 2.9166666666666665
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 28.916666666666668,
+     "end_sec": 33.416666666666664
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 80.91666666666667,
+     "end_sec": 90.66666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 110.16666666666667,
+     "end_sec": 173.41666666666666
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 0.0,
+     "end_sec": 0.4166666666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 19.166666666666668,
+     "end_sec": 28.916666666666668
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 45.416666666666664,
+     "end_sec": 48.416666666666664
+    }
+   ]
+  },
+  {
+   "id": "2015-03-03-11-31-36_stereo_centre_01",
+   "drive_id": "1lB_0TS3dByoNuW2IoGbz2VfgAQoHlqW7",
+   "split": "trainval",
+   "duration": 500.0833333333333,
+   "events": [
+    {
+     "query_id": "stop",
+     "start_sec": 0.9166666666666666,
+     "end_sec": 22.916666666666668
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 39.416666666666664,
+     "end_sec": 52.166666666666664
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 119.66666666666667,
+     "end_sec": 133.16666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 166.66666666666666,
+     "end_sec": 171.41666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 260.1666666666667,
+     "end_sec": 310.9166666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 313.1666666666667,
+     "end_sec": 330.6666666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 69.91666666666667,
+     "end_sec": 76.66666666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 172.66666666666666,
+     "end_sec": 178.41666666666666
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 447.4166666666667,
+     "end_sec": 451.9166666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 24.416666666666668,
+     "end_sec": 37.916666666666664
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 340.6666666666667,
+     "end_sec": 347.6666666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 489.6666666666667,
+     "end_sec": 495.1666666666667
+    }
+   ]
+  },
+  {
+   "id": "2014-06-26-09-31-18_stereo_centre_02",
+   "drive_id": "11C_eU_Tf0l-zylQZdRR9GakChfpIKzCM",
+   "split": "test",
+   "duration": 500.0,
+   "events": [
+    {
+     "query_id": "stop",
+     "start_sec": 0.08333333333333333,
+     "end_sec": 48.0
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 61.0,
+     "end_sec": 68.5
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 73.5,
+     "end_sec": 80.75
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 104.25,
+     "end_sec": 111.5
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 114.0,
+     "end_sec": 127.75
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 303.5,
+     "end_sec": 317.75
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 326.0,
+     "end_sec": 328.25
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 364.0,
+     "end_sec": 475.25
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 136.75,
+     "end_sec": 141.0
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 260.25,
+     "end_sec": 264.5
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 354.25,
+     "end_sec": 359.5
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 161.75,
+     "end_sec": 166.75
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 222.25,
+     "end_sec": 227.0
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 479.25,
+     "end_sec": 484.5
+    }
+   ]
+  },
+  {
+   "id": "2014-12-10-18-10-50_stereo_centre_02",
+   "drive_id": "1wLgmOinYyQTTSQeBzX5jG3TfCnLoBKsE",
+   "split": "test",
+   "duration": 500.0,
+   "events": [
+    {
+     "query_id": "overtake",
+     "start_sec": 253.0,
+     "end_sec": 257.75
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 172.75,
+     "end_sec": 203.25
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 347.0,
+     "end_sec": 376.0
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 435.75,
+     "end_sec": 499.9166666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 384.25,
+     "end_sec": 390.5
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 41.5,
+     "end_sec": 46.25
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 123.0,
+     "end_sec": 127.75
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 267.25,
+     "end_sec": 287.0
+    }
+   ]
+  },
+  {
+   "id": "2015-02-06-13-57-16_stereo_centre_01",
+   "drive_id": "1BJBPXesDIUzxPS1olptp0kK3pxX7twce",
+   "split": "test",
+   "duration": 500.0833333333333,
+   "events": [
+    {
+     "query_id": "move_left",
+     "start_sec": 365.6666666666667,
+     "end_sec": 369.1666666666667
+    },
+    {
+     "query_id": "move_right",
+     "start_sec": 360.4166666666667,
+     "end_sec": 362.4166666666667
+    },
+    {
+     "query_id": "overtake",
+     "start_sec": 362.6666666666667,
+     "end_sec": 365.6666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 0.0,
+     "end_sec": 12.416666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 39.416666666666664,
+     "end_sec": 53.666666666666664
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 72.16666666666667,
+     "end_sec": 86.91666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 229.66666666666666,
+     "end_sec": 230.41666666666666
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 332.1666666666667,
+     "end_sec": 340.6666666666667
+    },
+    {
+     "query_id": "stop",
+     "start_sec": 392.1666666666667,
+     "end_sec": 421.9166666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 87.16666666666667,
+     "end_sec": 96.91666666666667
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 194.41666666666666,
+     "end_sec": 199.41666666666666
+    },
+    {
+     "query_id": "turn_left",
+     "start_sec": 431.6666666666667,
+     "end_sec": 433.4166666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 275.1666666666667,
+     "end_sec": 282.4166666666667
+    },
+    {
+     "query_id": "turn_right",
+     "start_sec": 473.6666666666667,
+     "end_sec": 479.1666666666667
+    }
+   ]
+  }
+ ]
+}

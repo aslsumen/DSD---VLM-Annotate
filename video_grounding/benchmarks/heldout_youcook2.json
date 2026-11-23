@@ -1,0 +1,3433 @@
+{
+ "seed": 0,
+ "min_sec": 300,
+ "max_sec": 1800,
+ "videos": [
+  {
+   "id": "7D4uMKxLDT0",
+   "subset": "validation",
+   "recipe_type": "201",
+   "duration": 325.68,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "mix egg whites and olive oil together"
+    },
+    {
+     "query_id": "s1",
+     "text": "mix bread crumbs and parmesan cheese together"
+    },
+    {
+     "query_id": "s2",
+     "text": "spray the pan with cooking spray"
+    },
+    {
+     "query_id": "s3",
+     "text": "place the chicken on the sheet"
+    },
+    {
+     "query_id": "s4",
+     "text": "brush the chicken with the oil mixture and dip into the breadcrumb mixture"
+    },
+    {
+     "query_id": "s5",
+     "text": "spray the chicken with cooking spray and cook the chicken in the oven"
+    },
+    {
+     "query_id": "s6",
+     "text": "flip the chicken over and spread sauce onto the chicken"
+    },
+    {
+     "query_id": "s7",
+     "text": "add cheese on top and bake in the oven"
+    },
+    {
+     "query_id": "absent0",
+     "text": "in a new heating pot add some butter flour and mix it nicely"
+    },
+    {
+     "query_id": "absent1",
+     "text": "taste the stir fry"
+    },
+    {
+     "query_id": "absent2",
+     "text": "squeeze moisture out of potatos and onion"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 65.0,
+     "end_sec": 80.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 80.0,
+     "end_sec": 100.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 108.0,
+     "end_sec": 112.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 112.0,
+     "end_sec": 117.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 117.0,
+     "end_sec": 127.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 140.0,
+     "end_sec": 149.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 149.0,
+     "end_sec": 158.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 158.0,
+     "end_sec": 179.0
+    }
+   ]
+  },
+  {
+   "id": "6seOEuK0ojg",
+   "subset": "validation",
+   "recipe_type": "401",
+   "duration": 456.78,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "add onion paste"
+    },
+    {
+     "query_id": "s1",
+     "text": "add garlic paste"
+    },
+    {
+     "query_id": "s2",
+     "text": "add ginger paste"
+    },
+    {
+     "query_id": "s3",
+     "text": "add yogurt"
+    },
+    {
+     "query_id": "s4",
+     "text": "add tumeric and chili powder"
+    },
+    {
+     "query_id": "s5",
+     "text": "add cumin powder and coriander powder"
+    },
+    {
+     "query_id": "s6",
+     "text": "add salt"
+    },
+    {
+     "query_id": "s7",
+     "text": "add oil"
+    },
+    {
+     "query_id": "s8",
+     "text": "add oil to the pan"
+    },
+    {
+     "query_id": "s9",
+     "text": "add cardamom cinnamon sticks and cloves"
+    },
+    {
+     "query_id": "s10",
+     "text": "stir the food in the pan"
+    },
+    {
+     "query_id": "s11",
+     "text": "add tomato paste to the pan"
+    },
+    {
+     "query_id": "s12",
+     "text": "add garam marsala and sugar"
+    },
+    {
+     "query_id": "s13",
+     "text": "stir the food"
+    },
+    {
+     "query_id": "absent0",
+     "text": "add the mashed chick peas and the whole chick peas to the pan and stir"
+    },
+    {
+     "query_id": "absent1",
+     "text": "mince the parsley and mint"
+    },
+    {
+     "query_id": "absent2",
+     "text": "lay the bamboo sheet over the top and squeeze"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 114.0,
+     "end_sec": 120.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 120.0,
+     "end_sec": 123.0
+    },
+    {
+     "query_id": "s10",
+     "start_sec": 290.0,
+     "end_sec": 310.0
+    },
+    {
+     "query_id": "s11",
+     "start_sec": 328.0,
+     "end_sec": 336.0
+    },
+    {
+     "query_id": "s12",
+     "start_sec": 391.0,
+     "end_sec": 401.0
+    },
+    {
+     "query_id": "s13",
+     "start_sec": 405.0,
+     "end_sec": 415.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 125.0,
+     "end_sec": 128.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 130.0,
+     "end_sec": 137.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 139.0,
+     "end_sec": 148.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 151.0,
+     "end_sec": 158.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 161.0,
+     "end_sec": 164.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 169.0,
+     "end_sec": 183.0
+    },
+    {
+     "query_id": "s8",
+     "start_sec": 225.0,
+     "end_sec": 233.0
+    },
+    {
+     "query_id": "s9",
+     "start_sec": 247.0,
+     "end_sec": 255.0
+    }
+   ]
+  },
+  {
+   "id": "4nxbRG6-sfw",
+   "subset": "validation",
+   "recipe_type": "301",
+   "duration": 344.65,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "add salt rice wine soy sauce and corn starch to a bowl and mix"
+    },
+    {
+     "query_id": "s1",
+     "text": "pour the marinade onto the chicken and mix"
+    },
+    {
+     "query_id": "s2",
+     "text": "add sugar corn starch soy sauce black vinegar and sesame oil to water and mix"
+    },
+    {
+     "query_id": "s3",
+     "text": "pour oil onto a hot wok"
+    },
+    {
+     "query_id": "s4",
+     "text": "add chilis and szechuan peppercorn to the wok and stir"
+    },
+    {
+     "query_id": "s5",
+     "text": "add the chicken to the wok"
+    },
+    {
+     "query_id": "s6",
+     "text": "add green onion garlic and ginger to the wok"
+    },
+    {
+     "query_id": "s7",
+     "text": "pour the sauce into the wok and stir"
+    },
+    {
+     "query_id": "absent0",
+     "text": "slice the celery stalks"
+    },
+    {
+     "query_id": "absent1",
+     "text": "add some chopped tomatoes and mix it"
+    },
+    {
+     "query_id": "absent2",
+     "text": "place the filling on the center of the dosa"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 15.0,
+     "end_sec": 45.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 46.0,
+     "end_sec": 57.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 62.0,
+     "end_sec": 112.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 142.0,
+     "end_sec": 155.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 158.0,
+     "end_sec": 215.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 219.0,
+     "end_sec": 225.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 237.0,
+     "end_sec": 243.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 276.0,
+     "end_sec": 332.0
+    }
+   ]
+  },
+  {
+   "id": "9BNRMHGepS4",
+   "subset": "validation",
+   "recipe_type": "119",
+   "duration": 317.18,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "saute the onions peppers and garlic in a pan"
+    },
+    {
+     "query_id": "s1",
+     "text": "take the bread soaked in the milk and squeeze the bread to make it dry"
+    },
+    {
+     "query_id": "s2",
+     "text": "chop the bread and add salt and pepper to the salted vegetables"
+    },
+    {
+     "query_id": "s3",
+     "text": "add the bread eggs salt black pepper cumin chili pepper and cayenne pepper to the beef"
+    },
+    {
+     "query_id": "s4",
+     "text": "add the salted mixture to the beef bowl and mix the ingredients"
+    },
+    {
+     "query_id": "s5",
+     "text": "add some barbecue sauce and place the meat in the loaf pan"
+    },
+    {
+     "query_id": "s6",
+     "text": "pour some barbecue sauce on the meat loaf and bake the meatloaf"
+    },
+    {
+     "query_id": "s7",
+     "text": "spread barbecue sauce on the meatloaf"
+    },
+    {
+     "query_id": "absent0",
+     "text": "cover the chicken and refrigerate it for few hours"
+    },
+    {
+     "query_id": "absent1",
+     "text": "stir the mashed potatoes and add cream"
+    },
+    {
+     "query_id": "absent2",
+     "text": "mix in cheese"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 19.0,
+     "end_sec": 37.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 37.0,
+     "end_sec": 51.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 51.0,
+     "end_sec": 75.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 75.0,
+     "end_sec": 111.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 111.0,
+     "end_sec": 133.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 133.0,
+     "end_sec": 194.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 194.0,
+     "end_sec": 240.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 241.0,
+     "end_sec": 250.0
+    }
+   ]
+  },
+  {
+   "id": "9guuyTr8EUg",
+   "subset": "validation",
+   "recipe_type": "302",
+   "duration": 468.14,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "cook the rice noodles in boiling water"
+    },
+    {
+     "query_id": "s1",
+     "text": "combine soy sauce garlic ginger sesame seeds red pepper and salt"
+    },
+    {
+     "query_id": "s2",
+     "text": "pour oil into the wok"
+    },
+    {
+     "query_id": "s3",
+     "text": "add the spice mixture and onions to the wok"
+    },
+    {
+     "query_id": "s4",
+     "text": "add the rice noodles and bean sprouts to the wok and stir"
+    },
+    {
+     "query_id": "s5",
+     "text": "add the vegetables to the wok and stir"
+    },
+    {
+     "query_id": "s6",
+     "text": "mix flour and water together"
+    },
+    {
+     "query_id": "s7",
+     "text": "heat the paste in the microwave"
+    },
+    {
+     "query_id": "s8",
+     "text": "place the filling on the corner of the wrapper"
+    },
+    {
+     "query_id": "s9",
+     "text": "roll the wrapper half way up"
+    },
+    {
+     "query_id": "s10",
+     "text": "fold the sides of the wrapper in"
+    },
+    {
+     "query_id": "s11",
+     "text": "roll the wrapper all the way up and seal with the paste"
+    },
+    {
+     "query_id": "s12",
+     "text": "place the spring rolls in the oil"
+    },
+    {
+     "query_id": "s13",
+     "text": "cook the spring rolls until golden brown"
+    },
+    {
+     "query_id": "absent0",
+     "text": "boil carrots and add to hot pot"
+    },
+    {
+     "query_id": "absent1",
+     "text": "saute chopped celery carrots and onion"
+    },
+    {
+     "query_id": "absent2",
+     "text": "pour wine over the snails in a bowl"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 86.0,
+     "end_sec": 110.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 120.0,
+     "end_sec": 166.0
+    },
+    {
+     "query_id": "s10",
+     "start_sec": 325.0,
+     "end_sec": 333.0
+    },
+    {
+     "query_id": "s11",
+     "start_sec": 333.0,
+     "end_sec": 348.0
+    },
+    {
+     "query_id": "s12",
+     "start_sec": 365.0,
+     "end_sec": 372.0
+    },
+    {
+     "query_id": "s13",
+     "start_sec": 372.0,
+     "end_sec": 394.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 170.0,
+     "end_sec": 177.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 178.0,
+     "end_sec": 193.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 203.0,
+     "end_sec": 212.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 231.0,
+     "end_sec": 259.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 269.0,
+     "end_sec": 280.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 283.0,
+     "end_sec": 290.0
+    },
+    {
+     "query_id": "s8",
+     "start_sec": 310.0,
+     "end_sec": 314.0
+    },
+    {
+     "query_id": "s9",
+     "start_sec": 314.0,
+     "end_sec": 325.0
+    }
+   ]
+  },
+  {
+   "id": "LeCwqp8Bic8",
+   "subset": "validation",
+   "recipe_type": "418",
+   "duration": 342.84000000000003,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "add onions tomatoes and water to a pressure cooker and cook"
+    },
+    {
+     "query_id": "s1",
+     "text": "add the onion and tomato to a blender and blend"
+    },
+    {
+     "query_id": "s2",
+     "text": "add oil cumin seeds ginger garlic paste garam masala coriander powder chili powder and turmeric powder to a pan"
+    },
+    {
+     "query_id": "s3",
+     "text": "add the tomato and onion paste to the pan"
+    },
+    {
+     "query_id": "s4",
+     "text": "add the cooked chickpeas to the pan"
+    },
+    {
+     "query_id": "s5",
+     "text": "add dried fenugreek leaves to the pan"
+    },
+    {
+     "query_id": "s6",
+     "text": "add sweetened condensed milk to the pan"
+    },
+    {
+     "query_id": "s7",
+     "text": "garnish with coriander leaves and lime juice"
+    },
+    {
+     "query_id": "absent0",
+     "text": "place the beef mixture in the meatload pan"
+    },
+    {
+     "query_id": "absent1",
+     "text": "coat the fish in flour and batter"
+    },
+    {
+     "query_id": "absent2",
+     "text": "fold the tortilla add some cheese on it and bake it in the oven"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 53.0,
+     "end_sec": 92.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 108.0,
+     "end_sec": 113.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 130.0,
+     "end_sec": 175.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 176.0,
+     "end_sec": 183.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 198.0,
+     "end_sec": 208.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 220.0,
+     "end_sec": 229.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 260.0,
+     "end_sec": 270.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 290.0,
+     "end_sec": 302.0
+    }
+   ]
+  },
+  {
+   "id": "4ZbNtfqKkiI",
+   "subset": "validation",
+   "recipe_type": "227",
+   "duration": 301.35,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "add tomatoes to the herbs"
+    },
+    {
+     "query_id": "s1",
+     "text": "add cracked wheat mint salt lemon juice olive oil"
+    },
+    {
+     "query_id": "s2",
+     "text": "mix the salad"
+    },
+    {
+     "query_id": "absent0",
+     "text": "add peanuts and serve"
+    },
+    {
+     "query_id": "absent1",
+     "text": "turn the bacon over"
+    },
+    {
+     "query_id": "absent2",
+     "text": "mix the milk and apple cider vinegar"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 133.0,
+     "end_sec": 142.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 143.0,
+     "end_sec": 175.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 180.0,
+     "end_sec": 234.0
+    }
+   ]
+  },
+  {
+   "id": "DVW7nZeeVlk",
+   "subset": "validation",
+   "recipe_type": "416",
+   "duration": 349.68,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "place the dal in a pressure cooker with four cups of water"
+    },
+    {
+     "query_id": "s1",
+     "text": "add the salt turmeric ginger and green chili"
+    },
+    {
+     "query_id": "s2",
+     "text": "cover the pot and cook"
+    },
+    {
+     "query_id": "s3",
+     "text": "uncover the pot and stir"
+    },
+    {
+     "query_id": "s4",
+     "text": "lightly mash the kidney beans and dal and cook"
+    },
+    {
+     "query_id": "s5",
+     "text": "add cream garam masala and amchoor powder"
+    },
+    {
+     "query_id": "s6",
+     "text": "heat the ghee in a small saucepan"
+    },
+    {
+     "query_id": "s7",
+     "text": "add cumin seeds"
+    },
+    {
+     "query_id": "s8",
+     "text": "add the asafetida and red chilies"
+    },
+    {
+     "query_id": "s9",
+     "text": "pour the spiced ghee over the dal"
+    },
+    {
+     "query_id": "s10",
+     "text": "garnish with shredded ginger"
+    },
+    {
+     "query_id": "absent0",
+     "text": "heat up the griddle"
+    },
+    {
+     "query_id": "absent1",
+     "text": "cut the onion into slices and separate the rings"
+    },
+    {
+     "query_id": "absent2",
+     "text": "fry the dry fruits in oil and transfer to a bowl"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 110.0,
+     "end_sec": 120.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 121.0,
+     "end_sec": 138.0
+    },
+    {
+     "query_id": "s10",
+     "start_sec": 317.0,
+     "end_sec": 325.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 142.0,
+     "end_sec": 157.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 161.0,
+     "end_sec": 170.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 171.0,
+     "end_sec": 197.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 200.0,
+     "end_sec": 211.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 238.0,
+     "end_sec": 253.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 281.0,
+     "end_sec": 282.0
+    },
+    {
+     "query_id": "s8",
+     "start_sec": 283.0,
+     "end_sec": 290.0
+    },
+    {
+     "query_id": "s9",
+     "start_sec": 305.0,
+     "end_sec": 311.0
+    }
+   ]
+  },
+  {
+   "id": "2HsWZdKKBGg",
+   "subset": "validation",
+   "recipe_type": "225",
+   "duration": 386.68,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "heat butter and olive oil in a large pan"
+    },
+    {
+     "query_id": "s1",
+     "text": "chop pancetta into cubes"
+    },
+    {
+     "query_id": "s2",
+     "text": "fry the pancetta in the pan"
+    },
+    {
+     "query_id": "s3",
+     "text": "chop celery carrots onion and garlic and place them in the pan"
+    },
+    {
+     "query_id": "s4",
+     "text": "add diced tomatoes beans herbs and broth into the pan"
+    },
+    {
+     "query_id": "s5",
+     "text": "add cooked pasta into the pan"
+    },
+    {
+     "query_id": "s6",
+     "text": "remove herb stems from the pan"
+    },
+    {
+     "query_id": "absent0",
+     "text": "boil the pot of cream and spring onions"
+    },
+    {
+     "query_id": "absent1",
+     "text": "brush the sauce on the sushi"
+    },
+    {
+     "query_id": "absent2",
+     "text": "break cheese slices into four pieces and place them on the center of one patty"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 15.0,
+     "end_sec": 25.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 37.0,
+     "end_sec": 55.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 56.0,
+     "end_sec": 72.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 74.0,
+     "end_sec": 223.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 232.0,
+     "end_sec": 282.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 307.0,
+     "end_sec": 347.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 349.0,
+     "end_sec": 361.0
+    }
+   ]
+  },
+  {
+   "id": "5nh2CP22dgY",
+   "subset": "validation",
+   "recipe_type": "209",
+   "duration": 479.54,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "cook ground lamb with oil in a pan"
+    },
+    {
+     "query_id": "s1",
+     "text": "add flour and stir"
+    },
+    {
+     "query_id": "s2",
+     "text": "add chopped onion garlic carrot and mushrooms"
+    },
+    {
+     "query_id": "s3",
+     "text": "add a little worcestershire sauce and tomato puree and stir"
+    },
+    {
+     "query_id": "s4",
+     "text": "sprinkle some chopped rosemary on top"
+    },
+    {
+     "query_id": "s5",
+     "text": "add some chicken stock to the pan"
+    },
+    {
+     "query_id": "s6",
+     "text": "prepare some boiled potatoes and mash them with butter"
+    },
+    {
+     "query_id": "s7",
+     "text": "sprinkle some pepper in the potatoes"
+    },
+    {
+     "query_id": "s8",
+     "text": "put the lamb mixture in a baking pan and add some peas"
+    },
+    {
+     "query_id": "s9",
+     "text": "cover the pan with mashed potatoes"
+    },
+    {
+     "query_id": "s10",
+     "text": "spread some parmesan cheese on top"
+    },
+    {
+     "query_id": "absent0",
+     "text": "add chili powder coriander and tumeric and mix"
+    },
+    {
+     "query_id": "absent1",
+     "text": "put the sliced sirloins in to a zip lock cover"
+    },
+    {
+     "query_id": "absent2",
+     "text": "saute the onions"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 8.0,
+     "end_sec": 51.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 57.0,
+     "end_sec": 70.0
+    },
+    {
+     "query_id": "s10",
+     "start_sec": 345.0,
+     "end_sec": 378.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 73.0,
+     "end_sec": 95.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 98.0,
+     "end_sec": 130.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 135.0,
+     "end_sec": 157.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 161.0,
+     "end_sec": 177.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 240.0,
+     "end_sec": 290.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 300.0,
+     "end_sec": 308.0
+    },
+    {
+     "query_id": "s8",
+     "start_sec": 309.0,
+     "end_sec": 326.0
+    },
+    {
+     "query_id": "s9",
+     "start_sec": 328.0,
+     "end_sec": 342.0
+    }
+   ]
+  },
+  {
+   "id": "LjfTvZ-cmzs",
+   "subset": "validation",
+   "recipe_type": "210",
+   "duration": 347.06,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "peel and grate potatoes into a bowl"
+    },
+    {
+     "query_id": "s1",
+     "text": "squeeze the potatoes"
+    },
+    {
+     "query_id": "s2",
+     "text": "add the potatoes to the bowl and grate cooked potatoes into it and mix together"
+    },
+    {
+     "query_id": "s3",
+     "text": "add flour salt pepper and oil"
+    },
+    {
+     "query_id": "s4",
+     "text": "heat oil and butter in a pan and cook bacon in another pan"
+    },
+    {
+     "query_id": "s5",
+     "text": "roll a ball of potato mixture put it on the greased pan  press it and fry"
+    },
+    {
+     "query_id": "s6",
+     "text": "crack and fry the eggs"
+    },
+    {
+     "query_id": "s7",
+     "text": "cook the boxty with the bacon"
+    },
+    {
+     "query_id": "s8",
+     "text": "plate boxty cooked bacon and fried egg"
+    },
+    {
+     "query_id": "absent0",
+     "text": "add the salad to a a bowl of lettuce"
+    },
+    {
+     "query_id": "absent1",
+     "text": "cut the tofu into squares"
+    },
+    {
+     "query_id": "absent2",
+     "text": "add cumin powder to the pan and stir"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 45.0,
+     "end_sec": 55.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 63.0,
+     "end_sec": 71.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 75.0,
+     "end_sec": 90.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 94.0,
+     "end_sec": 161.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 163.0,
+     "end_sec": 176.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 187.0,
+     "end_sec": 217.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 219.0,
+     "end_sec": 227.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 228.0,
+     "end_sec": 233.0
+    },
+    {
+     "query_id": "s8",
+     "start_sec": 246.0,
+     "end_sec": 267.0
+    }
+   ]
+  },
+  {
+   "id": "-goI2-eJO1w",
+   "subset": "validation",
+   "recipe_type": "124",
+   "duration": 396.57,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "saute onions jalapeno and garlic"
+    },
+    {
+     "query_id": "s1",
+     "text": "put the meat in the pan and pour beer in"
+    },
+    {
+     "query_id": "s2",
+     "text": "add some cumin chili powder paprika worcestershire sauce dry mustard tomato paste and simmer the mixture"
+    },
+    {
+     "query_id": "s3",
+     "text": "add some apple cider vinegar to the pot"
+    },
+    {
+     "query_id": "s4",
+     "text": "simmer the hotdogs"
+    },
+    {
+     "query_id": "s5",
+     "text": "place the hotdog chili cheese jalapeno onion and mustard sauce in the bun"
+    },
+    {
+     "query_id": "absent0",
+     "text": "add sofrito to the clams and stir"
+    },
+    {
+     "query_id": "absent1",
+     "text": "add the snow peas to the pan"
+    },
+    {
+     "query_id": "absent2",
+     "text": "as bubbles appear turn the pan and cook the other side on high flame and brush melted butter"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 48.0,
+     "end_sec": 104.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 104.0,
+     "end_sec": 121.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 143.0,
+     "end_sec": 187.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 198.0,
+     "end_sec": 200.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 233.0,
+     "end_sec": 265.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 272.0,
+     "end_sec": 323.0
+    }
+   ]
+  },
+  {
+   "id": "0hb6NShH9hY",
+   "subset": "validation",
+   "recipe_type": "314",
+   "duration": 305.74,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "boil the water and cook the ramen noodles"
+    },
+    {
+     "query_id": "s1",
+     "text": "remove the cooked noodles and rinse in cold water"
+    },
+    {
+     "query_id": "s2",
+     "text": "add miso and ramen noodles to a jar"
+    },
+    {
+     "query_id": "s3",
+     "text": "wrap soy sauce eggs tofu and green onions and place in jar"
+    },
+    {
+     "query_id": "s4",
+     "text": "place packed seaweed into the jar"
+    },
+    {
+     "query_id": "s5",
+     "text": "add chicken bouillon paste and noodles to a jar"
+    },
+    {
+     "query_id": "s6",
+     "text": "add raw broccoli and shiitake mushrooms to the noodles"
+    },
+    {
+     "query_id": "s7",
+     "text": "place wrapped soy sauce eggs tofu some chicken pieces and chopped green onions in the jar"
+    },
+    {
+     "query_id": "s8",
+     "text": "take out the wrapped ingredients add boiling water and cover the jar"
+    },
+    {
+     "query_id": "s9",
+     "text": "remove the lid and stir and then add tofu and eggs"
+    },
+    {
+     "query_id": "s10",
+     "text": "take out the wrapped ingredients and add boiling water"
+    },
+    {
+     "query_id": "s11",
+     "text": "add the wrapped ingredients"
+    },
+    {
+     "query_id": "absent0",
+     "text": "sprinkle some chat masala"
+    },
+    {
+     "query_id": "absent1",
+     "text": "add butter and mash the potatoes"
+    },
+    {
+     "query_id": "absent2",
+     "text": "scoop the potato mixture and fry them in a pan"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 72.0,
+     "end_sec": 80.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 81.0,
+     "end_sec": 87.0
+    },
+    {
+     "query_id": "s10",
+     "start_sec": 245.0,
+     "end_sec": 249.0
+    },
+    {
+     "query_id": "s11",
+     "start_sec": 250.0,
+     "end_sec": 257.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 123.0,
+     "end_sec": 128.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 134.0,
+     "end_sec": 159.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 165.0,
+     "end_sec": 167.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 168.0,
+     "end_sec": 178.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 179.0,
+     "end_sec": 188.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 190.0,
+     "end_sec": 202.0
+    },
+    {
+     "query_id": "s8",
+     "start_sec": 212.0,
+     "end_sec": 226.0
+    },
+    {
+     "query_id": "s9",
+     "start_sec": 227.0,
+     "end_sec": 237.0
+    }
+   ]
+  },
+  {
+   "id": "10dZTHlkb8w",
+   "subset": "validation",
+   "recipe_type": "101",
+   "duration": 359.28,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "cook the bacon on a grill for one minute"
+    },
+    {
+     "query_id": "s1",
+     "text": "spread pesto on slices of bread"
+    },
+    {
+     "query_id": "s2",
+     "text": "add shredded cheese onto the bread"
+    },
+    {
+     "query_id": "s3",
+     "text": "add tomatoes to the bread slices"
+    },
+    {
+     "query_id": "s4",
+     "text": "add the bacon to the bread slices"
+    },
+    {
+     "query_id": "s5",
+     "text": "add basil to the bread slices"
+    },
+    {
+     "query_id": "s6",
+     "text": "add spinach to the bread slices"
+    },
+    {
+     "query_id": "s7",
+     "text": "top the sandwiches with bread"
+    },
+    {
+     "query_id": "s8",
+     "text": "cook the sandwiches on the grill"
+    },
+    {
+     "query_id": "absent0",
+     "text": "add half cup vodka and  stir"
+    },
+    {
+     "query_id": "absent1",
+     "text": "prepare some ground beef in a large bowl"
+    },
+    {
+     "query_id": "absent2",
+     "text": "garnish with the fried peppers"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 80.0,
+     "end_sec": 95.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 115.0,
+     "end_sec": 145.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 155.0,
+     "end_sec": 175.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 175.0,
+     "end_sec": 185.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 195.0,
+     "end_sec": 205.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 210.0,
+     "end_sec": 215.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 210.0,
+     "end_sec": 225.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 250.0,
+     "end_sec": 255.0
+    },
+    {
+     "query_id": "s8",
+     "start_sec": 260.0,
+     "end_sec": 264.0
+    }
+   ]
+  },
+  {
+   "id": "DrXVuj1Qowo",
+   "subset": "validation",
+   "recipe_type": "418",
+   "duration": 469.51,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "soak the channas in water and then transfer it into the pressure cooker"
+    },
+    {
+     "query_id": "s1",
+     "text": "add in cinnamon stick bay leaf black cardamom teabags and salt"
+    },
+    {
+     "query_id": "s2",
+     "text": "close pressure cooker and allow it to whistle twice and then lower heat to cook for another 20 min"
+    },
+    {
+     "query_id": "s3",
+     "text": "once done allow the pressure to go down and then open"
+    },
+    {
+     "query_id": "s4",
+     "text": "separate the water and the channas do not discard the water"
+    },
+    {
+     "query_id": "s5",
+     "text": "in a pan heat oil on medium heat"
+    },
+    {
+     "query_id": "s6",
+     "text": "once hot add in the asafoetida and right after that add in the crushed tomatoes"
+    },
+    {
+     "query_id": "s7",
+     "text": "cook till the tomatoes separate from the oil"
+    },
+    {
+     "query_id": "s8",
+     "text": "add in the channa masala chaat masala red chilli powder dry mango powder and anardana powder"
+    },
+    {
+     "query_id": "s9",
+     "text": "add in the channas/chole and mix again"
+    },
+    {
+     "query_id": "s10",
+     "text": "add in the water that had been set aside little at a time"
+    },
+    {
+     "query_id": "s11",
+     "text": "mix occasionaly and cover and allow the channas to cook"
+    },
+    {
+     "query_id": "absent0",
+     "text": "garnish with some parsley leaves and lemon juice before serve"
+    },
+    {
+     "query_id": "absent1",
+     "text": "cut the sushi roll and place on the serving plate"
+    },
+    {
+     "query_id": "absent2",
+     "text": "cut chicken breast into bite size cubes and place in bowl"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 73.0,
+     "end_sec": 81.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 82.0,
+     "end_sec": 90.0
+    },
+    {
+     "query_id": "s10",
+     "start_sec": 314.0,
+     "end_sec": 340.0
+    },
+    {
+     "query_id": "s11",
+     "start_sec": 340.0,
+     "end_sec": 424.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 108.0,
+     "end_sec": 119.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 120.0,
+     "end_sec": 140.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 146.0,
+     "end_sec": 159.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 192.0,
+     "end_sec": 194.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 198.0,
+     "end_sec": 203.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 214.0,
+     "end_sec": 230.0
+    },
+    {
+     "query_id": "s8",
+     "start_sec": 252.0,
+     "end_sec": 290.0
+    },
+    {
+     "query_id": "s9",
+     "start_sec": 296.0,
+     "end_sec": 314.0
+    }
+   ]
+  },
+  {
+   "id": "EsQbw20TQPA",
+   "subset": "validation",
+   "recipe_type": "216",
+   "duration": 308.4,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "peel the apple and chop it into pieces"
+    },
+    {
+     "query_id": "s1",
+     "text": "add olive oil and onions to the pot"
+    },
+    {
+     "query_id": "s2",
+     "text": "add the apple and garlic to the pot"
+    },
+    {
+     "query_id": "s3",
+     "text": "add the sauerkraut to the pot"
+    },
+    {
+     "query_id": "s4",
+     "text": "add water juniper berries and the bay leaf to the pot"
+    },
+    {
+     "query_id": "s5",
+     "text": "boil the bratwursts in water"
+    },
+    {
+     "query_id": "s6",
+     "text": "add butter and olive oil to a skillet"
+    },
+    {
+     "query_id": "s7",
+     "text": "cook the bratwursts on the skillet"
+    },
+    {
+     "query_id": "absent0",
+     "text": "put the spicy mixture on the roll and cover it with a cling wrap to keep it together"
+    },
+    {
+     "query_id": "absent1",
+     "text": "fold the dosa over to cover the mixture"
+    },
+    {
+     "query_id": "absent2",
+     "text": "separate the leaves from the stem of the parsley"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 27.0,
+     "end_sec": 49.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 54.0,
+     "end_sec": 67.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 73.0,
+     "end_sec": 85.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 86.0,
+     "end_sec": 100.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 110.0,
+     "end_sec": 125.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 132.0,
+     "end_sec": 146.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 189.0,
+     "end_sec": 205.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 205.0,
+     "end_sec": 235.0
+    }
+   ]
+  },
+  {
+   "id": "2IcWR76i1bo",
+   "subset": "validation",
+   "recipe_type": "202",
+   "duration": 443.4,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "slice celery carrot and mushroom into small pieces"
+    },
+    {
+     "query_id": "s1",
+     "text": "chop peeled potatoes to dices"
+    },
+    {
+     "query_id": "s2",
+     "text": "cut some tomatoes into puree"
+    },
+    {
+     "query_id": "s3",
+     "text": "shred some cabbage and prepare some cauliflowers"
+    },
+    {
+     "query_id": "s4",
+     "text": "slice some smoke ham to strips"
+    },
+    {
+     "query_id": "s5",
+     "text": "crush some garlic"
+    },
+    {
+     "query_id": "s6",
+     "text": "heat some olive oil in a pan"
+    },
+    {
+     "query_id": "s7",
+     "text": "add chopped vegetables and the ham"
+    },
+    {
+     "query_id": "s8",
+     "text": "add a little bit black pepper and stir"
+    },
+    {
+     "query_id": "s9",
+     "text": "add some oregano and basil and stir"
+    },
+    {
+     "query_id": "s10",
+     "text": "add tomato puree sweet peas chicken stock water and parmesan cheese to the pot"
+    },
+    {
+     "query_id": "s11",
+     "text": "cover the pan and cook in an oven"
+    },
+    {
+     "query_id": "s12",
+     "text": "add parsley peas salt pepper and pasta"
+    },
+    {
+     "query_id": "absent0",
+     "text": "place the tuna in a line on the sheet"
+    },
+    {
+     "query_id": "absent1",
+     "text": "take the dough in a separate bowl and let it aside for 30-40 minutes in a warm place"
+    },
+    {
+     "query_id": "absent2",
+     "text": "stir cream into the sauce"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 34.0,
+     "end_sec": 107.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 110.0,
+     "end_sec": 115.0
+    },
+    {
+     "query_id": "s10",
+     "start_sec": 249.0,
+     "end_sec": 286.0
+    },
+    {
+     "query_id": "s11",
+     "start_sec": 291.0,
+     "end_sec": 309.0
+    },
+    {
+     "query_id": "s12",
+     "start_sec": 347.0,
+     "end_sec": 365.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 118.0,
+     "end_sec": 123.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 126.0,
+     "end_sec": 130.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 136.0,
+     "end_sec": 144.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 145.0,
+     "end_sec": 149.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 156.0,
+     "end_sec": 160.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 164.0,
+     "end_sec": 192.0
+    },
+    {
+     "query_id": "s8",
+     "start_sec": 197.0,
+     "end_sec": 220.0
+    },
+    {
+     "query_id": "s9",
+     "start_sec": 228.0,
+     "end_sec": 241.0
+    }
+   ]
+  },
+  {
+   "id": "LQDP3xm8aRk",
+   "subset": "validation",
+   "recipe_type": "208",
+   "duration": 601.22,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "put potatoes and salt into a pot of water and boil"
+    },
+    {
+     "query_id": "s1",
+     "text": "fill second pot with peas mint salt sugar and water and boil"
+    },
+    {
+     "query_id": "s2",
+     "text": "add a little oil to a pan and add sausages on low heat"
+    },
+    {
+     "query_id": "s3",
+     "text": "add a little black pepper"
+    },
+    {
+     "query_id": "s4",
+     "text": "add a sliced onion to the sausage pan"
+    },
+    {
+     "query_id": "s5",
+     "text": "add dry italian herbs"
+    },
+    {
+     "query_id": "s6",
+     "text": "shake the pan"
+    },
+    {
+     "query_id": "s7",
+     "text": "remove sausages from pan"
+    },
+    {
+     "query_id": "s8",
+     "text": "add chopped tomato to onions and mix"
+    },
+    {
+     "query_id": "s9",
+     "text": "add splash of worchestire sauce and beef stock"
+    },
+    {
+     "query_id": "s10",
+     "text": "add smoked bbq sauce and add sausages"
+    },
+    {
+     "query_id": "s11",
+     "text": "add salt butter and nutmeg to the potatoes"
+    },
+    {
+     "query_id": "s12",
+     "text": "add milk and mash potatoes"
+    },
+    {
+     "query_id": "s13",
+     "text": "take out mint from peas and add butter and salt then mash"
+    },
+    {
+     "query_id": "s14",
+     "text": "add potatoes sausage onions and peas to plate"
+    },
+    {
+     "query_id": "absent0",
+     "text": "stretch out and press the dough"
+    },
+    {
+     "query_id": "absent1",
+     "text": "finely slice the cabbage"
+    },
+    {
+     "query_id": "absent2",
+     "text": "add mussels to the pot"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 40.0,
+     "end_sec": 53.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 56.0,
+     "end_sec": 80.0
+    },
+    {
+     "query_id": "s10",
+     "start_sec": 295.0,
+     "end_sec": 322.0
+    },
+    {
+     "query_id": "s11",
+     "start_sec": 335.0,
+     "end_sec": 366.0
+    },
+    {
+     "query_id": "s12",
+     "start_sec": 368.0,
+     "end_sec": 426.0
+    },
+    {
+     "query_id": "s13",
+     "start_sec": 429.0,
+     "end_sec": 455.0
+    },
+    {
+     "query_id": "s14",
+     "start_sec": 456.0,
+     "end_sec": 480.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 82.0,
+     "end_sec": 122.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 123.0,
+     "end_sec": 145.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 146.0,
+     "end_sec": 150.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 166.0,
+     "end_sec": 173.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 176.0,
+     "end_sec": 190.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 193.0,
+     "end_sec": 204.0
+    },
+    {
+     "query_id": "s8",
+     "start_sec": 210.0,
+     "end_sec": 230.0
+    },
+    {
+     "query_id": "s9",
+     "start_sec": 231.0,
+     "end_sec": 248.0
+    }
+   ]
+  },
+  {
+   "id": "-AwyG1JcMp8",
+   "subset": "validation",
+   "recipe_type": "309",
+   "duration": 307.5,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "combine kimchi sausage soy sauce sesame oil green onion ginger and red pepper flakes"
+    },
+    {
+     "query_id": "s1",
+     "text": "place the filling on a wrapper and press the edges together"
+    },
+    {
+     "query_id": "s2",
+     "text": "place the dumplings above a pot of boiling water"
+    },
+    {
+     "query_id": "s3",
+     "text": "mix soy sauce orange juice honey and sesame seeds"
+    },
+    {
+     "query_id": "s4",
+     "text": "dip the potsticker in the sauce"
+    },
+    {
+     "query_id": "absent0",
+     "text": "coat the chicken in the marinade"
+    },
+    {
+     "query_id": "absent1",
+     "text": "place enoki mushrooms and then salmon in the bowl"
+    },
+    {
+     "query_id": "absent2",
+     "text": "add miso paste and the drained noodles to the soup"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 44.0,
+     "end_sec": 92.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 101.0,
+     "end_sec": 117.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 160.0,
+     "end_sec": 181.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 192.0,
+     "end_sec": 229.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 262.0,
+     "end_sec": 267.0
+    }
+   ]
+  },
+  {
+   "id": "JqjwJIV6pI0",
+   "subset": "validation",
+   "recipe_type": "403",
+   "duration": 385.52,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "mix tamarind sauce plum sugar sugar fish sauce and a pinch of salt together"
+    },
+    {
+     "query_id": "s1",
+     "text": "heat olive oil in a pan  add the raddish and fried tofu"
+    },
+    {
+     "query_id": "s2",
+     "text": "crack eggs into the pan and stir fry"
+    },
+    {
+     "query_id": "s3",
+     "text": "add the shrimps to the pan"
+    },
+    {
+     "query_id": "s4",
+     "text": "add the rice noodles and a little water to the pan"
+    },
+    {
+     "query_id": "s5",
+     "text": "stir to mix the ingredients"
+    },
+    {
+     "query_id": "s6",
+     "text": "add the mixed sauce red chili powder leeks sprouts and nuts"
+    },
+    {
+     "query_id": "absent0",
+     "text": "garnish it with chopped pork cooked baby bok choy and then serve"
+    },
+    {
+     "query_id": "absent1",
+     "text": "peel the skin off the potatos"
+    },
+    {
+     "query_id": "absent2",
+     "text": "place the meatballs on spaghetti and sprinkle parmesan on top"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 26.0,
+     "end_sec": 63.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 125.0,
+     "end_sec": 134.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 137.0,
+     "end_sec": 153.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 154.0,
+     "end_sec": 160.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 163.0,
+     "end_sec": 172.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 174.0,
+     "end_sec": 192.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 193.0,
+     "end_sec": 226.0
+    }
+   ]
+  },
+  {
+   "id": "-Ju39A-G0Dk",
+   "subset": "validation",
+   "recipe_type": "225",
+   "duration": 496.02,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "pour a can of kidney beans in a pot"
+    },
+    {
+     "query_id": "s1",
+     "text": "pour the tomato puree in"
+    },
+    {
+     "query_id": "s2",
+     "text": "pour water into the pot"
+    },
+    {
+     "query_id": "s3",
+     "text": "add some oregano to the pot"
+    },
+    {
+     "query_id": "s4",
+     "text": "add some basil to the pot"
+    },
+    {
+     "query_id": "s5",
+     "text": "add a little bit salt and black pepper to the pot"
+    },
+    {
+     "query_id": "s6",
+     "text": "add garlic paste to the pot"
+    },
+    {
+     "query_id": "s7",
+     "text": "add chopped onion to the pot"
+    },
+    {
+     "query_id": "s8",
+     "text": "heat the soup and let it simmer"
+    },
+    {
+     "query_id": "s9",
+     "text": "pour the soup on the macaroni"
+    },
+    {
+     "query_id": "absent0",
+     "text": "place pistachio and raisins in a blender and mix"
+    },
+    {
+     "query_id": "absent1",
+     "text": "crack an egg into a pan and whisk"
+    },
+    {
+     "query_id": "absent2",
+     "text": "flip the foie gras over"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 107.0,
+     "end_sec": 114.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 134.0,
+     "end_sec": 143.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 151.0,
+     "end_sec": 155.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 176.0,
+     "end_sec": 186.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 188.0,
+     "end_sec": 196.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 204.0,
+     "end_sec": 227.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 229.0,
+     "end_sec": 243.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 247.0,
+     "end_sec": 256.0
+    },
+    {
+     "query_id": "s8",
+     "start_sec": 260.0,
+     "end_sec": 279.0
+    },
+    {
+     "query_id": "s9",
+     "start_sec": 295.0,
+     "end_sec": 314.0
+    }
+   ]
+  },
+  {
+   "id": "EedEYHqLfP8",
+   "subset": "validation",
+   "recipe_type": "106",
+   "duration": 346.2,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "boil a large pot of water and cook macaroni in the water"
+    },
+    {
+     "query_id": "s1",
+     "text": "pour macaroni on the baking dish and add butter and salt to macaroni"
+    },
+    {
+     "query_id": "s2",
+     "text": "add evaporated milk water and cheese"
+    },
+    {
+     "query_id": "s3",
+     "text": "add shredded cheese"
+    },
+    {
+     "query_id": "s4",
+     "text": "mix in an egg sauce and beer"
+    },
+    {
+     "query_id": "s5",
+     "text": "cover the top of macaroni with cheese"
+    },
+    {
+     "query_id": "s6",
+     "text": "bake the dish in the oven"
+    },
+    {
+     "query_id": "absent0",
+     "text": "add cardamom cinnamon sticks and cloves"
+    },
+    {
+     "query_id": "absent1",
+     "text": "fold the wrapper in half"
+    },
+    {
+     "query_id": "absent2",
+     "text": "add the chopped onion to it and stir"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 88.0,
+     "end_sec": 112.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 112.0,
+     "end_sec": 127.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 144.0,
+     "end_sec": 167.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 167.0,
+     "end_sec": 177.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 184.0,
+     "end_sec": 216.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 221.0,
+     "end_sec": 229.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 234.0,
+     "end_sec": 260.0
+    }
+   ]
+  },
+  {
+   "id": "DpuofwnCI8A",
+   "subset": "validation",
+   "recipe_type": "418",
+   "duration": 634.5,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "mash a bowl of chickpeas using a fork"
+    },
+    {
+     "query_id": "s1",
+     "text": "pour oil onto a hot pan"
+    },
+    {
+     "query_id": "s2",
+     "text": "add garam masala cloves cinnamon sticks bay leaf and cardamom to the pan"
+    },
+    {
+     "query_id": "s3",
+     "text": "add garlic ginger paste to the pan and stir"
+    },
+    {
+     "query_id": "s4",
+     "text": "add grated onion to the pan and stir"
+    },
+    {
+     "query_id": "s5",
+     "text": "add turmeric to the pan and stir"
+    },
+    {
+     "query_id": "s6",
+     "text": "add the mashed chick peas and the whole chick peas to the pan and stir"
+    },
+    {
+     "query_id": "s7",
+     "text": "garnish with cilantro leaves and stir"
+    },
+    {
+     "query_id": "absent0",
+     "text": "cook the dish in the oven"
+    },
+    {
+     "query_id": "absent1",
+     "text": "place it in the pre-heated oven"
+    },
+    {
+     "query_id": "absent2",
+     "text": "after the butter melts add mayo salt and paprika"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 150.0,
+     "end_sec": 196.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 205.0,
+     "end_sec": 217.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 245.0,
+     "end_sec": 290.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 292.0,
+     "end_sec": 325.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 326.0,
+     "end_sec": 364.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 379.0,
+     "end_sec": 405.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 438.0,
+     "end_sec": 481.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 549.0,
+     "end_sec": 560.0
+    }
+   ]
+  },
+  {
+   "id": "2SxbO4VAgN8",
+   "subset": "validation",
+   "recipe_type": "201",
+   "duration": 411.4,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "pound the chicken"
+    },
+    {
+     "query_id": "s1",
+     "text": "season the chicken breast with sea salt and black pepper"
+    },
+    {
+     "query_id": "s2",
+     "text": "coat the chicken breast with flour eggs and seasoned bread crumbs"
+    },
+    {
+     "query_id": "s3",
+     "text": "fry the chicken breast in the pan"
+    },
+    {
+     "query_id": "s4",
+     "text": "turn the chicken"
+    },
+    {
+     "query_id": "s5",
+     "text": "remove the chicken and drain it with paper towel"
+    },
+    {
+     "query_id": "s6",
+     "text": "place some tomato sauce and cheese on top of the chicken"
+    },
+    {
+     "query_id": "absent0",
+     "text": "pat escargot dry and place on mat"
+    },
+    {
+     "query_id": "absent1",
+     "text": "roll the ball of dough out"
+    },
+    {
+     "query_id": "absent2",
+     "text": "add milk to the pan and stir"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 32.0,
+     "end_sec": 78.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 120.0,
+     "end_sec": 128.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 137.0,
+     "end_sec": 191.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 193.0,
+     "end_sec": 196.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 224.0,
+     "end_sec": 238.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 261.0,
+     "end_sec": 271.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 313.0,
+     "end_sec": 380.0
+    }
+   ]
+  },
+  {
+   "id": "2heP32bqOV0",
+   "subset": "validation",
+   "recipe_type": "221",
+   "duration": 613.33,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "slice the meat into chunks"
+    },
+    {
+     "query_id": "s1",
+     "text": "mix paprika and pepper with the meat"
+    },
+    {
+     "query_id": "s2",
+     "text": "cut the onion into slices"
+    },
+    {
+     "query_id": "s3",
+     "text": "add oil to a pot"
+    },
+    {
+     "query_id": "s4",
+     "text": "cook the onions in the pot"
+    },
+    {
+     "query_id": "s5",
+     "text": "cook the meat in the pot"
+    },
+    {
+     "query_id": "s6",
+     "text": "add water to the pot"
+    },
+    {
+     "query_id": "s7",
+     "text": "add tomato paste onions cumin curry and seasoning to the pot"
+    },
+    {
+     "query_id": "absent0",
+     "text": "add hot chilly flakes to the bowl"
+    },
+    {
+     "query_id": "absent1",
+     "text": "repeat the same procedure for the tentacles also coat them with flour and keep aside"
+    },
+    {
+     "query_id": "absent2",
+     "text": "add rice to the wok"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 59.0,
+     "end_sec": 83.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 108.0,
+     "end_sec": 139.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 147.0,
+     "end_sec": 168.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 173.0,
+     "end_sec": 181.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 187.0,
+     "end_sec": 214.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 264.0,
+     "end_sec": 287.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 304.0,
+     "end_sec": 319.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 324.0,
+     "end_sec": 407.0
+    }
+   ]
+  },
+  {
+   "id": "2zFAZy0zSbw",
+   "subset": "validation",
+   "recipe_type": "303",
+   "duration": 374.17,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "mix soy sauce spicy sauce and sugar in a bowl"
+    },
+    {
+     "query_id": "s1",
+     "text": "pour oil into a hot pan"
+    },
+    {
+     "query_id": "s2",
+     "text": "add peppercorn ginger and garlic to the pan"
+    },
+    {
+     "query_id": "s3",
+     "text": "pour the sauce into the pan"
+    },
+    {
+     "query_id": "s4",
+     "text": "add the shrimp tofu and mushrooms to the pan"
+    },
+    {
+     "query_id": "s5",
+     "text": "stir all of the ingredients in the pan"
+    },
+    {
+     "query_id": "s6",
+     "text": "cover the pan with a lid"
+    },
+    {
+     "query_id": "s7",
+     "text": "sprinkle green onions and salt"
+    },
+    {
+     "query_id": "absent0",
+     "text": "spread a ball of rice on the sheet of seaweed"
+    },
+    {
+     "query_id": "absent1",
+     "text": "pour maple syrup on top"
+    },
+    {
+     "query_id": "absent2",
+     "text": "add the pasta to the soup"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 138.0,
+     "end_sec": 182.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 188.0,
+     "end_sec": 194.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 211.0,
+     "end_sec": 225.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 242.0,
+     "end_sec": 249.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 264.0,
+     "end_sec": 278.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 279.0,
+     "end_sec": 292.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 296.0,
+     "end_sec": 298.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 327.0,
+     "end_sec": 340.0
+    }
+   ]
+  },
+  {
+   "id": "GgM8IIglBLw",
+   "subset": "validation",
+   "recipe_type": "122",
+   "duration": 349.27,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "heat some olive oil in a pot and cook some chopped onion in it"
+    },
+    {
+     "query_id": "s1",
+     "text": "add fresh chopped tomatoes and stir"
+    },
+    {
+     "query_id": "s2",
+     "text": "add salt and pepper and stir"
+    },
+    {
+     "query_id": "s3",
+     "text": "cook until the tomatoes to clapse and add tomato paste"
+    },
+    {
+     "query_id": "s4",
+     "text": "add some chicken stock and stir"
+    },
+    {
+     "query_id": "s5",
+     "text": "add some peeled and chopped potatoes to the soup"
+    },
+    {
+     "query_id": "s6",
+     "text": "cover the pot and cook until potatoes are soft"
+    },
+    {
+     "query_id": "s7",
+     "text": "add some fresh basil leaves and blend everything in the soup"
+    },
+    {
+     "query_id": "s8",
+     "text": "take out the soup and garnish with more basil leaves to serve"
+    },
+    {
+     "query_id": "absent0",
+     "text": "add cooked spaghetti to the fried pancetta toss and mix well"
+    },
+    {
+     "query_id": "absent1",
+     "text": "spread batter on the skillet"
+    },
+    {
+     "query_id": "absent2",
+     "text": "peel and grate the ginger"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 40.0,
+     "end_sec": 71.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 74.0,
+     "end_sec": 90.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 93.0,
+     "end_sec": 100.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 112.0,
+     "end_sec": 125.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 135.0,
+     "end_sec": 146.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 159.0,
+     "end_sec": 165.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 182.0,
+     "end_sec": 191.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 202.0,
+     "end_sec": 256.0
+    },
+    {
+     "query_id": "s8",
+     "start_sec": 257.0,
+     "end_sec": 265.0
+    }
+   ]
+  },
+  {
+   "id": "3dUm-m3iFaI",
+   "subset": "validation",
+   "recipe_type": "422",
+   "duration": 313.93,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "boil some water in a pan and add some wonton noodles and stir"
+    },
+    {
+     "query_id": "s1",
+     "text": "remove the noodles"
+    },
+    {
+     "query_id": "s2",
+     "text": "add the wontons and baby bok choy to the water"
+    },
+    {
+     "query_id": "s3",
+     "text": "remove the bok choy leaves"
+    },
+    {
+     "query_id": "s4",
+     "text": "remove the wontons"
+    },
+    {
+     "query_id": "s5",
+     "text": "boil some chicken broth in a pot add some cooking oil soy sauce  and sesame oil"
+    },
+    {
+     "query_id": "s6",
+     "text": "pour broth and garnish with chopped green onions and dry garlic"
+    },
+    {
+     "query_id": "absent0",
+     "text": "place the pepperoni and more cheese on the sandwich"
+    },
+    {
+     "query_id": "absent1",
+     "text": "whisk 3 beaten eggs in a bowl"
+    },
+    {
+     "query_id": "absent2",
+     "text": "mix apple cider vinegar and sugar together"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 59.0,
+     "end_sec": 81.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 83.0,
+     "end_sec": 100.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 113.0,
+     "end_sec": 117.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 166.0,
+     "end_sec": 180.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 187.0,
+     "end_sec": 193.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 201.0,
+     "end_sec": 235.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 261.0,
+     "end_sec": 280.0
+    }
+   ]
+  },
+  {
+   "id": "MCtF5tRCRUk",
+   "subset": "validation",
+   "recipe_type": "117",
+   "duration": 387.1,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "whisk the eggs and place the bowl over a pan of water"
+    },
+    {
+     "query_id": "s1",
+     "text": "stir butter into the eggs"
+    },
+    {
+     "query_id": "s2",
+     "text": "squeeze lemon juice into the sauce"
+    },
+    {
+     "query_id": "s3",
+     "text": "add salt to the sauce and mix"
+    },
+    {
+     "query_id": "s4",
+     "text": "add vinegar and salt to the pot of water"
+    },
+    {
+     "query_id": "s5",
+     "text": "crack an egg into a cup and then drop the egg into the water"
+    },
+    {
+     "query_id": "s6",
+     "text": "layer ham on the english muffins"
+    },
+    {
+     "query_id": "s7",
+     "text": "place the poached egg on the layer of ham"
+    },
+    {
+     "query_id": "s8",
+     "text": "pour the sauce on top of the egg"
+    },
+    {
+     "query_id": "s9",
+     "text": "top with chopped chives"
+    },
+    {
+     "query_id": "absent0",
+     "text": "add pepper oil sausage and onion to the bowl"
+    },
+    {
+     "query_id": "absent1",
+     "text": "add cumin powder chilli powder oregano cayenne pepper mix and cook"
+    },
+    {
+     "query_id": "absent2",
+     "text": "add the sauerkraut to the pot"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 30.0,
+     "end_sec": 35.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 35.0,
+     "end_sec": 71.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 87.0,
+     "end_sec": 100.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 100.0,
+     "end_sec": 116.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 135.0,
+     "end_sec": 145.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 161.0,
+     "end_sec": 175.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 205.0,
+     "end_sec": 235.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 235.0,
+     "end_sec": 255.0
+    },
+    {
+     "query_id": "s8",
+     "start_sec": 265.0,
+     "end_sec": 288.0
+    },
+    {
+     "query_id": "s9",
+     "start_sec": 288.0,
+     "end_sec": 304.0
+    }
+   ]
+  },
+  {
+   "id": "29Wkj1LqaK8",
+   "subset": "validation",
+   "recipe_type": "410",
+   "duration": 369.29,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "add flour salt and sugar in a bowl and mix"
+    },
+    {
+     "query_id": "s1",
+     "text": "add vegetable oil to the flour and add water"
+    },
+    {
+     "query_id": "s2",
+     "text": "knead the dough by hand"
+    },
+    {
+     "query_id": "s3",
+     "text": "divide the dough into lemon sized balls"
+    },
+    {
+     "query_id": "s4",
+     "text": "add flour to the dough and roll into a thin circle"
+    },
+    {
+     "query_id": "s5",
+     "text": "place oil on the chapati and cover with flour"
+    },
+    {
+     "query_id": "s6",
+     "text": "fold the chapati like a fan"
+    },
+    {
+     "query_id": "s7",
+     "text": "roll the chapati together into a circle"
+    },
+    {
+     "query_id": "s8",
+     "text": "place the chapati onto a hot pan and add oil"
+    },
+    {
+     "query_id": "absent0",
+     "text": "chop the onions and coriander and place it in a bowl"
+    },
+    {
+     "query_id": "absent1",
+     "text": "add the clams to the soup"
+    },
+    {
+     "query_id": "absent2",
+     "text": "preheat the oven to 350 degree fahrenheit"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 15.0,
+     "end_sec": 24.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 25.0,
+     "end_sec": 75.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 78.0,
+     "end_sec": 93.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 106.0,
+     "end_sec": 120.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 121.0,
+     "end_sec": 150.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 151.0,
+     "end_sec": 180.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 185.0,
+     "end_sec": 200.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 204.0,
+     "end_sec": 223.0
+    },
+    {
+     "query_id": "s8",
+     "start_sec": 257.0,
+     "end_sec": 310.0
+    }
+   ]
+  },
+  {
+   "id": "LpBsoQ6TAL0",
+   "subset": "validation",
+   "recipe_type": "204",
+   "duration": 368.57,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "blend the tomatoes"
+    },
+    {
+     "query_id": "s1",
+     "text": "add tomato paste to the blender and blend"
+    },
+    {
+     "query_id": "s2",
+     "text": "crush the garlic then cook it in a pan with oil"
+    },
+    {
+     "query_id": "s3",
+     "text": "add the tomato salt black pepper and red pepper flakes"
+    },
+    {
+     "query_id": "s4",
+     "text": "add vodka to the sauce"
+    },
+    {
+     "query_id": "s5",
+     "text": "stir in cream"
+    },
+    {
+     "query_id": "s6",
+     "text": "remove the garlic"
+    },
+    {
+     "query_id": "s7",
+     "text": "drain the pasta and add to the sauce"
+    },
+    {
+     "query_id": "s8",
+     "text": "mix in cheese"
+    },
+    {
+     "query_id": "s9",
+     "text": "mix in butter"
+    },
+    {
+     "query_id": "s10",
+     "text": "transfer the pasta to a bowl and top with cheese and parsley"
+    },
+    {
+     "query_id": "absent0",
+     "text": "add marsala powder"
+    },
+    {
+     "query_id": "absent1",
+     "text": "cut out circles from the sheet of dough"
+    },
+    {
+     "query_id": "absent2",
+     "text": "take 6 pieces of thinly sliced sirloin"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 47.0,
+     "end_sec": 85.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 87.0,
+     "end_sec": 101.0
+    },
+    {
+     "query_id": "s10",
+     "start_sec": 327.0,
+     "end_sec": 351.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 107.0,
+     "end_sec": 134.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 141.0,
+     "end_sec": 190.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 194.0,
+     "end_sec": 206.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 228.0,
+     "end_sec": 247.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 252.0,
+     "end_sec": 263.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 263.0,
+     "end_sec": 295.0
+    },
+    {
+     "query_id": "s8",
+     "start_sec": 296.0,
+     "end_sec": 316.0
+    },
+    {
+     "query_id": "s9",
+     "start_sec": 317.0,
+     "end_sec": 326.0
+    }
+   ]
+  },
+  {
+   "id": "J7gBorrGvDU",
+   "subset": "validation",
+   "recipe_type": "102",
+   "duration": 367.2,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "mix flour baking powder salt paprika and pepper together"
+    },
+    {
+     "query_id": "s1",
+     "text": "add beer to the mixture"
+    },
+    {
+     "query_id": "s2",
+     "text": "coat some onion rings in the mixture"
+    },
+    {
+     "query_id": "s3",
+     "text": "melt some butter in some preheated oil"
+    },
+    {
+     "query_id": "s4",
+     "text": "fry the onion in the oil"
+    },
+    {
+     "query_id": "absent0",
+     "text": "add the fried onions to the pot"
+    },
+    {
+     "query_id": "absent1",
+     "text": "add diced cucumbers chopped red bell peppers and chopped tomatoes to a bowl"
+    },
+    {
+     "query_id": "absent2",
+     "text": "add chicken stock to the pan and mix"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 92.0,
+     "end_sec": 108.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 115.0,
+     "end_sec": 127.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 169.0,
+     "end_sec": 175.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 191.0,
+     "end_sec": 201.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 210.0,
+     "end_sec": 261.0
+    }
+   ]
+  },
+  {
+   "id": "AMBH5L6x3dQ",
+   "subset": "validation",
+   "recipe_type": "423",
+   "duration": 423.42,
+   "prompts": [
+    {
+     "query_id": "s0",
+     "text": "add garlic and ginger to food processor"
+    },
+    {
+     "query_id": "s1",
+     "text": "add soaked cashew nuts to the processor"
+    },
+    {
+     "query_id": "s2",
+     "text": "add chopped onions red chili dried shrimp to it"
+    },
+    {
+     "query_id": "s3",
+     "text": "add chili powder lime powder and mint leaves"
+    },
+    {
+     "query_id": "s4",
+     "text": "add the shrimp paste and coriander powder to it"
+    },
+    {
+     "query_id": "s5",
+     "text": "drizzle some olive oil and blend everything"
+    },
+    {
+     "query_id": "s6",
+     "text": "fry some prawn heads in a sauce pan with oil and then take them out"
+    },
+    {
+     "query_id": "s7",
+     "text": "add the blended paste and stir"
+    },
+    {
+     "query_id": "s8",
+     "text": "add the chicken stock and fish stock"
+    },
+    {
+     "query_id": "s9",
+     "text": "add a can of laksa to the soup and bring the soup to a boil"
+    },
+    {
+     "query_id": "s10",
+     "text": "add a little fish sauce sugar and lime juice"
+    },
+    {
+     "query_id": "s11",
+     "text": "add the prawns fish balls and the tofu cubes"
+    },
+    {
+     "query_id": "s12",
+     "text": "pour the soup on bean sprouts and sprinkle parsley on top"
+    },
+    {
+     "query_id": "absent0",
+     "text": "add the spring onion and salt to the wok"
+    },
+    {
+     "query_id": "absent1",
+     "text": "add the pork slices to it"
+    },
+    {
+     "query_id": "absent2",
+     "text": "scramble two eggs and add a ramen seasoning packet"
+    }
+   ],
+   "events": [
+    {
+     "query_id": "s0",
+     "start_sec": 33.0,
+     "end_sec": 39.0
+    },
+    {
+     "query_id": "s1",
+     "start_sec": 39.0,
+     "end_sec": 57.0
+    },
+    {
+     "query_id": "s10",
+     "start_sec": 281.0,
+     "end_sec": 308.0
+    },
+    {
+     "query_id": "s11",
+     "start_sec": 314.0,
+     "end_sec": 324.0
+    },
+    {
+     "query_id": "s12",
+     "start_sec": 342.0,
+     "end_sec": 375.0
+    },
+    {
+     "query_id": "s2",
+     "start_sec": 60.0,
+     "end_sec": 84.0
+    },
+    {
+     "query_id": "s3",
+     "start_sec": 87.0,
+     "end_sec": 100.0
+    },
+    {
+     "query_id": "s4",
+     "start_sec": 107.0,
+     "end_sec": 127.0
+    },
+    {
+     "query_id": "s5",
+     "start_sec": 135.0,
+     "end_sec": 143.0
+    },
+    {
+     "query_id": "s6",
+     "start_sec": 146.0,
+     "end_sec": 178.0
+    },
+    {
+     "query_id": "s7",
+     "start_sec": 185.0,
+     "end_sec": 200.0
+    },
+    {
+     "query_id": "s8",
+     "start_sec": 220.0,
+     "end_sec": 225.0
+    },
+    {
+     "query_id": "s9",
+     "start_sec": 232.0,
+     "end_sec": 267.0
+    }
+   ]
+  }
+ ]
+}
