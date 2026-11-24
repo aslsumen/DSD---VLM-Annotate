@@ -205,10 +205,11 @@ Index: `(search_id, review_status)` for the review list; `(video_id)`.
 Alembic migrations must be additive first (create new tables), then a data migration for existing rows, then
 drop the old tables. No destructive migration before the team agrees.
 
-## 6. Current implemented schema (verified 2026-11-20)
+## 6. Current implemented schema (verified 2026-11-24)
 
 SQLite `data/vlm_annotate.db`, migrations `0001_initial_schema.py`, `d03f1c4ffd30_auth_and_datasets.py`,
-`e5b9c3d7a2f1_search_and_search_video.py` and `c9f0d3a1b2e4_nullable_processing_job_project.py`:
+`e5b9c3d7a2f1_search_and_search_video.py`, `c9f0d3a1b2e4_nullable_processing_job_project.py` and
+`f1a4b8c2d6e9_search_idempotency_key.py`:
 
 | Table | Purpose |
 |---|---|
@@ -224,13 +225,15 @@ SQLite `data/vlm_annotate.db`, migrations `0001_initial_schema.py`, `d03f1c4ffd3
 | user_sessions | opaque bearer session; token hash, expiry and revocation |
 | datasets | dataset container for the Sprint 3 access model |
 | dataset_memberships | which user may see/annotate a dataset (roles stay global) |
-| searches | one free-text prompt run over a dataset; `status` (`queued`/`running`/`done`/`partial`/`failed`), auto `title` |
+| searches | one free-text prompt run over a dataset; `status` (`queued`/`running`/`done`/`partial`/`failed`), auto `title`, optional unique `idempotency_key` |
 | search_videos | one row per (search, video): `search_id`, `video_id`, nullable `job_id -> processing_jobs.id`, per-video `status` |
 
 Migrations `0002` (`d03f1c4ffd30`) and `0003` (`e5b9c3d7a2f1`) were verified on a fresh SQLite file with
 `alembic upgrade head` and `alembic check` (no pending operations); the API was exercised against that migrated
 schema without `create_all` (bootstrap → login → create dataset). **14 tables total**, migration head is
-`c9f0d3a1b2e4`. The schema is portable to PostgreSQL but has not been tested there (R-09).
+`f1a4b8c2d6e9` (migration `0005`/`f1a4b8c2d6e9` was written on 2026-11-24 and has not been applied in this
+working copy yet — run `alembic upgrade head` to confirm). The schema is portable to PostgreSQL but has not
+been tested there (R-09).
 
 `search_videos` is the join that replaced the "one job per video" view: a `Search` aggregates the status of its
 `SearchVideo` rows, while each row keeps pointing at the underlying `processing_jobs` job that the worker executes.

@@ -124,7 +124,7 @@ Not called by the browser. Worker → engine:
 | Export | `POST/GET /api/v1/projects/{id}/exports`, `GET/DELETE /api/v1/exports/{id}`, `GET /api/v1/exports/{id}/download` |
 | Auth (Sprint 3) | `POST /api/v1/auth/bootstrap` (`X-Bootstrap-Token`, first admin only), `POST /api/v1/auth/login`, `POST /api/v1/auth/accept-invitation`, `GET /api/v1/auth/me`, `POST /api/v1/auth/logout`, `POST /api/v1/auth/invitations`, `GET /api/v1/auth/users` |
 | Datasets (Sprint 3) | `POST/GET /api/v1/datasets`, `GET /api/v1/datasets/{id}`, `GET/POST /api/v1/datasets/{id}/members`, `POST/GET /api/v1/datasets/{id}/videos` |
-| Searches (Sprint 3) | `POST /api/v1/datasets/{id}/searches` (202, fan-out), `GET /api/v1/searches/{id}` (aggregated status + per-video results), `GET /api/v1/searches/{id}/candidates` |
+| Searches (Sprint 3) | `POST /api/v1/datasets/{id}/searches` (202, fan-out, optional `Idempotency-Key`), `GET /api/v1/datasets/{id}/searches` (list, filters `status`, `limit`, `offset`), `GET /api/v1/searches/{id}` (aggregated status + per-video results), `GET /api/v1/searches/{id}/candidates` |
 | System | `GET /api/v1/health`, `/api/v1/adapters`, `/api/v1/system/media`, `/api/docs` |
 
 **Session authentication (implemented).** The target contract in §2 uses `/api/auth`; the implementation is
@@ -141,7 +141,7 @@ auth and search routes are added **additively under `/api/v1`** rather than behi
 paths that change no frozen endpoint — §8's "decide in Sprint 3" is resolved in favour of extending `/api/v1`.
 
 Behavioural guarantees of that API (timestamps, unreviewed semantics, error envelope, range streaming) are
-tested by the pytest suite (103 tests on 2026-11-21) and are the part to carry into the new contract.
+tested by the pytest suite (121 tests on 2026-11-25) and are the part to carry into the new contract.
 
 **Job cancel and lost workers.** `POST /api/v1/jobs/{id}/cancel` works on `queued` and `running` jobs; a running
 worker stops at its next progress tick and its result is discarded. A running job whose worker stops
@@ -156,10 +156,18 @@ project), `409 VIDEO_NOT_READY` (a listed video is not ready). An optional `Idem
 per video as `<key>:<video_id>`, so repeating the request returns the same jobs. Keys longer than 100
 characters are rejected with `422` on both job endpoints (the column is 128 wide).
 
+**Search idempotency.** `POST /api/v1/datasets/{dataset_id}/searches` accepts an optional `Idempotency-Key`
+header (≤100 characters). Unlike the batch job route, the key is stored **on the `searches` row itself**
+(`searches.idempotency_key`, globally unique) rather than suffixed per video: the search is the unit of
+de-duplication, so a repeated request returns `202` with the existing search and its current per-video state
+instead of fanning out a second time. Replaying the same key with a different `prompt`, `dataset_id` or
+`video_ids` scope is rejected with `409 IDEMPOTENCY_KEY_REUSED`. When `video_ids` was omitted the original
+request meant "every ready video", so a video uploaded later does not turn a legitimate replay into a conflict.
+
 **Exhaustive adapters.** An adapter that reports `exhaustive` (currently `videojev`) returns every event it
 finds: the `max_candidates_per_job` cap does not apply, candidates are ranked by score descending, and zero
 events is a successful job with an empty candidate list (the action does not occur in that video). Other
 adapters keep the cap (earliest 12 by start time) and fail a job that yields no candidates.
 
 Behavioural guarantees of that API (timestamps, unreviewed semantics, error envelope, range streaming) are
-tested by the pytest suite (103 tests on 2026-11-21) and are the part to carry into the new contract.
+tested by the pytest suite (121 tests on 2026-11-25) and are the part to carry into the new contract.

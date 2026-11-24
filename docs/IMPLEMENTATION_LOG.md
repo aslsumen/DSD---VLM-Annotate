@@ -2,6 +2,79 @@
 
 Chronological record of what was actually built, changed and measured. Newest last.
 
+## 2026-11-24/25 — Stuck Search statuses: cancel, requeue, retry and video deletion
+
+**Goal:** a `Search` must never stay `queued`/`running` forever. Before this change, three paths broke the
+`Search` ↔ `SearchVideo` invariant: `cancel_job` never touched the `SearchVideo` row it belonged to,
+`reap_stale_jobs` re-queued or failed the job but left the row `running`, and deleting a video left
+`SearchVideo` rows pointing at a row that no longer existed (the `videos` list kept a ghost entry and the
+parent `Search` never settled). The same held for `retry_job`.
+
+**Code**
+
+- `app/services/pipeline.py`: new `_sync_search_video_status(session, job, status, error_message=None,
+  *, commit=True)` is now the single choke point — it resolves the `SearchVideo` by `job_id`, writes
+  status/message, and recomputes the parent. The old `_sync_search_video` was deleted; every caller
+  (`execute_job`, `fail_job_now`, `cancel_job`, `reap_stale_jobs`, `retry_job`) goes through the new helper.
+- `app/services/pipeline.py`: `_recompute_search_status` now settles an empty row set as `done` with
+  `finished_at` instead of returning early (deleting the last video must not freeze the search), and it fills
+  `Search.error_message` from the first failed video when the search is `failed` (clearing it otherwise).
+- `app/services/pipeline.py`: new public `refresh_searches_for_video(session, video_id)` drops the
+  `SearchVideo` rows of a video and re-derives each affected search; exported in `__all__`.
+- `app/services/pipeline.py`: `reap_stale_jobs` and `cancel_job` paint the ORM `job` object in memory before
+  syncing, because the preceding bulk `update()` uses `synchronize_session=False` and `expire_on_commit=False`
+  would otherwise make the helper read a stale status and take the wrong branch.
+- `app/api/videos.py`: `delete_video` calls `refresh_searches_for_video` **before** `session.delete(video)`.
+- **No migration:** the fix is pure Python. A canceled job is represented as `SearchVideoStatus.failed` with
+  `error_message = "Job canceled"` — adding a `canceled` member to the search enums was rejected because it
+  contradicts the documented state machine (`DESIGN_DESCRIPTION.md:121`) and would need model, schema, API and
+  SQLite constraint work for no behavioural gain.
+- `tests/test_searches.py`: 7 new regression tests (section 6), each starting from the state a worker leaves
+  mid-run rather than from `queued`, so they fail against the old code: cancel one video → `running` with
+  `failed_videos == 1` and `"Job canceled"` kept; cancel all → `failed` with the reason on the search; reaper
+  requeue → `SearchVideo` back to `queued` and the job claimable again; reaper exhausted → `failed` with
+  `"attempts exhausted"`; retry → `SearchVideo` and search back to `queued` with the error cleared; delete a
+  running video → search re-derived and no orphan row; delete the last video → `done` instead of stuck.
+
+**Verification (actual):** `pytest -q` → **121 passed** (2026-11-25; 7 new tests on top of the prior 114) and
+`ruff check --no-cache backend\app backend\tests` clean, both run by the user on Windows.
+
+## 2026-11-24 — Dataset search listing + `Idempotency-Key` on search creation
+
+**Goal:** give the frontend a way to restore the search list on page reload (`GET /datasets/{id}/searches`)
+and make search creation replay-safe so a double click cannot fan out a second search.
+
+**Code**
+
+- `app/models.py`: `Search.idempotency_key` (`String(100)`, nullable) + `UniqueConstraint` named
+  `uq_search_idempotency_key`. The key lives on the **search**, not on the per-video jobs: the search is the
+  unit of de-duplication, and reusing suffixed job keys would create a second `Search` whose `SearchVideo` rows
+  point at already-finished jobs and would stay `queued` forever.
+- Migration `f1a4b8c2d6e9_search_idempotency_key.py` (down_revision `c9f0d3a1b2e4`): batch
+  `add_column` + `create_unique_constraint`; `downgrade()` reverses both.
+- `app/api/searches.py`:
+  - new `GET /datasets/{dataset_id}/searches` → `list[SearchOut]`; `get_current_principal` + `_require_access`
+    (admin sees all, member sees own datasets, non-member gets `404 DATASET_NOT_FOUND`); filters `status`
+    (alias for the `SearchStatus` enum), `limit` (default 100, 1…500) and `offset` (default 0); newest first
+    (`created_at desc, id desc`). Counts come from a single `_aggregate_many` query (`SearchVideo.search_id IN
+    (...)`) so the list does not issue one query per row.
+  - `create_search` now accepts an optional `Idempotency-Key` header (≤100 chars). Lookup by key before
+    creating; a replay returns `202` with the existing search and its **current** aggregated state. A replay
+    with a different `prompt`/`dataset_id`/`video_ids` scope raises `409 IDEMPOTENCY_KEY_REUSED`. The
+    `flush()` is wrapped in `try/except IntegrityError` → rollback + re-select + replay, so two concurrent
+    requests with the same key cannot both create a search. A blank header is normalised to `None`.
+  - helpers `_aggregate_many`, `_with_counts`, `_detail`, `_video_ids_for`, `_replay_matches`,
+    `_replay_or_conflict`; `_aggregate` kept as a thin wrapper.
+- `tests/test_searches.py`: 10 new tests (20 total) — listing scoping/counts/paging/`status` filter/empty
+  dataset/unknown dataset/membership, and idempotency replay, distinct keys, payload conflict, >100-char key
+  (`422`), replay-after-worker-run, and replay when `video_ids` was originally omitted.
+
+**Verification:** implementation only in this session — `alembic upgrade head`, `pytest` and `ruff` were not
+runnable here (the shell executor is a no-op in this environment). The suite was later confirmed green on
+Windows at **121 passed** once the 2026-11-25 lifecycle tests were added; this increment accounted for 114.
+Run from `backend/`: `..\.venv\Scripts\python.exe -m alembic upgrade head`, then
+`..\.venv\Scripts\python.exe -m pytest -q`, then `..\.venv\Scripts\python.exe -m ruff check app tests`.
+
 ## 2026-11-20/21 — Search & SearchVideo: models, migration, fan-out, worker sync, dataset videos, tests
 
 **Goal:** implement the Sprint 3 Search layer (S3-06): one free-text prompt over all ready videos of a dataset,
@@ -33,8 +106,9 @@ upload/listing — without breaking the legacy project/action/job path.
 Run from `backend/`: `..\.venv\Scripts\python.exe -m alembic upgrade head` then
 `..\.venv\Scripts\python.exe -m pytest -q`.
 
-**Not done yet:** re-running existing searches on newly added videos (v1.2 SearchVideo behaviour); search
-`Idempotency-Key` (the legacy batch endpoint has it); dataset-scoped exports; `DELETE /datasets/{id}/members/{user_id}`.
+**Not done yet:** re-running existing searches on newly added videos (v1.2 SearchVideo behaviour); dataset-scoped
+exports; `DELETE /datasets/{id}/members/{user_id}`. (Search `Idempotency-Key` was added later — see the
+2026-11-24 entry.)
 
 ## 2026-11-19 — Sprint 3: session auth, invitations and datasets
 

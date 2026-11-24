@@ -289,6 +289,18 @@ def reap_stale_jobs(
         if result.rowcount == 1:
             if exhausted and job.kind == JobKind.dataset_export:
                 _fail_export(session, job.export_id, message)
+            # The bulk UPDATE ran with synchronize_session=False, so the ORM
+            # instance is stale. Paint the new state in memory, then mirror it on
+            # the SearchVideo row (a requeued job goes back to queued, not failed).
+            job.status = JobStatus.failed if exhausted else JobStatus.queued
+            job.error_message = message
+            _sync_search_video_status(
+                session,
+                job,
+                SearchVideoStatus.failed if exhausted else SearchVideoStatus.queued,
+                message if exhausted else None,
+                commit=False,
+            )
             reaped += 1
             logger.warning("job %s: %s", job.id, message)
         session.commit()
@@ -313,7 +325,7 @@ def execute_job(
     job = session.get(ProcessingJob, job_id)
     if job is None:
         raise ApiError(404, "JOB_NOT_FOUND", "job disappeared before execution")
-    _sync_search_video(session, job, SearchVideoStatus.running)
+    _sync_search_video_status(session, job, SearchVideoStatus.running)
     try:
         try:
             if job.kind == JobKind.candidate_proposal:
@@ -333,7 +345,7 @@ def execute_job(
             else:  # pragma: no cover - enum guard
                 raise ApiError(500, "UNKNOWN_JOB_KIND", f"unknown job kind {job.kind}")
             _finish(session, job, JobStatus.succeeded)
-            _sync_search_video(session, job, SearchVideoStatus.done)
+            _sync_search_video_status(session, job, SearchVideoStatus.done)
         except JobInterrupted:
             raise  # must not reach the generic handler below
         except (AdapterError, MediaError, StorageError) as exc:
@@ -735,9 +747,13 @@ def _recompute_search_status(session: Session, search_id: int) -> Search | None:
     Rules (per the S3-06 plan):
     * queued  — every SearchVideo is queued
     * running — any SearchVideo is running, OR a mix of queued and done/failed
-    * done    — every SearchVideo is done          -> finished_at set
+    * done    — every SearchVideo is done, or no rows remain -> finished_at set
     * failed  — every SearchVideo is failed        -> finished_at set
     * partial — none queued/running, >=1 done, >=1 failed -> finished_at set
+
+    A Search with no SearchVideo rows has nothing left to wait for, so it is
+    settled as ``done`` (this is the "every video of the search was deleted"
+    case, which must not leave the search stuck in queued/running).
     """
     search = session.get(Search, search_id)
     if search is None:
@@ -746,6 +762,9 @@ def _recompute_search_status(session: Session, search_id: int) -> Search | None:
         session.scalars(select(SearchVideo).where(SearchVideo.search_id == search_id))
     )
     if not rows:
+        search.status = SearchStatus.done
+        search.finished_at = search.finished_at or _now()
+        search.error_message = None
         return search
     statuses = {row.status for row in rows}
 
@@ -773,34 +792,73 @@ def _recompute_search_status(session: Session, search_id: int) -> Search | None:
     else:
         # mix of queued and done/failed with no running row
         search.status, finished = SearchStatus.running, False
-    search.finished_at = _now() if finished else None
+    # Only stamp finished_at on the way into a terminal state; re-deriving an
+    # already-finished search must not keep bumping the timestamp.
+    if finished:
+        search.finished_at = search.finished_at or _now()
+    else:
+        search.finished_at = None
+    if search.status == SearchStatus.failed:
+        search.error_message = next(
+            (
+                row.error_message
+                for row in rows
+                if row.status == SearchVideoStatus.failed and row.error_message
+            ),
+            None,
+        )
+    else:
+        search.error_message = None
     return search
 
 
-def _sync_search_video(session: Session, job: ProcessingJob, status: SearchVideoStatus) -> None:
+def refresh_searches_for_video(session: Session, video_id: int) -> list[int]:
+    """Detach a video from its searches and re-derive each affected Search.
+
+    Call this *before* deleting the Video row: it owns the SearchVideo rows that
+    reference the video (the DB cascade would otherwise remove them silently and
+    leave the parent Search stuck).  Returns the affected search ids.
+    """
+    rows = list(
+        session.scalars(select(SearchVideo).where(SearchVideo.video_id == video_id))
+    )
+    search_ids = sorted({row.search_id for row in rows})
+    for row in rows:
+        session.delete(row)
+    session.flush()
+    for search_id in search_ids:
+        _recompute_search_status(session, search_id)
+    return search_ids
+
+
+def _sync_search_video_status(
+    session: Session,
+    job: ProcessingJob,
+    status: SearchVideoStatus,
+    error_message: str | None = None,
+    *,
+    commit: bool = True,
+) -> None:
+    """Mirror a job's state onto its SearchVideo row and re-derive the parent Search."""
     sv = _search_video_for_job(session, job)
     if sv is None:
         return
     sv.status = status
-    if status in (SearchVideoStatus.running, SearchVideoStatus.done):
-        sv.error_message = None
+    sv.error_message = error_message
     _recompute_search_status(session, sv.search_id)
-    session.commit()
+    if commit:
+        session.commit()
 
 
 def _sync_search_video_failure(session: Session, job: ProcessingJob) -> None:
-    sv = _search_video_for_job(session, job)
-    if sv is None:
-        return
+    """Mirror the job's own terminal-or-requeued state onto its SearchVideo row."""
     if job.status == JobStatus.failed:
-        sv.status = SearchVideoStatus.failed
-        sv.error_message = job.error_message
+        _sync_search_video_status(
+            session, job, SearchVideoStatus.failed, job.error_message
+        )
     else:
         # The job was requeued for a retry, so the video is not failed yet.
-        sv.status = SearchVideoStatus.queued
-        sv.error_message = None
-    _recompute_search_status(session, sv.search_id)
-    session.commit()
+        _sync_search_video_status(session, job, SearchVideoStatus.queued, None)
 
 
 def _record_failure(
@@ -861,6 +919,9 @@ def retry_job(session: Session, job: ProcessingJob) -> ProcessingJob:
             export.status = ExportStatus.queued
             export.error_message = None
     session.commit()
+    # The SearchVideo mirrors the job: back to queued, and the parent Search
+    # leaves its terminal state (finished_at is cleared by the recompute).
+    _sync_search_video_status(session, job, SearchVideoStatus.queued, None)
     return job
 
 
@@ -879,6 +940,14 @@ def cancel_job(session: Session, job: ProcessingJob) -> ProcessingJob:
     if result.rowcount != 1:
         session.rollback()
         raise ApiError(409, "JOB_NOT_CANCELABLE", "only queued or running jobs can be canceled")
+    # The UPDATE used synchronize_session=False, so the ORM instance still holds
+    # the pre-cancel state; mirror the new status in memory before syncing the
+    # SearchVideo row in this same transaction.
+    job.status = JobStatus.canceled
+    job.finished_at = moment
+    _sync_search_video_status(
+        session, job, SearchVideoStatus.failed, "Job canceled", commit=False
+    )
     if job.export_id:
         session.execute(
             update(DatasetExport)
@@ -903,5 +972,6 @@ __all__ = [
     "fail_job_now",
     "heartbeat",
     "reap_stale_jobs",
+    "refresh_searches_for_video",
     "retry_job",
 ]

@@ -185,7 +185,7 @@ python scripts/smoke_videojev.py --base-url http://127.0.0.1:8000 --action "pers
 
 ```powershell
 # automated checks
-.\.venv\Scripts\python.exe -m pytest backend -q            # expect 80 passed
+.\.venv\Scripts\python.exe -m pytest backend -q            # expect 121 passed
 .\.venv\Scripts\python.exe scripts\smoke_e2e.py            # expect 26/26 checks
 
 # ffmpeg diagnostics

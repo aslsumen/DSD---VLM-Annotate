@@ -22,7 +22,7 @@ from ..errors import ApiError
 from ..models import ActionDefinition, Candidate, ProcessingJob, Video, VideoStatus
 from ..schemas import JobCreate, JobOut, VideoOut
 from ..services.media import MediaError, MediaProbe
-from ..services.pipeline import enqueue_candidate_job
+from ..services.pipeline import enqueue_candidate_job, refresh_searches_for_video
 from ..services.storage import LocalStorage, StorageError
 from .files import range_file_response
 
@@ -210,6 +210,9 @@ def delete_video(
         )
     )
     storage_key = video.storage_key
+    # SearchVideo rows reference this video; drop them and settle each affected
+    # Search before the Video row goes, so no search is left waiting forever.
+    refresh_searches_for_video(session, video_id)
     session.delete(video)
     session.commit()
     storage.delete(storage_key)

@@ -487,6 +487,7 @@ class Search(Base):
     __tablename__ = "searches"
     __table_args__ = (
         Index("ix_searches_dataset_status", "dataset_id", "status"),
+        UniqueConstraint("idempotency_key", name="uq_search_idempotency_key"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -504,6 +505,10 @@ class Search(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, nullable=False)
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Client-supplied Idempotency-Key, so a double click cannot launch the same
+    # search twice.  Unlike processing_jobs this is not suffixed per video: the
+    # Search row is the unit of de-duplication.
+    idempotency_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
 
 class SearchVideo(Base):

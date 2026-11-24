@@ -372,7 +372,9 @@ class SearchCreate(BaseModel):
 
     prompt: str = Field(min_length=1, max_length=5000)
     title: str | None = Field(default=None, max_length=200)
-    video_ids: list[int] | None = None
+    video_ids: list[int] | None = Field(
+        default=None, min_length=1
+    )  # None = every ready video in the dataset
     adapter_name: str | None = Field(default=None, max_length=100)
     params: dict[str, object] = Field(default_factory=dict)
 
