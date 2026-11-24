@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
-import shutil
-
 from fastapi import APIRouter, Depends, Header, Query, Response, status
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
@@ -38,8 +35,8 @@ from ..schemas import (
     ProjectStats,
     ProjectUpdate,
 )
-from ..services.pipeline import enqueue_candidate_job
-from ..services.storage import LocalStorage, StorageError
+from ..services.pipeline import enqueue_candidate_job, remove_engine_files
+from ..services.storage import LocalStorage
 
 router = APIRouter(tags=["projects"])
 
@@ -115,11 +112,16 @@ def delete_project(
             )
         )
     )
+    video_ids = list(session.scalars(select(Video.id).where(Video.project_id == project_id)))
+    job_ids = list(
+        session.scalars(select(ProcessingJob.id).where(ProcessingJob.project_id == project_id))
+    )
     session.delete(project)
     session.commit()
     for key in [*video_keys, *clip_keys, *export_keys]:
         if key:
             storage.delete(key)
+    remove_engine_files(storage, job_ids, video_ids)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -375,11 +377,7 @@ def delete_action(
     for key in clip_keys:
         if key:
             storage.delete(key)
-    for job_id in job_ids:
-        with contextlib.suppress(StorageError, OSError):
-            work_dir = storage.path_for(f"engine/job-{job_id}")
-            if work_dir.is_dir():
-                shutil.rmtree(work_dir, ignore_errors=True)
+    remove_engine_files(storage, job_ids)  # features stay: other searches on the video use them
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

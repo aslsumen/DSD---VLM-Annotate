@@ -94,10 +94,50 @@ flowchart LR
   in the worker process only; [ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md)), and a
   registered `qwen2.5-vl` stub. The `videojev` adapter is *exhaustive* (all events kept, zero events is
   success), resumes from a per-job work dir `data/storage/engine/job-<id>/` on retry, and loads the model once
-  per worker. `POST /projects/{id}/actions/{id}/jobs` queues one job per video.
+  per worker. `POST /projects/{id}/actions/{id}/jobs` queues one job per video. It also keeps a per-video
+  visual feature cache under `data/storage/engine/features/` (see "Visual feature cache" below).
 - Export is a ZIP with `manifest.json` + `labels.csv` + clips (not OpenLABEL JSON).
 
-**Tests:** 80 backend (pytest), 21 UI (vitest), real-ffmpeg smoke 26/26; adapter tests use a fake engine (`backend/tests/test_videojev.py`), the engine has its own tests (`video_grounding/tests`); real-model `scripts/smoke_videojev.py` on the RTX 3070 laptop is pending (2026-11-16).
+### Visual feature cache
+
+**What.** The worker stores each video window's visual features (the expensive decode + visual-encode step) on
+its own disk. A later search on the same video skips that step. Results are identical: verified bit-exact on
+180 window predictions and 28 events. The job config hash ignores the cache, so it never blocks a resume.
+
+**Used (cache hit)** when the worker runs a search on a video that an earlier search already processed with the
+same model and sampling settings:
+
+- adding a new search to a project whose videos were already searched;
+- "Run pending searches" over existing videos;
+- re-running or retrying a search;
+- engine CLI scans with several prompts, which share refine tiles at the same positions.
+
+**Not used:**
+
+- the first search on a video (it fills the cache);
+- after changing the model or revision, sampling fps/frames, context, attention implementation, or upgrading
+  torch/transformers (the keys change; old entries age out);
+- on a different worker host (each host has its own cache);
+- after LRU eviction;
+- for the same file uploaded again as another video (the cache is per video);
+- when `feature_cache.dir: null`.
+
+**Saves vs. does not save.** It saves decoding and visual encoding: on the 8 GB laptop a later search on the
+same 5–6.6 minute video took 38.6–45.5% less time in the 2026-11-22 measurements
+([`video_grounding/docs/PERFORMANCE.md`](../video_grounding/docs/PERFORMANCE.md)). It does not save per-search
+scoring, refine tiles at new positions, clip cutting, or backend preview extraction.
+
+**Where and how big.** `data/storage/engine/features/video-<id>/` in the product (engine CLI:
+`~/.cache/video_grounding/features`). Measured: one 8-prompt search of a 307 s cooking video left 1.9 GB
+(15 coarse windows and 50 refine tiles, about 29 MB per entry); size grows with video length and with the
+number of refine tiles. The cap is global across all videos (`feature_cache.max_gb`, default 50)
+and evicts the least recently used entries.
+
+**Deletion.** Deleting a video or a project removes its features and its `engine/job-<id>/` work dirs. Deleting
+a search keeps the video's features (other searches use them). Deleting the whole features directory is always
+safe: it only costs speed.
+
+**Tests:** 98 backend (pytest; on macOS the Windows-path case `test_path_for_rejects_traversal[..\\escape.mp4]` fails, as it does on main), 21 UI (vitest), real-ffmpeg smoke 26/26; adapter tests use a fake engine (`backend/tests/test_videojev.py`), the engine has its own tests (`video_grounding/tests`). The real model ran through the API and worker on the RTX 3070 laptop on 2026-11-22: two videos, two prompts each, with video and project deletes clearing the feature cache (`video_grounding/docs/PERFORMANCE.md`).
 
 ## 4. Gap and migration plan
 

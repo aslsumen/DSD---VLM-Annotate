@@ -8,7 +8,9 @@
 > available on a worker configured with a GPU ([INSTALLATION_MANUAL.md](INSTALLATION_MANUAL.md) §5.1). It is
 > integrated, but not yet validated on product footage. Search time is measured for one video and one prompt
 > per job; see the [single-prompt speed results](../video_grounding/docs/EVALUATION.md#speed-kpis) for actual
-> times and model/cache conditions. With it, review every candidate: on held-out long videos it found 86% of the true cooking events and 47% of the true driving events, and on driving it gives almost as many candidates for actions that are not in the video as for ones that are (`video_grounding/docs/EVALUATION.md`).
+> times and model/cache conditions. Later searches reuse visual features for the same uploaded video.
+> Deleting the video or its project clears those features. Deleting a search keeps them available for other searches.
+> With it, review every candidate: on held-out long videos it found 86% of the true cooking events and 47% of the true driving events, and on driving it gives almost as many candidates for actions that are not in the video as for ones that are (`video_grounding/docs/EVALUATION.md`).
 
 ## 1. What you can do
 
@@ -113,7 +115,7 @@ include unreviewed items.
 
 | Limitation | Effect | Planned |
 |---|---|---|
-| Mock candidate generation (default adapter) | Intervals are plausible but arbitrary | Use the `videojev` adapter on a GPU worker; real-model smoke and product-footage validation pending |
+| Mock candidate generation (default adapter) | Intervals are plausible but arbitrary | Use the `videojev` adapter on a GPU worker; the real-model web smoke passed on a public clip. Product footage still needs validation |
 | Real detector quality | Held-out long videos (2026-11-22): recall 0.86 cooking and 0.47 driving vs the 0.85 target; on driving, turns are found but lane moves, overtakes and most stops are missed; a prompt for something not in the video still returns about 3.5 candidates per cooking video and 8.4 per driving video | Human review of every candidate; validation on product footage |
 | Single worker | One long job delays others | Parallel workers with PostgreSQL (later) |
 | No multi-user accounts | One shared optional token | Deferred (OPT-06) |

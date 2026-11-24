@@ -124,10 +124,12 @@ def make_backend(settings: Settings) -> GroundingBackend:
         return ReplayBackend(rt.replay_path)
     if rt.backend == "synthetic":
         return SyntheticBackend({})
+    from ..feature_cache import FeatureCache
     from .videojev import VideoJevBackend  # lazy: needs torch/transformers
 
-    m = settings.model
+    m, fc = settings.model, settings.feature_cache
+    cache = FeatureCache(Path(fc.dir).expanduser(), int(fc.max_gb * 1e9)) if fc.dir else None
     return VideoJevBackend(model_path=m.local_path or m.id, model_id=m.id, model_revision=m.revision,
                            context_tokens=settings.coarse.context_tokens, device_map=rt.device_map,
                            max_memory=rt.max_memory, attn_implementation=rt.attn_implementation,
-                           threshold=settings.coarse.grounding_threshold)
+                           threshold=settings.coarse.grounding_threshold, feature_cache=cache)

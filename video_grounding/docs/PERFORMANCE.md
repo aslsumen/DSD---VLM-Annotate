@@ -51,6 +51,15 @@ benchmark. The observed times apply to these 5–6.6 minute videos, this hardwar
 Evidence: [single_prompt_timing.json](../benchmarks/results/2026-11-22/single_prompt_timing.json) records prompt
 text, model/cache state, durations, job times, candidate counts, source hashes and the original test log.
 
+## Visual feature cache
+
+The worker keeps each video's features under `data/storage/engine/features/video-<id>/`. A cache hit skips decoding
+and visual encoding for that window. Prompt scoring, refinement at new positions, and preview extraction still run.
+
+An eight-prompt engine run on the 307-second cooking video stored 65 entries (15 coarse windows and 50 refinement
+tiles), using 1.9 GB. The configured cache limit applies across videos and evicts the least recently used entries.
+The [architecture notes](../../docs/ARCHITECTURE.md#visual-feature-cache) describe invalidation and deletion.
+
 ## Required protocol
 
 Use one video and one prompt in every timed job. Record the exact prompt, video duration/resolution, code and
