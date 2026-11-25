@@ -22,7 +22,7 @@ real-model accuracy (handled by the model evaluation protocol and `video_groundi
 
 ```powershell
 # from the repository root
-.\.venv\Scripts\python.exe -m pytest backend -q                 # 121 tests
+.\.venv\Scripts\python.exe -m pytest backend -q                 # 125 tests
 .\.venv\Scripts\python.exe -m ruff check backend\app backend\tests
 .\.venv\Scripts\python.exe scripts\smoke_e2e.py                 # real ffmpeg, writes evidence JSON
 cd frontend; npm ci; npm run build; npm test
@@ -41,7 +41,8 @@ cd frontend; npm ci; npm run build; npm test
 | Security/adapters | `backend/tests/test_security.py` | FR-28, FR-21, adapter gating | 4 |
 | VideoJev adapter | `backend/tests/test_videojev.py` (fake engine, no torch) | exhaustive pipeline, batch endpoint, resume, cancel | added 2026-11-16 |
 | Heartbeat lease | `backend/tests/test_lease.py` | PB-28 / R-07 | added 2026-11-16 |
-| Searches | `backend/tests/test_searches.py` | search fan-out, status aggregation, role + dataset scoping, dataset search listing (`GET /datasets/{id}/searches`, paging + `status` filter), `Idempotency-Key` replay/conflict, job-lifecycle sync (cancel / reaper requeue+exhausted / retry / video delete) | added 2026-11-21 (S3-06/S3-16), extended 2026-11-24 (20 tests), extended 2026-11-25 (27 tests) |
+| Searches | `backend/tests/test_searches.py` | search fan-out, status aggregation, role + dataset scoping, dataset search listing (`GET /datasets/{id}/searches`, paging + `status` filter), `Idempotency-Key` replay/conflict, job-lifecycle sync (cancel / reaper requeue+exhausted / retry / video delete), concurrent completion | added 2026-11-21 (S3-06/S3-16), extended 2026-11-24 (20 tests), extended 2026-11-25 (28 tests) |
+| Review filters | `backend/tests/test_review_filters.py` | `review_state` and `verdict` combined on both candidate listings; verdict alone; `unreviewed + verdict` stays empty | added 2026-11-25 (3 tests) |
 | Frontend unit | `frontend/src/lib/format.test.ts` | timestamp formatting | see frontend report |
 
 ## 4. Coverage of the riskiest behaviours
@@ -52,6 +53,8 @@ cd frontend; npm ci; npm run build; npm test
 | Proposal/preview/correction separation | Auditability and model evaluation | `test_preview_window_keeps_original_boundaries_untouched`, export manifest assertions |
 | Interval bounds | Crashes/wrong clips | `test_validate_interval_*`, clamped candidates assertion |
 | Atomic job claim | Duplicate processing | `test_claiming_an_empty_queue_returns_false` + conditional UPDATE review |
+| Concurrent search completion | Search stuck `running` for ever | `test_concurrent_completion_settles_the_search` |
+| Review filter combination | `review_state` + `verdict` → 500 | `test_project_candidates_filter_by_review_state_and_verdict`, `test_search_candidates_filter_by_review_state_and_verdict` |
 | Retry idempotency | Duplicate candidates | `test_retryable_adapter_failure_requeues_then_fails`, unique `(job_id, rank)` |
 | Path traversal | Arbitrary file read | `test_path_for_rejects_traversal` (6 cases) |
 | Range requests | Video seeking | `test_range_request_returns_partial_content` |
@@ -73,7 +76,8 @@ cd frontend; npm ci; npm run build; npm test
 | Live server probe | `uvicorn` on :8010 | **PASS** — `/health` ok, `/` 200 HTML, `/api/v1/projects` 200, `/api/docs` 200 |
 | **Re-verification at Sprint 2 close (2026-11-15)** | pytest, `npm test`, smoke | **PASS** — 56 backend, 21 UI, 26/26 smoke; evidence `docs/evidence/smoke-e2e-20261115-180704.json` |
 
-> Results above are the Sprint 2 baseline (2026-11-05/15). Since then the backend suite grew to 80 tests (`test_videojev.py`, `test_lease.py`; 2026-11-16, not re-run for this document), then to 90 tests with the auth/dataset PR #48 (2026-11-19), to **103 tests** with `test_searches.py` (9 tests, 2026-11-21 — all green), to **114 tests** with the dataset-search listing + `Idempotency-Key` work (10 more tests in `test_searches.py`, 2026-11-24), and to **121 tests** with the job-lifecycle regression tests (7 more, 2026-11-25 — all green). The engine has its own suite (`video_grounding/tests`, 44 tests on macOS at the last count in `EVALUATION.md`).
+> Results above are the Sprint 2 baseline (2026-11-05/15). Since then the backend suite grew to 80 tests (`test_videojev.py`, `test_lease.py`; 2026-11-16, not re-run for this document), then to 90 tests with the auth/dataset PR #48 (2026-11-19), to **103 tests** with `test_searches.py` (9 tests, 2026-11-21 — all green), to **114 tests** with the dataset-search listing + `Idempotency-Key` work (10 more tests in `test_searches.py`, 2026-11-24), and to **121 tests** with the job-lifecycle regression tests (7 more, 2026-11-25 — all green), and to **125 tests**
+with the review-filter and concurrent-completion tests (4 more, 2026-11-25 — all green). The engine has its own suite (`video_grounding/tests`, 44 tests on macOS at the last count in `EVALUATION.md`).
 
 > Warnings are reported, not hidden: `StarletteDeprecationWarning: Using httpx with starlette.testclient is
 > deprecated` comes from FastAPI 0.162 / Starlette 1.10 and does not affect application behaviour.

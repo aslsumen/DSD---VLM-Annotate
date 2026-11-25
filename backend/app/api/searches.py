@@ -343,15 +343,16 @@ def list_search_candidates(
         .options(selectinload(Candidate.annotation))
         .where(Candidate.search_id == search_id)
     )
+    # ``annotations`` is joined at most once: joining it a second time for the
+    # verdict filter emits the table twice and makes every column reference
+    # ambiguous ("two filters together -> 500").
     if review_state == "unreviewed":
-        statement = statement.outerjoin(Annotation, Annotation.candidate_id == Candidate.id).where(
-            Annotation.id.is_(None)
-        )
-    elif review_state == "reviewed":
+        statement = statement.outerjoin(
+            Annotation, Annotation.candidate_id == Candidate.id
+        ).where(Annotation.id.is_(None))
+    elif review_state == "reviewed" or verdict is not None:
         statement = statement.join(Annotation, Annotation.candidate_id == Candidate.id)
     if verdict is not None:
-        statement = statement.join(Annotation, Annotation.candidate_id == Candidate.id).where(
-            Annotation.verdict == verdict
-        )
+        statement = statement.where(Annotation.verdict == verdict)
     statement = statement.order_by(Candidate.video_id, Candidate.start_seconds, Candidate.rank).limit(limit)
     return list(session.scalars(statement))

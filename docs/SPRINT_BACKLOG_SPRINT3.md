@@ -34,7 +34,7 @@ Target 80–85 % of declared capacity once the table is filled.
 | S3-13 | KPI harness: recall, R@IoU, complete clip, boundary adjustment | NFR-5 | 5 | ML | First measurements done 2026-11-16 (engine `eval` CLI; Charades-STA reference only, composites in S3-17); reviewer boundary-adjustment KPI not built |
 | S3-14 | Alpha deck + evidence + upload checklist | D-19 | 5 | Scrum Master | Upload 2026-11-30 |
 | S3-15 | Carry-over: validate a real 10–30 min video | NFR-4 | 3 | QA | From Sprint 2 |
-| S3-16 | Integration tests: auth, permissions, dataset scoping | NFR-11…14 | 5 | QA | Security-critical. **Done 2026-11-21** — `backend/tests/test_searches.py` (9 tests) covers search fan-out, status aggregation, role + dataset scoping; full suite 103 passed. **Extended 2026-11-24** — 10 more tests for dataset search listing and `Idempotency-Key` (20 in the file, 114 total). **Extended 2026-11-25** — 7 lifecycle regression tests for cancel / reaper / retry / video delete (27 in the file, 121 total) |
+| S3-16 | Integration tests: auth, permissions, dataset scoping | NFR-11…14 | 5 | QA | Security-critical. **Done 2026-11-21** — `backend/tests/test_searches.py` (9 tests) covers search fan-out, status aggregation, role + dataset scoping; full suite 103 passed. **Extended 2026-11-24** — 10 more tests for dataset search listing and `Idempotency-Key` (20 in the file, 114 total). **Extended 2026-11-25** — 7 lifecycle regression tests for cancel / reaper / retry / video delete (27 in the file, 121 total). **Extended again 2026-11-25** — `test_review_filters.py` (3) + concurrent-completion test (28 in `test_searches.py`), 125 total |
 | S3-17 | Run held-out composite benchmarks, re-check `min_event_score` (0.5 is provisional), report KPIs | NFR-5 | 5 | ML | Started 2026-11-16 on the RTX 3070 laptop (PB-70); results pending |
 
 **Status 2026-11-19:** S3-01…S3-05 implemented in PR #48 (10 new tests, 90 total); JSON schema is in PR #47
@@ -57,6 +57,15 @@ video row, `retry_job` reopens it, and `delete_video` drops the `SearchVideo` ro
 (`refresh_searches_for_video`); a search whose last video is deleted settles as `done` instead of hanging. No
 migration — canceled jobs map to `SearchVideoStatus.failed` rather than a new enum member. 7 regression tests
 added (27 in `test_searches.py`, 121 total, green 2026-11-25).
+
+**Status 2026-11-25 (later):** two defects from PR review fixed. `review_state` + `verdict` on the candidate
+listings no longer join `annotations` twice (that combination returned `500`); `annotations` is joined at most
+once on both `GET /projects/{id}/candidates` and `GET /searches/{id}/candidates`. Concurrent completion of the
+last two videos of a search no longer leaves it `running`: the `SearchVideo` row is committed **before** the
+aggregate is derived (`_settle_search_status`, re-derived until stable), so a peer worker always sees it. New
+`test_review_filters.py` (3 tests) plus `test_concurrent_completion_settles_the_search` — 125 total, green.
+Still open from the same review: the legacy `/videos/{id}` and `/candidates/{id}` routes have no dataset
+membership check when `VLM_API_TOKEN` is unset (pre-existing, deliberately out of scope here).
 
 **Total committed:** ~99 SP. **This is likely more than the team can absorb in two weeks without capacity
 data** (R-22). Triage proposal: S3-01…S3-07 and S3-14 are the minimum; S3-08…S3-13 can slip into Sprint 4 if

@@ -26,6 +26,7 @@ from app.models import (
     Video,
     VideoStatus,
 )
+from app.services import pipeline
 from app.services.pipeline import _now, claim_next_job, reap_stale_jobs
 from sqlalchemy import select, update
 from tests.conftest import (
@@ -860,4 +861,67 @@ def test_deleting_every_video_settles_a_running_search_as_done(client) -> None:
     assert detail["status"] == "done"
     assert detail["finished_at"] is not None
     assert detail["error_message"] is None
+
+
+def test_concurrent_completion_settles_the_search(client, monkeypatch) -> None:
+    """The aggregate must be derived from committed rows, not a pre-write snapshot.
+
+    Two workers can finish the last two videos of one search at the same time.
+    If a worker derives the aggregate *before* committing its own SearchVideo
+    row, its peer derives from a snapshot in which the other video still looks
+    ``running``: both write ``running`` and nothing ever re-derives the search.
+    So the invariant is "commit the row, then derive" — asserted here by
+    inspecting, from an independent session at the moment of derivation, whether
+    the worker's own row is already visible.
+    """
+    dataset = _create_dev_dataset(client, "Concurrent completion")
+    video_ids = [
+        _upload_dataset_video(client, dataset["id"], f"c{index}.mp4")["id"]
+        for index in range(2)
+    ]
+    search = _launch_search(client, dataset["id"])
+    jobs = _job_by_video(search["id"])
+    assert len(jobs) == 2
+
+    job_id = jobs[video_ids[0]]
+    observed: list[set[SearchVideoStatus]] = []
+    original = pipeline._recompute_search_status
+
+    def spy(session, search_id):
+        # A peer worker's session, opening a brand-new transaction right now.
+        with db.SessionLocal() as peer:
+            rows = list(
+                peer.scalars(
+                    select(SearchVideo).where(SearchVideo.search_id == search_id)
+                )
+            )
+            observed.append({row.status for row in rows})
+        return original(session, search_id)
+
+    monkeypatch.setattr(pipeline, "_recompute_search_status", spy)
+
+    with db.SessionLocal() as session:
+        pipeline._sync_search_video_status(
+            session,
+            session.get(ProcessingJob, job_id),
+            SearchVideoStatus.done,
+        )
+
+    # At every derivation the row just written was already committed and visible
+    # to a peer, so a concurrent worker cannot miss it.
+    assert observed, "the aggregate was never derived"
+    assert all(SearchVideoStatus.done in seen for seen in observed)
+
+    # Finish the second video and confirm the search settles.
+    with db.SessionLocal() as session:
+        pipeline._sync_search_video_status(
+            session,
+            session.get(ProcessingJob, jobs[video_ids[1]]),
+            SearchVideoStatus.done,
+        )
+
+    detail = _search_detail(client, search["id"])
+    assert detail["status"] == "done"
+    assert detail["done_videos"] == 2
+    assert detail["finished_at"] is not None
 

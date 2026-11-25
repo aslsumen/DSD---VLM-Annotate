@@ -51,16 +51,17 @@ def list_project_candidates(
         statement = statement.where(Candidate.video_id == video_id)
     if action_id is not None:
         statement = statement.where(Candidate.action_id == action_id)
+    # ``annotations`` is joined at most once: joining it a second time for the
+    # verdict filter emits the table twice and makes every column reference
+    # ambiguous, so ``review_state`` + ``verdict`` together used to fail.
     if review_state == "unreviewed":
-        statement = statement.outerjoin(Annotation, Annotation.candidate_id == Candidate.id).where(
-            Annotation.id.is_(None)
-        )
-    elif review_state == "reviewed":
+        statement = statement.outerjoin(
+            Annotation, Annotation.candidate_id == Candidate.id
+        ).where(Annotation.id.is_(None))
+    elif review_state == "reviewed" or verdict is not None:
         statement = statement.join(Annotation, Annotation.candidate_id == Candidate.id)
     if verdict is not None:
-        statement = statement.join(Annotation, Annotation.candidate_id == Candidate.id).where(
-            Annotation.verdict == verdict
-        )
+        statement = statement.where(Annotation.verdict == verdict)
     statement = statement.order_by(Video.id, Candidate.start_seconds, Candidate.rank).limit(limit)
     return list(session.scalars(statement))
 

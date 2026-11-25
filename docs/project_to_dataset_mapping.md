@@ -63,7 +63,7 @@ Additional notes:
 | `POST` | `/api/v1/datasets/{dataset_id}/searches` | `create_search` (`backend/app/api/searches.py:182-287`) — **implemented**; `202`; body `SearchCreate{prompt, title?, video_ids?, adapter_name?, params?}`; creates 1 `Search` + 1 `SearchVideo` + 1 `ProcessingJob` per ready video; unknown/unready ids → `422 VIDEOS_NOT_IN_DATASET`; optional `Idempotency-Key` header (≤100 chars) replays the existing search instead of fanning out again, and a changed payload with the same key → `409 IDEMPOTENCY_KEY_REUSED`. |
 | `GET` | `/api/v1/datasets/{dataset_id}/searches` | `list_searches` (`backend/app/api/searches.py:290-315`) — **implemented**; `list[SearchOut]`, newest first, filters `status` (enum), `limit` (1…500, default 100) and `offset`; per-status counts come from one aggregate query. Used by the UI to restore the search list on reload. |
 | `GET` | `/api/v1/searches/{search_id}` | `get_search` (`backend/app/api/searches.py:318-326`) — **implemented**; returns `SearchDetailOut` with `status`, the five per-status counts and the `SearchVideo` list. |
-| `GET` | `/api/v1/searches/{search_id}/candidates` | `list_search_candidates` (`backend/app/api/searches.py:329-357`) — **implemented**; optional `review_state` / `verdict` / `limit` filters. |
+| `GET` | `/api/v1/searches/{search_id}/candidates` | `list_search_candidates` (`backend/app/api/searches.py:329-357`) — **implemented**; optional `review_state` / `verdict` / `limit` filters, combinable (`annotations` is joined at most once, so `review_state` + `verdict` together no longer errors). |
 
 **There is no `DELETE /datasets/{id}/members/{user_id}` and no `PUT /users/{user_id}/assignments`** — membership
 is currently add/list only. Those are future work, not present.
@@ -161,9 +161,10 @@ tables, columns and routes. The `/api/v1` vs `/api/v2` question is settled: the 
    (`backend/app/models.py:484-537`, migrations `e5b9c3d7a2f1` and `f1a4b8c2d6e9`), with fan-out and read
    endpoints in `backend/app/api/searches.py` and worker synchronisation in
    `backend/app/services/pipeline.py`. Automated tests were added 2026-11-21, extended 2026-11-24 and
-   2026-11-25 in `backend/tests/test_searches.py` (27 tests: fan-out, status aggregation, role + dataset
-   scoping, dataset search listing, `Idempotency-Key`, and job-lifecycle sync on cancel / reaper / retry /
-   video delete). Not done yet: the "re-run searches on newly added videos" behaviour from
+   2026-11-25 in `backend/tests/test_searches.py` (28 tests: fan-out, status aggregation, role + dataset
+   scoping, dataset search listing, `Idempotency-Key`, job-lifecycle sync on cancel / reaper / retry /
+   video delete, and concurrent completion), plus `backend/tests/test_review_filters.py` (3 tests) for the
+   `review_state` + `verdict` combination. Not done yet: the "re-run searches on newly added videos" behaviour from
    v1.2 and dataset-scoped exports.
 7. **Identity default changed.** The old `annotations.reviewer` column still defaults to `"anonymous"`
    (`backend/app/models.py:358`) and remains a plain `String(100)`, but all *new* tables use integer FKs to `users.id`.

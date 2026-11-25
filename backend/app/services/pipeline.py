@@ -754,6 +754,11 @@ def _recompute_search_status(session: Session, search_id: int) -> Search | None:
     A Search with no SearchVideo rows has nothing left to wait for, so it is
     settled as ``done`` (this is the "every video of the search was deleted"
     case, which must not leave the search stuck in queued/running).
+
+    This derives from whatever the session currently sees.  Callers that share
+    a run with other workers must go through :func:`_settle_search_status`,
+    which re-derives after committing so a concurrent completion cannot be
+    missed.
     """
     search = session.get(Search, search_id)
     if search is None:
@@ -812,6 +817,39 @@ def _recompute_search_status(session: Session, search_id: int) -> Search | None:
     return search
 
 
+def _settle_search_status(
+    session: Session, search_id: int, *, max_rounds: int = 3
+) -> Search | None:
+    """Persist the pending row change, then derive the Search status atomically.
+
+    Two workers can finish the last two videos of the same search at the same
+    time.  Each derives the aggregate from what *its own* transaction can see,
+    so a worker that read the rows before its peer committed would compute
+    ``running`` and could then overwrite the peer's ``done`` — leaving the
+    search stuck in ``running`` forever, because nobody derives it again.
+
+    The cure is to commit the SearchVideo row first and only then derive, and to
+    keep re-deriving (dropping the stale snapshot with ``expire_all``) until the
+    derived status stops changing.  Whoever commits last therefore always reads
+    the rows the other worker already committed and settles on the terminal
+    state.  See ``test_searches.py::test_concurrent_completion_settles_the_search``.
+    """
+    session.commit()
+    previous: SearchStatus | None = None
+    search: Search | None = None
+    for _ in range(max_rounds):
+        session.expire_all()
+        search = _recompute_search_status(session, search_id)
+        if search is None:
+            return None
+        derived = search.status
+        session.commit()
+        if derived == previous:
+            break
+        previous = derived
+    return search
+
+
 def refresh_searches_for_video(session: Session, video_id: int) -> list[int]:
     """Detach a video from its searches and re-derive each affected Search.
 
@@ -827,7 +865,9 @@ def refresh_searches_for_video(session: Session, video_id: int) -> list[int]:
         session.delete(row)
     session.flush()
     for search_id in search_ids:
-        _recompute_search_status(session, search_id)
+        # Commit the row removals, then derive — a worker may be finishing
+        # another video of the same search right now.
+        _settle_search_status(session, search_id)
     return search_ids
 
 
@@ -839,15 +879,26 @@ def _sync_search_video_status(
     *,
     commit: bool = True,
 ) -> None:
-    """Mirror a job's state onto its SearchVideo row and re-derive the parent Search."""
+    """Mirror a job's state onto its SearchVideo row and re-derive the parent Search.
+
+    With ``commit=True`` the row change is committed *before* the aggregate is
+    derived (via :func:`_settle_search_status`), so a peer worker finishing the
+    same search concurrently always sees this row and cannot leave the search
+    stuck in ``running``.
+
+    With ``commit=False`` the caller owns the transaction and will commit the
+    whole batch itself (the reaper, cancel); the aggregate is derived in that
+    same transaction, which is what keeps those multi-row updates atomic.
+    """
     sv = _search_video_for_job(session, job)
     if sv is None:
         return
     sv.status = status
     sv.error_message = error_message
-    _recompute_search_status(session, sv.search_id)
     if commit:
-        session.commit()
+        _settle_search_status(session, sv.search_id)
+    else:
+        _recompute_search_status(session, sv.search_id)
 
 
 def _sync_search_video_failure(session: Session, job: ProcessingJob) -> None:

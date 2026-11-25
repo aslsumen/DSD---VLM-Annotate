@@ -122,7 +122,7 @@ The API accepts such jobs without the engine; a worker without it fails the job 
 
 ```powershell
 # Windows
-.\.venv\Scripts\python.exe -m pytest backend -q                 # 121 tests
+.\.venv\Scripts\python.exe -m pytest backend -q                 # 125 tests
 .\.venv\Scripts\python.exe -m ruff check backend\app backend\tests
 .\.venv\Scripts\python.exe scripts\smoke_e2e.py                 # real ffmpeg, 26/26 checks
 cd frontend; npm run build; npm test
@@ -179,8 +179,9 @@ backend/
     services/          storage, media (ffmpeg), pipeline (queue/export)
     adapters/          VLMAdapter boundary: mock, videojev (real), Qwen2.5-VL (stub)
   alembic/             database migrations (initial schema verified)
-  tests/               121 pytest tests (incl. search fan-out / status / scoping / listing / idempotency,
-                       job-lifecycle sync on cancel / reaper / retry / video delete)
+  tests/               125 pytest tests (incl. search fan-out / status / scoping / listing / idempotency,
+                       job-lifecycle sync on cancel / reaper / retry / video delete, review-filter combinations,
+                       concurrent search completion)
 frontend/              React + TypeScript + Vite UI
 video_grounding/       zero-shot grounding engine (VideoJev-4B), see video_grounding/README.md
 presentations/         versioned decks (PPTX + editable Markdown source)

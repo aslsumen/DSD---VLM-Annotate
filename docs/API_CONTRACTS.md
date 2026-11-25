@@ -141,7 +141,7 @@ auth and search routes are added **additively under `/api/v1`** rather than behi
 paths that change no frozen endpoint — §8's "decide in Sprint 3" is resolved in favour of extending `/api/v1`.
 
 Behavioural guarantees of that API (timestamps, unreviewed semantics, error envelope, range streaming) are
-tested by the pytest suite (121 tests on 2026-11-25) and are the part to carry into the new contract.
+tested by the pytest suite (125 tests on 2026-11-25) and are the part to carry into the new contract.
 
 **Job cancel and lost workers.** `POST /api/v1/jobs/{id}/cancel` works on `queued` and `running` jobs; a running
 worker stops at its next progress tick and its result is discarded. A running job whose worker stops
@@ -164,10 +164,22 @@ instead of fanning out a second time. Replaying the same key with a different `p
 `video_ids` scope is rejected with `409 IDEMPOTENCY_KEY_REUSED`. When `video_ids` was omitted the original
 request meant "every ready video", so a video uploaded later does not turn a legitimate replay into a conflict.
 
+**Search status aggregation.** A `Search` mirrors its `SearchVideo` rows: `queued` (all queued), `running` (any
+running, or a mix of queued with done/failed), `done` (all done — or no rows left, i.e. every video was deleted),
+`failed` (all failed), `partial` (no queued/running left, at least one done and one failed). `finished_at` is
+stamped once on entering a terminal state and is not bumped by later re-derivations; `error_message` carries the
+first failed video's reason when the search is `failed`. The aggregate is always derived **after** the
+`SearchVideo` row is committed, and re-derived until stable, so two workers finishing the last two videos of one
+search concurrently cannot both write `running` and strand it.
+
+**Candidate list filters.** `GET /api/v1/projects/{id}/candidates` and `GET /api/v1/searches/{id}/candidates`
+accept `review_state` (`reviewed` / `unreviewed`) and `verdict` (`true_positive` / `false_positive`) together.
+`unreviewed` means "no annotation row", so `review_state=unreviewed&verdict=…` is an empty list, never an error.
+
 **Exhaustive adapters.** An adapter that reports `exhaustive` (currently `videojev`) returns every event it
 finds: the `max_candidates_per_job` cap does not apply, candidates are ranked by score descending, and zero
 events is a successful job with an empty candidate list (the action does not occur in that video). Other
 adapters keep the cap (earliest 12 by start time) and fail a job that yields no candidates.
 
 Behavioural guarantees of that API (timestamps, unreviewed semantics, error envelope, range streaming) are
-tested by the pytest suite (121 tests on 2026-11-25) and are the part to carry into the new contract.
+tested by the pytest suite (125 tests on 2026-11-25) and are the part to carry into the new contract.

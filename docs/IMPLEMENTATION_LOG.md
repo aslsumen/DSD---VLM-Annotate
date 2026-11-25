@@ -2,6 +2,46 @@
 
 Chronological record of what was actually built, changed and measured. Newest last.
 
+## 2026-11-25 — Review-filter combination and concurrent search completion
+
+**Goal:** two defects reported in PR review. (a) Filtering the candidate lists by `review_state` **and**
+`verdict` together returned `500`: each condition added its own join of `annotations`, so the compiled SQL
+selected the table twice and every column reference became ambiguous. (b) Two workers finishing the last two
+videos of the same search at the same moment could leave that search `running` for ever: each derived the
+aggregate from a transaction that did not include its peer's committed `SearchVideo` row, both wrote
+`running`, and nothing derived the search again.
+
+**Code**
+
+- `app/api/searches.py` (`list_search_candidates`) and `app/api/candidates.py` (`list_project_candidates`):
+  `annotations` is now joined **at most once**. `review_state=unreviewed` keeps the outer join
+  (`Annotation.id IS NULL`); `reviewed` *or* a standalone `verdict` filter adds the single inner join; the
+  verdict predicate is a plain `.where()` on that same alias. `review_state=unreviewed&verdict=…` is still an
+  empty result, not an error.
+- `app/services/pipeline.py`: new `_settle_search_status(session, search_id, *, max_rounds=3)` **commits the
+  row write first and only then derives** the aggregate, re-deriving with `session.expire_all()` until the
+  derived status stops changing. Whoever commits last therefore always reads the rows its peer already
+  committed and settles on the terminal state.
+- `app/services/pipeline.py`: `_sync_search_video_status` routes through `_settle_search_status` when
+  `commit=True`; with `commit=False` (reaper, cancel — the caller owns the transaction and must keep the
+  multi-row update atomic) it keeps deriving in that same transaction. `refresh_searches_for_video` settles
+  each affected search, so a worker finishing another video of the same search is not missed.
+- `tests/test_review_filters.py` (new, 3 tests): each filter alone, the previously failing combination on both
+  the project and the search route, the `unreviewed + verdict` empty case, and verdict-only.
+- `tests/test_searches.py`: `test_concurrent_completion_settles_the_search` spies on `_recompute_search_status`
+  and, at each derivation, reads the rows from a **separate** session to assert the worker's own row is already
+  committed and visible; it then finishes the second video and asserts the search reaches `done`.
+- **No migration:** pure Python; no column, table or enum changed.
+
+**Trade-off to note:** `refresh_searches_for_video` now commits internally, so in `DELETE /videos/{id}` the
+`SearchVideo` rows are committed just before the `Video` row is deleted. If that final delete failed, the
+affected searches would already have settled as though the video were gone. Accepted because the delete is a
+single row with no blocking FK.
+
+**Verification (actual):** `pytest -q` run by the user on Windows (2026-11-25) — **all tests pass**. The suite
+is now **125 tests**: the prior 121, plus 3 in `test_review_filters.py` and 1 concurrency test in
+`test_searches.py`.
+
 ## 2026-11-24/25 — Stuck Search statuses: cancel, requeue, retry and video deletion
 
 **Goal:** a `Search` must never stay `queued`/`running` forever. Before this change, three paths broke the
