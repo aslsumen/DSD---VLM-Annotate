@@ -76,5 +76,6 @@ def evaluate_review(pred: dict, reviews: list[dict], tolerance_sec: float = 2.0)
     return {"n_candidates": len(ev), "n_reviewed": len(reviews), "n_accepted": len(acc),
             "accept_rate": len(acc) / len(reviews) if reviews else None,
             "complete_clip_rate": sum(inside) / len(acc) if acc else None,
+            "boundary_adjust_mean": float(np.mean(adj)) if adj else None,
             "boundary_adjust_p50": p(adj, 50), "boundary_adjust_p90": p(adj, 90),
             "per_query": per_query}

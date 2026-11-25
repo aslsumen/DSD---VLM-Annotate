@@ -167,7 +167,7 @@ traceback when you ask for help.
 | Dataset export: manifest, labels.csv, clips, provenance | Working, tested |
 | Responsive web UI | Working — build + 21 unit tests + a headless-Chrome end-to-end pass (reported, not committed as a test) |
 | **Real VLM inference** | **Integrated, not yet validated on product footage** — `videojev` adapter (VideoJev-4B, worker GPU); mock stays the default |
-| 10–30 minute real footage validation | Not yet; real-model smoke on the 8 GB laptop pending (2026-11-16) |
+| 10–30 minute real footage validation | Pending for 10–30 minute product footage. A 52-second public clip passed the real VideoJev web smoke on the RTX 3070 laptop. |
 
 ## Repository map
 
@@ -215,9 +215,11 @@ Read more: [Architecture](docs/ARCHITECTURE.md) · [Design Description](docs/DES
 ## Status
 
 Sprint 3 is in progress (2026-11-16 → 2026-11-29; Alpha gate 29 Nov). `main` contains the tested vertical slice
-(mock adapter is the default), the opt-in `videojev` adapter and the `video_grounding` engine (Linux/WSL2 only;
-Charades-STA reference numbers only, held-out composite results pending — see
-[MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md)). Accounts, global roles, datasets, searches and OpenLABEL JSON
+(mock adapter is the default), the opt-in `videojev` adapter and the `video_grounding` engine (Linux/WSL2 only).
+Held-out long-video recall was 0.86 for cooking and 0.47 for driving. Charades-STA serves as an in-domain reference.
+See [MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md).
+
+Accounts, global roles, datasets, searches and OpenLABEL JSON
 are the remaining Sprint 3 scope.
 
 Course artifacts are tracked in [docs/course/DSD_DELIVERABLES_REGISTER.md](docs/course/DSD_DELIVERABLES_REGISTER.md).

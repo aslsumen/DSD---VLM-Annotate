@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tests.conftest import create_action, create_project
+from tests.conftest import create_action, create_project, make_engine_dirs, upload_video
 
 
 def test_create_and_list_projects(client) -> None:
@@ -79,3 +79,22 @@ def test_stats_on_empty_project(client) -> None:
         "jobs_failed": 0,
         "exports_ready": 0,
     }
+
+
+def test_delete_project_removes_engine_dirs_of_its_videos(client) -> None:
+    doomed, kept = create_project(client), create_project(client, "kept")
+    action = create_action(client, doomed["id"])
+    videos = [upload_video(client, doomed["id"]), upload_video(client, doomed["id"], "b.mp4")]
+    other = upload_video(client, kept["id"])
+    job_ids = [
+        client.post(f"/api/v1/videos/{v['id']}/jobs", json={"action_id": action["id"]}).json()["id"]
+        for v in videos
+    ]
+    storage = client.app.state.storage
+    make_engine_dirs(storage, job_ids, [v["id"] for v in [*videos, other]])
+
+    assert client.delete(f"/api/v1/projects/{doomed['id']}").status_code == 204
+    for v in videos:
+        assert not storage.path_for(f"engine/features/video-{v['id']}").exists()
+    assert not any(storage.path_for(f"engine/job-{j}").exists() for j in job_ids)
+    assert storage.path_for(f"engine/features/video-{other['id']}").is_dir()

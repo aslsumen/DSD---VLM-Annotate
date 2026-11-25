@@ -52,8 +52,12 @@ Checklist:
 Start the worker as in [INSTALLATION_MANUAL.md](INSTALLATION_MANUAL.md) §5.1 (`VLM_VLM_ADAPTER=videojev`,
 `VLM_VIDEOJEV_CONFIG=video_grounding/configs/rtx3070.yaml` on an 8 GB laptop), then repeat Plan A with a
 short clip using the `videojev` model.
-Expect minutes per video on 8 GB, no MOCK banner, `provenance.mock = false`, and 0..n candidates per video. Run it
-once before presenting; the real-model smoke (`scripts/smoke_videojev.py`) is still pending on the project laptop.
+On 2026-11-23, the team ran the web flow with VideoJev-4B on an RTX 3070 Laptop GPU and a 52-second public clip.
+The worker produced a candidate in about 51 seconds. Source and preview playback, review and export worked,
+and the ZIP recorded `provenance.mock = false`. [GPU smoke evidence](https://github.com/aslsumen/DSD---VLM-Annotate/pull/53)
+
+Rehearse with the selected clip and record the model and per-video feature cache state with the measured time.
+[Single-prompt speed results](../video_grounding/docs/EVALUATION.md#speed-kpis)
 
 ## 3. Plan B — prepared fallback
 
@@ -91,7 +95,7 @@ Fill with real names only when the team supplies them:
 
 ## 6. Questions to expect
 
-- *"Is that a real model?"* → Not in the mock demo (labelled). A real model, VideoJev-4B, is integrated as the `videojev` adapter and has only reference numbers on Charades-STA (the model was trained on it, so they do not show accuracy on new footage); held-out benchmark results (running since 2026-11-16) and validation on product footage are pending.
-- *"Why 8 GB?"* → The dev laptop's GPU; VideoJev-4B runs on it with CPU offload (about 0.66× the video duration on ~30 s Charades-STA videos; reference set); 7B bf16 does not fit.
+- *"Is that a real model?"* → Not in the mock demo (labelled). A real model, VideoJev-4B, is integrated as the `videojev` adapter and has only reference numbers on Charades-STA (the model was trained on it, so they do not show accuracy on new footage); on held-out long YouCook2 and ROAD videos (2026-11-22) it finds 86% of the true cooking events and 47% of the driving events against the 85% target, and on driving it barely tells present from absent actions (8.4 vs 9.2 candidates per prompt), so review every candidate; validation on product footage is pending.
+- *"Why 8 GB?"* → The dev laptop's GPU; VideoJev-4B runs on it with CPU offload. Report measured time for one video × one prompt, with model/cache state, from [the speed results](../video_grounding/docs/EVALUATION.md#speed-kpis); 7B bf16 does not fit.
 - *"What if the model is wrong?"* → A human labels every candidate; the proposal is preserved separately.
 - *"Can two reviewers work at once?"* → Yes at the API level; the queue is single-worker today.
