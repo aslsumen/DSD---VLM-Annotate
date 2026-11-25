@@ -77,6 +77,22 @@ cd frontend; npm ci; npm run build; npm test
 > Warnings are reported, not hidden: `StarletteDeprecationWarning: Using httpx with starlette.testclient is
 > deprecated` comes from FastAPI 0.162 / Starlette 1.10 and does not affect application behaviour.
 
+### Phase 3A session checks (2026-11-25)
+
+Run the standard frontend/backend commands in §2 on the baseline and candidate using separate
+temporary databases and storage roots. The session and polling Vitest files cover anonymous and
+stored-token bootstrap, invalid responses, timeouts, revocation, late responses and request
+cancellation. See the [Implementation Log](IMPLEMENTATION_LOG.md#2026-11-25--phase-3a-frontend-session-hardening)
+for comparison results.
+
+In Chrome with auth enabled, open a protected URL, sign in, and reload. Verify the role-specific
+route guard. Inject a lost connection, 403 and 500 separately on the anonymous dataset probe and
+`/auth/me`. Verify the access error and retry. Revoke or expire a synthetic session while a
+search is polling and verify that the protected UI and polling stop. Use two tabs to cover logout
+during bootstrap. Sign in again on a review page and verify the same user's time and note edits are
+restored. In an auth OFF database, repeat [Alpha Plan A](DEMO_RUNBOOK.md#2-plan-a--live-path-68-minutes)
+and exercise the lost enqueue response and delayed job poll from PR #52.
+
 ## 5b. Not exercised
 
 Retry and cancel buttons, `NO_REVIEWED_CANDIDATES`, clicking the ZIP download, UI project PATCH, and a

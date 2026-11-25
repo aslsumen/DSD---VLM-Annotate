@@ -19,7 +19,7 @@ import {
 } from "../components/ui";
 import { api, newIdempotencyKey, toApiError, type ApiError } from "../lib/api";
 import { formatBytes, formatClock, formatDate, formatResolution, percent } from "../lib/format";
-import { useApiData, useSearchPolling } from "../lib/hooks";
+import { useApiData, useStatusPolling } from "../lib/hooks";
 import { navigate } from "../lib/router";
 import {
   deleteSearch,
@@ -170,7 +170,7 @@ export function DatasetPage({ datasetId }: { datasetId: number }) {
     : false;
 
   const reload = data.reload;
-  useSearchPolling(data, anyActive, 3000);
+  useStatusPolling(data, anyActive, 3000);
 
   async function uploadFiles(files: File[]) {
     if (!data.data || files.length === 0) return;

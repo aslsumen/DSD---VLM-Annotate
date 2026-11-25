@@ -29,22 +29,17 @@ describe("search polling", () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
-  it("stops on 401, expires a signed-in session, and leaves the anonymous error to the page", () => {
+  it.each([401, 403])("does not re-schedule polling after HTTP %i", (status) => {
     const reload = vi.fn();
-    const sessionExpired = vi.fn();
-    schedulePoll({ active: true, loading: false, status: 401 }, 2500, reload, sessionExpired);
-    schedulePoll({ active: true, loading: false, status: 401 }, 2500, reload);
+    schedulePoll({ active: true, loading: false, status }, 2500, reload);
     vi.advanceTimersByTime(7500);
-    expect(sessionExpired).toHaveBeenCalledTimes(1);
     expect(reload).not.toHaveBeenCalled();
   });
 
   it("retries a transient error on an active search", () => {
     const reload = vi.fn();
-    const sessionExpired = vi.fn();
-    schedulePoll({ active: true, loading: false, status: 503 }, 2500, reload, sessionExpired);
+    schedulePoll({ active: true, loading: false, status: 503 }, 2500, reload);
     vi.advanceTimersByTime(2500);
     expect(reload).toHaveBeenCalledTimes(1);
-    expect(sessionExpired).not.toHaveBeenCalled();
   });
 });

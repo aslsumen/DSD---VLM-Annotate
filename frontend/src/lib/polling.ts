@@ -3,13 +3,8 @@ export function schedulePoll(
   { active, loading, status }: { active: boolean; loading: boolean; status?: number },
   delay: number,
   reload: () => void,
-  sessionExpired?: () => void,
 ): (() => void) | undefined {
-  if (status === 401) {
-    sessionExpired?.();
-    return undefined;
-  }
-  if (!active || loading) return undefined;
+  if (!active || loading || status === 401 || status === 403) return undefined;
 
   const timer = setTimeout(reload, delay);
   return () => clearTimeout(timer);

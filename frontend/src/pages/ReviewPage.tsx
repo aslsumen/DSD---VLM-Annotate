@@ -36,7 +36,7 @@ import {
   videoReviewer,
   type ReviewStatus,
 } from "../lib/search";
-import { useSession } from "../lib/session";
+import { useSession, type ReviewDraft } from "../lib/session";
 import type { Candidate, Video } from "../types";
 
 type Filter = "all" | ReviewStatus;
@@ -150,24 +150,36 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
   const decided = Boolean(selected?.annotation);
   const readOnly = decided || lockedByOther;
 
-  // Select the first unreviewed candidate once data arrives.
+  const drafts = session.reviewDrafts;
+  const draftKey = (id: number) => `${datasetId}/${searchId}/${id}`;
+  const draft = selected && !readOnly ? drafts.get(draftKey(selected.id)) : undefined;
+
+  function editDraft(changes: Partial<ReviewDraft>) {
+    if (!selected || readOnly) return;
+    drafts.set(draftKey(selected.id), { startValue, endValue, startText, endText, note, ...changes });
+  }
+
+  // Return to an unsubmitted edit when the same user resumes this search.
   useEffect(() => {
     if (selectedId !== null || ordered.length === 0) return;
-    const first = ordered.find((candidate) => !candidate.annotation) ?? ordered[0];
+    const first = ordered.find((candidate) => !candidate.annotation
+      && drafts.has(`${datasetId}/${searchId}/${candidate.id}`))
+      ?? ordered.find((candidate) => !candidate.annotation) ?? ordered[0];
     setSelectedId(first.id);
-  }, [ordered, selectedId]);
+  }, [ordered, selectedId, drafts, datasetId, searchId]);
 
   // Reset the editor when the selection changes.
   useEffect(() => {
     if (!selected) return;
     const bounds = finalBounds(selected);
-    setStartValue(bounds.start);
-    setEndValue(bounds.end);
-    setStartText(bounds.start.toFixed(1));
-    setEndText(bounds.end.toFixed(1));
-    setNote(selected.annotation?.note ?? "");
+    setStartValue(draft?.startValue ?? bounds.start);
+    setEndValue(draft?.endValue ?? bounds.end);
+    setStartText(draft?.startText ?? bounds.start.toFixed(1));
+    setEndText(draft?.endText ?? bounds.end.toFixed(1));
+    setNote(draft?.note ?? selected.annotation?.note ?? "");
     setSaveError(null);
     setInputError("");
+    if (draft) setLive("Unsaved review edits restored.");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id]);
 
@@ -210,6 +222,7 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
     setEndValue(e);
     setStartText(s.toFixed(1));
     setEndText(e.toFixed(1));
+    editDraft({ startValue: s, endValue: e, startText: s.toFixed(1), endText: e.toFixed(1) });
     setInputError(e > s ? "" : "The end must be after the start.");
   }
 
@@ -244,6 +257,7 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
         note: note.trim(),
         reviewer,
       });
+      drafts.delete(draftKey(selected.id));
       const merged = withAnnotation(selected, result.annotation);
       setSaved((current) => ({ ...current, [selected.id]: merged }));
       setLive(`Candidate ${verdict === "true_positive" ? "accepted" : "rejected"}.`);
@@ -691,7 +705,16 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
                           inputMode="decimal"
                           disabled={readOnly}
                           value={which === "start" ? startText : endText}
-                          onChange={(event) => (which === "start" ? setStartText(event.target.value) : setEndText(event.target.value))}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            if (which === "start") {
+                              setStartText(value);
+                              editDraft({ startText: value });
+                            } else {
+                              setEndText(value);
+                              editDraft({ endText: value });
+                            }
+                          }}
                           onBlur={() => commitText(which)}
                           onKeyDown={(event) => {
                             if (event.key === "Enter") (event.target as HTMLInputElement).blur();
@@ -791,7 +814,11 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
                     value={note}
                     disabled={readOnly}
                     maxLength={2000}
-                    onChange={(event) => setNote(event.target.value)}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setNote(value);
+                      editDraft({ note: value });
+                    }}
                     placeholder="Optional — e.g. forklift partly hidden by a shelf"
                   />
                   {!session.user ? (

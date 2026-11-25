@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Dialog, ErrorNotice, Frame, Icon, Loading, Notice, PageHeader, ProgressBar, SearchChip } from "../components/ui";
 import { api, toApiError, type ApiError } from "../lib/api";
 import { formatDateTime, percent } from "../lib/format";
-import { useApiData, useSearchPolling } from "../lib/hooks";
+import { useApiData, useStatusPolling } from "../lib/hooks";
 import { deleteSearch as deleteSearchSafely } from "../lib/operations";
 import { navigate } from "../lib/router";
 import { countReview, isActive, summarizeSearch } from "../lib/search";
@@ -43,7 +43,7 @@ export function SearchPage({ datasetId, searchId }: { datasetId: number; searchI
 
   const active = data.data ? isActive(data.data.summary.status) : false;
   const reload = data.reload;
-  useSearchPolling(data, active, 2500);
+  useStatusPolling(data, active, 2500);
 
   async function jobAction(job: Job, kind: "retry" | "cancel") {
     setBusyJob(job.id);

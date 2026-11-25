@@ -2,7 +2,7 @@ import { useEffect } from "react";
 
 import { Shell, useTheme } from "./components/Shell";
 import { Frame, Loading } from "./components/ui";
-import { AcceptInvitePage, ForgotPasswordPage, SignInPage } from "./pages/AuthPages";
+import { AcceptInvitePage, ForgotPasswordPage, SessionUnavailablePage, SignInPage } from "./pages/AuthPages";
 import { DatasetPage } from "./pages/DatasetPage";
 import { DatasetsPage } from "./pages/DatasetsPage";
 import { ExportPage } from "./pages/ExportPage";
@@ -47,22 +47,25 @@ function Routed() {
     }
   }, [session.mode, route.name]);
 
-  if (session.mode === "loading") {
+  if (session.mode === "loading" || session.mode === "signing-out") {
     return (
       <div className="auth-screen">
-        <Loading label="Starting…" />
+        <Loading label={session.mode === "signing-out" ? "Signing out…" : "Checking access…"} />
       </div>
     );
   }
 
   if (route.name === "invite") {
-    return <AcceptInvitePage token={route.token} />;
+    return <AcceptInvitePage key={route.token} token={route.token} />;
   }
   if (route.name === "forgot") {
     return <ForgotPasswordPage />;
   }
   if (route.name === "signin" || session.mode === "signed-out") {
     return <SignInPage />;
+  }
+  if (session.mode === "unavailable") {
+    return <SessionUnavailablePage />;
   }
 
   let page;
@@ -106,7 +109,7 @@ function Routed() {
     }
   }
 
-  return <Shell route={route}>{page}</Shell>;
+  return <Shell key={session.workspaceKey} route={route}>{page}</Shell>;
 }
 
 function App() {

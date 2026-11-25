@@ -33,7 +33,7 @@ import type { ApiErrorBody } from "../types";
 export const API_BASE = "/api/v1";
 // Holds the session token returned by POST /auth/login (or a deployment-wide
 // VLM_API_TOKEN in older setups). Sent as `Authorization: Bearer <token>`.
-const TOKEN_STORAGE_KEY = "vlm-annotate.api-token";
+export const TOKEN_STORAGE_KEY = "vlm-annotate.api-token";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -71,12 +71,17 @@ function localStorageOrNull(): Storage | null {
 }
 
 export function getStoredToken(): string {
-  return localStorageOrNull()?.getItem(TOKEN_STORAGE_KEY) ?? "";
+  try {
+    return localStorageOrNull()?.getItem(TOKEN_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
 }
 
 export function storeToken(token: string): void {
   const store = localStorageOrNull();
   if (!store) {
+    if (token) throw new Error("Browser storage is unavailable. Enable it to sign in.");
     return;
   }
   const trimmed = token.trim();
@@ -96,10 +101,72 @@ interface RequestOptions {
   body?: unknown;
   headers?: Record<string, string>;
   signal?: AbortSignal;
+  /** Explicit authentication for bootstrap, sign-out and anonymous endpoints. */
+  token?: string;
+  expectedStatus?: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+// Protected pages share a cancellation scope. Explicit auth calls have their own
+// lifetime so logout can revoke the captured token after protected requests stop.
+let workspace: { token: string | null; controller: AbortController } | undefined;
+
+export function setWorkspaceSession(token: string | null): AbortSignal {
+  workspace?.controller.abort();
+  const controller = new AbortController();
+  workspace = { token, controller };
+  if (token === null) controller.abort();
+  return controller.signal;
+}
+
+function workspaceRequest(signal?: AbortSignal): { token: string; signal?: AbortSignal } {
+  const scope = workspace;
+  if (!scope) return { token: getStoredToken(), signal };
+  scope.controller.signal.throwIfAborted();
+  const token = scope.token ?? "";
+  // Storage events are asynchronous. Never send a different tab's token from
+  // a view that still belongs to the previous principal.
+  assertWorkspaceToken(token);
+  return { token, signal: signal ? AbortSignal.any([scope.controller.signal, signal]) : scope.controller.signal };
+}
+
+function assertWorkspaceToken(token: string): void {
+  if (workspace && token !== getStoredToken()) throw new DOMException("Session changed", "AbortError");
+}
+
+let sessionUnauthorized: ((token: string) => void) | undefined;
+
+export function watchSessionUnauthorized(listener: (token: string) => void): () => void {
+  sessionUnauthorized = listener;
+  return () => {
+    if (sessionUnauthorized === listener) sessionUnauthorized = undefined;
+  };
+}
+
+function reportUnauthorized(status: number, token: string): void {
+  if (status === 401 && token && token === getStoredToken()) sessionUnauthorized?.(token);
+}
+
+function invalidSessionResponse(): ApiError {
+  return new ApiError(200, "INVALID_RESPONSE", "The API returned unexpected authentication data.");
+}
+
+function isUser(value: unknown): value is User {
+  return isRecord(value) && Number.isInteger(value.id) && typeof value.email === "string"
+    && typeof value.full_name === "string" && value.is_active === true && typeof value.created_at === "string"
+    && (value.role === "administrator" || value.role === "dataset_admin" || value.role === "annotator");
+}
+
+function sessionResponse(value: unknown): LoginResponse {
+  if (!isRecord(value) || !isUser(value.user) || typeof value.access_token !== "string"
+    || !value.access_token.trim() || value.token_type !== "bearer"
+    || typeof value.expires_at !== "string" || !Number.isFinite(Date.parse(value.expires_at))) {
+    throw invalidSessionResponse();
+  }
+  return { user: value.user, access_token: value.access_token, token_type: "bearer", expires_at: value.expires_at };
 }
 
 function toErrorBody(payload: unknown): ApiErrorBody | null {
@@ -172,7 +239,18 @@ async function parseResponse<T>(response: Response): Promise<T> {
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
-  const token = getStoredToken();
+  const auth = options.token === undefined
+    ? workspaceRequest(options.signal)
+    : { token: options.token, signal: AbortSignal.any([
+      ...(options.signal ? [options.signal] : []), AbortSignal.timeout(10_000),
+    ]) };
+  const { token, signal } = auth;
+  function checkAborted() {
+    if (signal?.aborted && signal.reason?.name === "TimeoutError") {
+      throw new ApiError(0, "TIMEOUT", "The API did not respond in time.");
+    }
+    signal?.throwIfAborted();
+  }
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
@@ -189,15 +267,31 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       method: options.method ?? "GET",
       headers,
       body,
-      signal: options.signal,
+      signal,
+      cache: options.token === undefined ? undefined : "no-store",
+      redirect: options.token === undefined ? undefined : "error",
+      credentials: options.token === "" ? "omit" : "same-origin",
     });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw error;
-    }
+  } catch {
+    checkAborted();
     throw networkError();
   }
-  return parseResponse<T>(response);
+  checkAborted();
+  if (options.token !== undefined && response.redirected) throw invalidSessionResponse();
+  if (options.token === undefined) reportUnauthorized(response.status, token);
+  if (response.ok && options.expectedStatus !== undefined && response.status !== options.expectedStatus) {
+    throw new ApiError(response.status, "INVALID_RESPONSE", "The API returned an unexpected status.");
+  }
+  checkAborted();
+  try {
+    const result = await parseResponse<T>(response);
+    checkAborted();
+    if (options.token === undefined) assertWorkspaceToken(token);
+    return result;
+  } catch (failure) {
+    checkAborted();
+    throw failure;
+  }
 }
 
 function toQuery(params: Record<string, string | number | undefined>): string {
@@ -374,18 +468,26 @@ export const api = {
     request<ExportCreated>(`/projects/${projectId}/exports`, { method: "POST", body: input }),
 
   // Accounts (USR-1, USR-5, NFR-12)
-  login: (email: string, password: string): Promise<LoginResponse> =>
-    request<LoginResponse>("/auth/login", { method: "POST", body: { email, password } }),
+  login: async (email: string, password: string, signal?: AbortSignal): Promise<LoginResponse> =>
+    sessionResponse(await request<unknown>("/auth/login", {
+      method: "POST", body: { email, password }, token: "", signal, expectedStatus: 200,
+    })),
 
-  logout: (): Promise<void> => request<void>("/auth/logout", { method: "POST" }),
+  logout: (token: string, signal?: AbortSignal): Promise<void> =>
+    request<void>("/auth/logout", { method: "POST", token, signal, expectedStatus: 204 }),
 
-  me: (signal?: AbortSignal): Promise<User> => request<User>("/auth/me", { signal }),
+  me: async (token: string, signal?: AbortSignal): Promise<User> => {
+    const user = await request<unknown>("/auth/me", { signal, token, expectedStatus: 200 });
+    if (!isUser(user)) throw invalidSessionResponse();
+    return user;
+  },
 
-  acceptInvitation: (token: string, fullName: string, password: string): Promise<LoginResponse> =>
-    request<LoginResponse>("/auth/accept-invitation", {
+  acceptInvitation: async (token: string, fullName: string, password: string, signal?: AbortSignal): Promise<LoginResponse> =>
+    sessionResponse(await request<unknown>("/auth/accept-invitation", {
       method: "POST",
       body: { token, full_name: fullName, password },
-    }),
+      token: "", signal, expectedStatus: 201,
+    })),
 
   createInvitation: (email: string, role: UserRole): Promise<InvitationCreated> =>
     request<InvitationCreated>("/auth/invitations", { method: "POST", body: { email, role } }),
@@ -396,8 +498,16 @@ export const api = {
    * Probe used at start-up: succeeds when the deployment does not require a
    * sign-in (development), fails with 401 when it does.
    */
-  probeOpenAccess: (signal?: AbortSignal): Promise<unknown> =>
-    request<unknown>("/datasets", { signal }),
+  probeOpenAccess: async (signal?: AbortSignal): Promise<void> => {
+    const datasets = await request<unknown>("/datasets", { signal, token: "", expectedStatus: 200 });
+    if (!Array.isArray(datasets) || !datasets.every((dataset: unknown) =>
+      isRecord(dataset) && Number.isInteger(dataset.id) && typeof dataset.name === "string"
+      && typeof dataset.description === "string" && typeof dataset.created_at === "string"
+      && typeof dataset.updated_at === "string"
+      && (dataset.created_by_id === null || Number.isInteger(dataset.created_by_id)))) {
+      throw invalidSessionResponse();
+    }
+  },
 };
 
 /**
@@ -409,11 +519,11 @@ function uploadWithProgress(
   file: File,
   onProgress?: (fraction: number) => void,
 ): Promise<Video> {
+  const { token, signal } = workspaceRequest();
   return new Promise<Video>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${API_BASE}/projects/${projectId}/videos`);
     xhr.setRequestHeader("Accept", "application/json");
-    const token = getStoredToken();
     if (token) {
       xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     }
@@ -424,7 +534,18 @@ function uploadWithProgress(
       }
     };
 
+    const abort = () => xhr.abort();
+    signal?.addEventListener("abort", abort, { once: true });
+    xhr.onloadend = () => signal?.removeEventListener("abort", abort);
     xhr.onload = () => {
+      try {
+        signal?.throwIfAborted();
+        assertWorkspaceToken(token);
+      } catch (error) {
+        reject(error);
+        return;
+      }
+      reportUnauthorized(xhr.status, token);
       const parsed = parseJson(xhr.responseText);
       if (xhr.status >= 200 && xhr.status < 300) {
         if (!parsed.ok || parsed.value === null) {
@@ -456,7 +577,12 @@ function uploadWithProgress(
 
     const form = new FormData();
     form.append("file", file, file.name);
-    xhr.send(form);
+    try {
+      xhr.send(form);
+    } catch (error) {
+      signal?.removeEventListener("abort", abort);
+      reject(error);
+    }
   });
 }
 
@@ -474,21 +600,27 @@ export function newIdempotencyKey(): string {
  */
 export async function downloadExportFile(exportId: number, filename: string): Promise<void> {
   const headers = new Headers();
-  const token = getStoredToken();
+  const { token, signal } = workspaceRequest();
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
   let response: Response;
   try {
-    response = await fetch(exportDownloadUrl(exportId), { headers });
-  } catch {
+    response = await fetch(exportDownloadUrl(exportId), { headers, signal });
+  } catch (error) {
+    signal?.throwIfAborted();
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
     throw networkError();
   }
+  signal?.throwIfAborted();
   if (!response.ok) {
+    reportUnauthorized(response.status, token);
     throw await errorFromResponse(response);
   }
   const blob = await response.blob();
+  signal?.throwIfAborted();
+  assertWorkspaceToken(token);
   const objectUrl = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = objectUrl;

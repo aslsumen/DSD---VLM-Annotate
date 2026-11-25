@@ -317,6 +317,47 @@ report the elapsed job time for each video and prompt.
 **Open items:** driving recall and absent-prompt false candidates (PB-71); `min_event_score` sweep (PB-72);
 product-footage validation.
 
+## 2026-11-25 — Phase 3A: frontend session hardening
+
+**Base** `a3fa00c` (includes PR #52) · Local branch `feat/ui-auth-session` · USR-1, USR-2,
+USR-5, NFR-12, NFR-13.
+
+On the baseline, a network error, 403 or 5xx could open Development mode during bootstrap. A
+malformed 200 could also mount protected UI. The frontend now grants anonymous access after a
+validated HTTP 200 from the real Dataset list. Without credentials, a 401 shows sign-in. A stored
+bearer token is verified with `GET /api/v1/auth/me`; a 401 clears it and requires sign-in. Other
+failures gate the workspace and let the user retry.
+
+One session check at a time runs at 30-second intervals after completion. On a failed check, the
+workspace closes until the server confirms the retained token. A successful check refreshes the
+role. Storage changes from other tabs invalidate earlier work, and cancelled or superseded responses
+cannot reopen the workspace. A closed workspace cancels its fetches, uploads and scheduled
+refreshes. Logout attempts server revocation with the previous bearer token and reports if that
+could not be confirmed. Sign-in resumes protected hash routes and unsaved review times and notes
+are restored in memory for the same user after reauthentication.
+
+| Check | Baseline | Phase 3A |
+| --- | --- | --- |
+| Frontend Vitest | 42 passed | 80 passed |
+| TypeScript and Vite production build | Passed | Passed |
+| Backend pytest (macOS) | 98 passed, one failed | 98 passed, same failure ([#55](https://github.com/aslsumen/DSD---VLM-Annotate/issues/55)) |
+| Focused auth and Dataset API pytest | 10 passed | 10 passed |
+| Ruff lint / format check | Lint passed, 10 files flagged by format check | Same |
+| Fresh SQLite Alembic upgrade/current/check | `d03f1c4ffd30` head, no pending operations | Same |
+| FFmpeg + mock smoke | 26/26 | 26/26 |
+
+The Chrome evidence and Playwright reproductions for the local review are stored outside the Git
+diff. The browser checks use isolated SQLite databases, synthetic accounts and generated video.
+Auth ON covers fail-closed bootstrap, route guards, late responses, revocation and review recovery.
+Auth OFF exercises the Alpha flow including the lost enqueue response and serialized polling from
+PR #52, full-video playback, a corrected annotation and JSON download.
+
+**Backend dependencies:** Legacy Project, Action, Job, media and annotation endpoints still require
+their own authorization and Dataset membership enforcement. The implemented session has server-side
+absolute expiry, while the v1.2 inactivity policy remains pending. Browser cancellation cannot undo
+already committed writes. The tests use Chromium on macOS, SQLite and the mock detector. Phase 3B
+is the independent review gate.
+
 ## Template for the next entry
 
 ```markdown
