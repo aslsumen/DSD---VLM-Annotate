@@ -2,12 +2,12 @@
  * Search status (DET-3, NFR-9; Design Description v1.2, 4.4 and 5.3):
  * queued → running → done, or failed / partial, with one row per video job.
  */
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Dialog, ErrorNotice, Frame, Icon, Loading, Notice, PageHeader, ProgressBar, SearchChip } from "../components/ui";
 import { api, toApiError, type ApiError } from "../lib/api";
 import { formatDateTime, percent } from "../lib/format";
-import { useApiData } from "../lib/hooks";
+import { useApiData, useSearchPolling } from "../lib/hooks";
 import { deleteSearch as deleteSearchSafely } from "../lib/operations";
 import { navigate } from "../lib/router";
 import { countReview, isActive, summarizeSearch } from "../lib/search";
@@ -43,11 +43,7 @@ export function SearchPage({ datasetId, searchId }: { datasetId: number; searchI
 
   const active = data.data ? isActive(data.data.summary.status) : false;
   const reload = data.reload;
-  useEffect(() => {
-    if (!active) return undefined;
-    const timer = window.setInterval(reload, 2500);
-    return () => window.clearInterval(timer);
-  }, [active, reload]);
+  useSearchPolling(data, active, 2500);
 
   async function jobAction(job: Job, kind: "retry" | "cancel") {
     setBusyJob(job.id);

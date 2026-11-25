@@ -245,6 +245,44 @@ on the composites (PB-72); product-footage validation.
 *Note 2026-11-22: superseded by the long-video benchmark below; these composites had 24 and 72 GT events (recall
 CI about ±0.13).*
 
+## 2026-11-20 — Sprint 3 Alpha search resilience
+
+**Base** `a1b8279` · Branch `feat/ui-auth` · DET-3, DS-3, PR-1.
+
+- The dataset and search status views schedule a refresh after the preceding load settles. They stop
+  on a terminal state or a 401. A 401 in a signed-in session returns the UI to sign-in.
+- If a prompt is saved and the batch enqueue result is unknown or unsuccessful, the form keeps the
+  saved action and reuses its enqueue key on retry. The saved search is also available by URL.
+  Recovery with the original key applies while the form stays open. The current API saves the action
+  and enqueues its jobs in separate calls.
+
+| Check | Result |
+| --- | --- |
+| `cd frontend && npm run build && npm test` | Build passed. 42 tests passed, including 7 new regressions. |
+| `./.venv/bin/python -m pytest -p no:cacheprovider backend -q` | 93 passed. One existing macOS failure in `test_path_for_rejects_traversal` for the backslash case, also reported in PR #42. |
+| `./.venv/bin/ruff check --no-cache backend/app backend/tests` | Passed. |
+| `./.venv/bin/python scripts/smoke_e2e.py` | 26/26 API and worker checks passed with FFmpeg and the mock detector. |
+| Chrome 157, headless, API and worker on local SQLite | Alpha flow passed using the production UI build, auth OFF, an empty static token, a generated 720p MP4, and the mock detector. Verified dataset creation, upload, queued search, results, full-video seek and playback, review, navigation and reload. The JSON download included the accepted interval with its corrected timestamp. |
+
+To repeat the browser check, follow [Plan A](DEMO_RUNBOOK.md#2-plan-a--live-path-68-minutes) with a fresh
+demo database. Keep the worker stopped until the queued search survives a reload, then start it against
+the same database. For the fault checks, intercept only these requests in a local browser test:
+
+1. Forward the initial batch enqueue to FastAPI, confirm the upstream `202`, then drop its response.
+   On the original build the next submit sent another create-action request and got `409`. The fixed
+   build sends one create-action request in total, reuses the batch URL and `Idempotency-Key` and leaves
+   one job for the fixture video. Two form submits in the same tick also leave one saved action.
+2. While the search is queued, delay one `GET /api/v1/jobs` refresh for 3.4 seconds. The original build
+   started the next refresh before that request finished. The fixed build waits for it to settle.
+3. In a separate signed-in browser context on the queued search, return a test-only `401 INVALID_SESSION`
+   from the jobs refresh. The original build kept polling. The fixed build returned to sign-in after one
+   401 and made no further polls.
+
+These checks used Chrome on macOS and Node 22.23.2. Firefox, Edge and VideoJev inference were outside
+this run. Project/job session enforcement, Dataset membership for the workflow and protected playback
+remain backend dependencies. The browser 401 was injected because the current jobs route still uses
+the legacy static-token guard.
+
 ## 2026-11-22 — Held-out long-video benchmark results (VideoJev-4B)
 
 **Goal:** replace the small composites as the KPI source (PB-70). The user judged them too small to be reliable:

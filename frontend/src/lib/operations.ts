@@ -2,9 +2,24 @@
  * Multi-call operations on a dataset that the current API does not offer as a
  * single endpoint.
  */
-import type { ActionDefinition, Video } from "../types";
-import { api, newIdempotencyKey } from "./api";
+import type { ActionDefinition, ActionInput, Video } from "../types";
+import { api, ApiError, newIdempotencyKey } from "./api";
 import { summarizeSearch, unprocessedVideos } from "./search";
+
+export async function prepareSearch(projectId: number, input: ActionInput, adapter: string) {
+  const action = await api.createAction(projectId, input);
+  const key = newIdempotencyKey();
+  return {
+    action,
+    async enqueue() {
+      // An error can mean the server committed the jobs and the response was lost.
+      const jobs = await api.createActionJobs(projectId, action.id, { adapter }, key);
+      if (jobs.length === 0) {
+        throw new ApiError(0, "NO_READY_VIDEOS", "No ready videos were available. Check the dataset and try again.");
+      }
+    },
+  };
+}
 
 /**
  * Deletes a search (prompt). Queued and running jobs are canceled first, then
