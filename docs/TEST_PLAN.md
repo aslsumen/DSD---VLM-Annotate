@@ -93,6 +93,27 @@ during bootstrap. Sign in again on a review page and verify the same user's time
 restored. In an auth OFF database, repeat [Alpha Plan A](DEMO_RUNBOOK.md#2-plan-a--live-path-68-minutes)
 and exercise the lost enqueue response and delayed job poll from PR #52.
 
+### Phase 3C regression cases (2026-11-26)
+
+| Scenario | Expected observation |
+|---|---|
+| Focused Start or End at expiry | After same-user login, Accept without refocusing uses both visible fields. The PUT, SQLite row, reloaded editor and ZIP manifest agree to the millisecond. |
+| Invalid or empty bound, excessive precision, reversed/equal interval or end beyond duration | Accept/Reject reports an error, preserves input and sends zero annotation requests. |
+| Pending final decision | Submitted fields stay locked. Selecting another candidate preserves its draft and selection when the previous response arrives. |
+| Periodic verification returns 503 | Protected UI closes. Retry verifies the retained login; Sign out clears it immediately; Go to sign in starts fresh authentication. |
+| Late verification or failed revocation | Local sign-out survives service recovery. The user sees an unconfirmed-revocation notice. A new login survives the old acknowledgement. |
+| Same user, expiry or temporary loss | Restore the RAM-only draft for that user, dataset, search and candidate. |
+| Explicit logout in another tab or change of account | Clear the previous user's in-memory edits, including after a same-user login following deliberate logout. |
+| Document becomes visible or resumes | Reuse one verification request and one timer. Cleanup on logout or definitive expiry removes listeners and cancels the timer. |
+
+Run `npm test` and `npm run build` in `frontend/`. With a local Playwright
+installation, set `PLAYWRIGHT_MODULE` to its absolute package path and run
+`node qa/session-recovery.mjs` from the same directory. Repeat with
+`ENGINE=webkit` and the matching WebKit installation. This suite serves the
+built UI on loopback and stubs the API. The Phase 3C package additionally
+exercises real FastAPI, migrated SQLite, FFmpeg, a mock worker, the downloaded
+archive and both browser engines. See its reproduction guide and raw logs.
+
 ## 5b. Not exercised
 
 Retry and cancel buttons, `NO_REVIEWED_CANDIDATES`, clicking the ZIP download, UI project PATCH, and a

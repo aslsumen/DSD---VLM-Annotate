@@ -358,6 +358,40 @@ absolute expiry, while the v1.2 inactivity policy remains pending. Browser cance
 already committed writes. The tests use Chromium on macOS, SQLite and the mock detector. Phase 3B
 is the independent review gate.
 
+## 2026-11-26 — Phase 3C session review corrections
+
+The independent review rejected candidate `543ac661` on NFR-13 and NFR-12.
+On Chrome and WebKit, an End field restored to 1.8 s persisted 2.264 s,
+and an unavailable identity check left a retained login without a Sign out control.
+
+- The review draft owns the displayed text. Accept and Reject parse both fields
+  at submission, preserve the API's millisecond precision and reject invalid
+  or out-of-range input. The submitting candidate's draft fields lock until
+  the PUT settles. A late success consumes only that draft and preserves a
+  new selection. The historic concurrent-note problem on main has a separate
+  local issue draft in the Phase 3C review package.
+- Session recovery offers retry, local logout and fresh authentication.
+  Logout cancels verification, closes the workspace and clears the stored
+  credential before attempting revocation. A failed revocation has a separate
+  status message. A late acknowledgement cannot replace a newer login.
+- An explicit logout generation clears in-memory drafts across tabs, including
+  for a returning user. Expiry and temporary unavailability preserve drafts for
+  the same verified user. A different verified user clears the previous drafts.
+  Visibility and resume notifications request the existing serialized check.
+
+Local comparison of main `a3fa00cc`, the reviewed candidate and this change:
+42/80/100 Vitest tests passed, TypeScript and Vite passed on all three. Backend
+pytest reported 98 passed and the same macOS storage case (#55) on each.
+Ruff lint passed, Ruff format listed the same ten files, Alembic reported no
+drift, and FFmpeg/mock smoke passed 26/26 in each checkout. The Chrome/WebKit
+timestamp case now sends and persists 1.8 s. A separate real SQLite/ZIP check
+matches both edited bounds (0.125 s and 1.801 s). Both engines passed the
+production UI recovery regression and Vite development Strict Mode.
+
+The local review package contains the Alpha replay, evidence by engine,
+unchanged independent scripts, the full comparison and a SHA-256 manifest.
+Phase 3D is the independent review gate.
+
 ## Template for the next entry
 
 ```markdown
