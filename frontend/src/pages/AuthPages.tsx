@@ -12,11 +12,17 @@ import { navigate } from "../lib/router";
 import { useSession } from "../lib/session";
 
 function AuthLayout({ children }: { children: ReactNode }) {
+  const { hasRetainedToken, signOut } = useSession();
   return (
     <div className="auth-screen">
       <div className="auth-card">
         <Brand large />
-        <Frame className="auth-frame">{children}</Frame>
+        <Frame className="auth-frame">
+          {children}
+          {hasRetainedToken && (
+            <button className="btn btn-secondary" onClick={() => void signOut()}>Sign out</button>
+          )}
+        </Frame>
       </div>
     </div>
   );
@@ -129,7 +135,7 @@ export function SignInPage() {
 }
 
 export function SessionUnavailablePage() {
-  const { error, retrySession, signOut, hasRetainedToken } = useSession();
+  const { error, retrySession, signOut } = useSession();
   return (
     <AuthLayout>
       <div className="stack">
@@ -141,9 +147,6 @@ export function SessionUnavailablePage() {
             onRetry={retrySession}
           />
         ) : null}
-        {hasRetainedToken && (
-          <button className="btn btn-secondary align-start" onClick={() => void signOut()}>Sign out</button>
-        )}
         <a className="btn btn-ghost align-start" href="#/signin" onClick={() => void signOut("signin")}>
           Go to sign in
         </a>
