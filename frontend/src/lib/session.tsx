@@ -10,8 +10,6 @@ import { canManage } from "./search";
 import { endSession, monitorSession, resolveSession, SESSION_ENDED, type SessionSnapshot } from "./sessionLifecycle";
 
 export interface ReviewDraft {
-  startValue: number;
-  endValue: number;
   startText: string;
   endText: string;
   note: string;

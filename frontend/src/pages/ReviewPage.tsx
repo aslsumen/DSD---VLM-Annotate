@@ -13,7 +13,7 @@
  *   backend lock (Video.reviewer_id) exists.
  */
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 
 import {
   AriaLive,
@@ -36,6 +36,7 @@ import {
   videoReviewer,
   type ReviewStatus,
 } from "../lib/search";
+import { reviewInterval, reviewSeconds } from "../lib/reviewBounds";
 import { useSession, type ReviewDraft } from "../lib/session";
 import type { Candidate, Video } from "../types";
 
@@ -77,8 +78,6 @@ async function load(projectId: number, actionId: number, signal: AbortSignal) {
   };
 }
 
-const round1 = (value: number) => Math.round(value * 10) / 10;
-
 function isTyping(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return (
@@ -97,13 +96,9 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<Sort>("confidence");
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [startValue, setStartValue] = useState(0);
-  const [endValue, setEndValue] = useState(0);
-  const [startText, setStartText] = useState("");
-  const [endText, setEndText] = useState("");
-  const [note, setNote] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<ApiError | null>(null);
+  const [, refreshDraft] = useReducer((version: number) => version + 1, 0);
+  const [savingId, setSavingId] = useState<number | null>(null);
+  const [saveError, setSaveError] = useState<{ id: number; error: ApiError } | null>(null);
   const [inputError, setInputError] = useState("");
   const [live, setLive] = useState("");
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -154,9 +149,19 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
   const draftKey = (id: number) => `${datasetId}/${searchId}/${id}`;
   const draft = selected && !readOnly ? drafts.get(draftKey(selected.id)) : undefined;
 
+  const bounds = selected ? finalBounds(selected) : { start: 0, end: 0 };
+  const startText = draft?.startText ?? String(bounds.start);
+  const endText = draft?.endText ?? String(bounds.end);
+  const note = draft?.note ?? selected?.annotation?.note ?? "";
+  const startValue = reviewSeconds(startText) ?? bounds.start;
+  const endValue = reviewSeconds(endText) ?? bounds.end;
+  const editingDisabled = readOnly || (selected !== null && savingId === selected.id);
+
   function editDraft(changes: Partial<ReviewDraft>) {
-    if (!selected || readOnly) return;
-    drafts.set(draftKey(selected.id), { startValue, endValue, startText, endText, note, ...changes });
+    if (!selected || editingDisabled) return;
+    drafts.set(draftKey(selected.id), { startText, endText, note, ...changes });
+    setInputError("");
+    refreshDraft();
   }
 
   // Return to an unsubmitted edit when the same user resumes this search.
@@ -171,12 +176,6 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
   // Reset the editor when the selection changes.
   useEffect(() => {
     if (!selected) return;
-    const bounds = finalBounds(selected);
-    setStartValue(draft?.startValue ?? bounds.start);
-    setEndValue(draft?.endValue ?? bounds.end);
-    setStartText(draft?.startText ?? bounds.start.toFixed(1));
-    setEndText(draft?.endText ?? bounds.end.toFixed(1));
-    setNote(draft?.note ?? selected.annotation?.note ?? "");
     setSaveError(null);
     setInputError("");
     if (draft) setLive("Unsaved review edits restored.");
@@ -214,50 +213,29 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
     if (next) select(next);
   }
 
-  function setBounds(start: number, end: number) {
-    const max = duration || end;
-    const s = round1(Math.min(Math.max(0, start), max));
-    const e = round1(Math.min(Math.max(0, end), max));
-    setStartValue(s);
-    setEndValue(e);
-    setStartText(s.toFixed(1));
-    setEndText(e.toFixed(1));
-    editDraft({ startValue: s, endValue: e, startText: s.toFixed(1), endText: e.toFixed(1) });
-    setInputError(e > s ? "" : "The end must be after the start.");
-  }
-
-  function commitText(which: "start" | "end") {
-    const value = Number((which === "start" ? startText : endText).replace(",", "."));
-    if (!Number.isFinite(value)) {
-      setInputError("Enter the time in seconds, e.g. 42.5");
-      return;
-    }
-    if (which === "start") setBounds(value, endValue);
-    else setBounds(startValue, value);
+  function moveBound(which: "start" | "end", seconds: number) {
+    const value = Math.min(duration, Math.max(0, Math.round(seconds * 1000) / 1000));
+    editDraft(which === "start" ? { startText: String(value) } : { endText: String(value) });
   }
 
   async function decide(verdict: "true_positive" | "false_positive") {
-    if (!selected || readOnly || saving) return;
-    if (!(endValue > startValue)) {
-      setInputError("The end must be after the start.");
+    if (!selected || readOnly || savingId !== null) return;
+    const interval = reviewInterval(startText, endText, duration);
+    if ("error" in interval) {
+      setInputError(interval.error);
       return;
     }
-    if (duration && endValue > duration + 0.001) {
-      setInputError(`The end must be within the video (${formatClock(duration)}).`);
-      return;
-    }
-    const adjusted =
-      Math.abs(startValue - selected.start_seconds) > 0.05 || Math.abs(endValue - selected.end_seconds) > 0.05;
-    setSaving(true);
+    const adjusted = interval.start !== selected.start_seconds || interval.end !== selected.end_seconds;
+    setSavingId(selected.id);
     setSaveError(null);
     try {
       const result = await api.upsertAnnotation(selected.id, {
         verdict,
-        ...(adjusted ? { corrected_start_seconds: startValue, corrected_end_seconds: endValue } : {}),
+        ...(adjusted ? { corrected_start_seconds: interval.start, corrected_end_seconds: interval.end } : {}),
         note: note.trim(),
         reviewer,
       });
-      drafts.delete(draftKey(selected.id));
+      if (drafts.get(draftKey(selected.id)) === draft) drafts.delete(draftKey(selected.id));
       const merged = withAnnotation(selected, result.annotation);
       setSaved((current) => ({ ...current, [selected.id]: merged }));
       setLive(`Candidate ${verdict === "true_positive" ? "accepted" : "rejected"}.`);
@@ -265,12 +243,12 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
         const index = ordered.findIndex((candidate) => candidate.id === selected.id);
         const after = [...ordered.slice(index + 1), ...ordered.slice(0, index)];
         const next = after.find((candidate) => candidate.id !== selected.id && !(saved[candidate.id] ?? candidate).annotation);
-        if (next) select(next);
+        if (next) setSelectedId((current) => current === selected.id ? next.id : current);
       }
     } catch (failure) {
-      setSaveError(toApiError(failure));
+      setSaveError({ id: selected.id, error: toApiError(failure) });
     } finally {
-      setSaving(false);
+      setSavingId(null);
     }
   }
 
@@ -332,7 +310,7 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
   }
 
   function onHandleDown(which: "start" | "end", event: ReactPointerEvent<HTMLSpanElement>) {
-    if (readOnly) return;
+    if (editingDisabled) return;
     event.preventDefault();
     event.stopPropagation();
     dragging.current = which;
@@ -342,8 +320,8 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
   function onHandleMove(event: ReactPointerEvent<HTMLSpanElement>) {
     if (!dragging.current) return;
     const time = timeFromPointer(event.clientX);
-    if (dragging.current === "start") setBounds(Math.min(time, endValue - 0.1), endValue);
-    else setBounds(startValue, Math.max(time, startValue + 0.1));
+    if (dragging.current === "start") moveBound("start", Math.min(time, endValue - 0.1));
+    else moveBound("end", Math.max(time, startValue + 0.1));
   }
 
   function onHandleUp() {
@@ -382,7 +360,7 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
   const sameVideo = selected ? candidates.filter((candidate) => candidate.video_id === selected.video_id) : [];
   const adjusted =
     selected &&
-    (Math.abs(startValue - selected.start_seconds) > 0.05 || Math.abs(endValue - selected.end_seconds) > 0.05);
+    (startValue !== selected.start_seconds || endValue !== selected.end_seconds);
   const position = selected ? visible.findIndex((candidate) => candidate.id === selected.id) + 1 : 0;
 
   return (
@@ -623,7 +601,8 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
                         <button
                           type="button"
                           className="btn btn-ghost btn-sm"
-                          onClick={() => setBounds(selected.start_seconds, selected.end_seconds)}
+                          disabled={editingDisabled}
+                          onClick={() => editDraft({ startText: String(selected.start_seconds), endText: String(selected.end_seconds) })}
                         >
                           Reset
                         </button>
@@ -652,13 +631,13 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
                     <span
                       key={which}
                       role="slider"
-                      tabIndex={readOnly ? -1 : 0}
+                      tabIndex={editingDisabled ? -1 : 0}
                       aria-label={which === "start" ? "Event start" : "Event end"}
                       aria-valuemin={0}
                       aria-valuemax={duration}
                       aria-valuenow={which === "start" ? startValue : endValue}
                       aria-valuetext={formatTimestamp(which === "start" ? startValue : endValue)}
-                      aria-disabled={readOnly}
+                      aria-disabled={editingDisabled}
                       className={`track__handle track__handle--${which}`}
                       style={{ left: toPct(which === "start" ? startValue : endValue) }}
                       onPointerDown={(event) => onHandleDown(which, event)}
@@ -666,13 +645,13 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
                       onPointerUp={onHandleUp}
                       onClick={(event) => event.stopPropagation()}
                       onKeyDown={(event) => {
-                        if (readOnly) return;
+                        if (editingDisabled) return;
                         const delta = event.key === "ArrowLeft" ? -0.1 : event.key === "ArrowRight" ? 0.1 : 0;
                         if (!delta) return;
                         event.preventDefault();
                         event.stopPropagation();
-                        if (which === "start") setBounds(startValue + delta, endValue);
-                        else setBounds(startValue, endValue + delta);
+                        if (which === "start") moveBound("start", startValue + delta);
+                        else moveBound("end", endValue + delta);
                       }}
                     />
                   ))}
@@ -691,10 +670,10 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
                         <button
                           type="button"
                           className="btn btn-secondary btn-icon"
-                          disabled={readOnly}
+                          disabled={editingDisabled}
                           aria-label={`${which} minus half a second`}
                           onClick={() =>
-                            which === "start" ? setBounds(startValue - STEP, endValue) : setBounds(startValue, endValue - STEP)
+                            moveBound(which, (which === "start" ? startValue : endValue) - STEP)
                           }
                         >
                           −
@@ -703,19 +682,12 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
                           id={`bound-${which}`}
                           className="input tabular"
                           inputMode="decimal"
-                          disabled={readOnly}
+                          disabled={editingDisabled}
                           value={which === "start" ? startText : endText}
                           onChange={(event) => {
                             const value = event.target.value;
-                            if (which === "start") {
-                              setStartText(value);
-                              editDraft({ startText: value });
-                            } else {
-                              setEndText(value);
-                              editDraft({ endText: value });
-                            }
+                            editDraft(which === "start" ? { startText: value } : { endText: value });
                           }}
-                          onBlur={() => commitText(which)}
                           onKeyDown={(event) => {
                             if (event.key === "Enter") (event.target as HTMLInputElement).blur();
                           }}
@@ -723,10 +695,10 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
                         <button
                           type="button"
                           className="btn btn-secondary btn-icon"
-                          disabled={readOnly}
+                          disabled={editingDisabled}
                           aria-label={`${which} plus half a second`}
                           onClick={() =>
-                            which === "start" ? setBounds(startValue + STEP, endValue) : setBounds(startValue, endValue + STEP)
+                            moveBound(which, (which === "start" ? startValue : endValue) + STEP)
                           }
                         >
                           +
@@ -738,7 +710,7 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
                     {formatClock(startValue)}–{formatClock(endValue)} · length {Math.max(endValue - startValue, 0).toFixed(1)} s
                   </div>
                 </div>
-                {inputError ? <div className="field-error">{inputError}</div> : null}
+                {inputError ? <div role="alert" className="field-error">{inputError}</div> : null}
               </div>
 
               {lockedByOther && !decided ? (
@@ -759,7 +731,7 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
                   <button
                     type="button"
                     className="decide__btn decide__btn--reject blueprint"
-                    disabled={saving}
+                    disabled={savingId !== null}
                     onClick={() => void decide("false_positive")}
                     aria-label="Reject candidate (R)"
                   >
@@ -770,7 +742,7 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
                   <button
                     type="button"
                     className="decide__btn decide__btn--accept blueprint"
-                    disabled={saving}
+                    disabled={savingId !== null}
                     onClick={() => void decide("true_positive")}
                     aria-label="Accept candidate (A)"
                   >
@@ -780,7 +752,7 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
                   </button>
                 </div>
               ) : null}
-              {saveError ? <ErrorNotice error={saveError} title="The decision was not saved" /> : null}
+              {saveError?.id === selected.id ? <ErrorNotice error={saveError.error} title="The decision was not saved" /> : null}
 
               <div className="review__nav">
                 <button type="button" className="btn btn-secondary" onClick={() => step(-1)}>
@@ -812,11 +784,10 @@ export function ReviewPage({ datasetId, searchId }: { datasetId: number; searchI
                     id="review-note"
                     className="input"
                     value={note}
-                    disabled={readOnly}
+                    disabled={editingDisabled}
                     maxLength={2000}
                     onChange={(event) => {
                       const value = event.target.value;
-                      setNote(value);
                       editDraft({ note: value });
                     }}
                     placeholder="Optional — e.g. forklift partly hidden by a shelf"
