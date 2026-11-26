@@ -83,8 +83,14 @@ export function monitorSession(
   function stop() {
     clearTimeout(timer);
     controller.abort();
-    if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisible);
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", onVisible);
+      document.removeEventListener("resume", check);
+    }
   }
-  if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVisible);
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onVisible);
+    document.addEventListener("resume", check);
+  }
   return stop;
 }

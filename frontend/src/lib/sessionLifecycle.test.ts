@@ -379,6 +379,8 @@ describe("session review regressions", () => {
     try {
       page.dispatchEvent(new Event("visibilitychange"));
       expect(fetchMock).not.toHaveBeenCalled();
+      page.dispatchEvent(new Event("resume"));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
       page.visibilityState = "visible";
       page.dispatchEvent(new Event("visibilitychange"));
       page.dispatchEvent(new Event("visibilitychange"));
@@ -388,6 +390,7 @@ describe("session review regressions", () => {
       await vi.advanceTimersByTimeAsync(0);
       expect(next).toHaveBeenCalledExactlyOnceWith({ mode: "signed-out", notice: SESSION_ENDED });
       page.dispatchEvent(new Event("visibilitychange"));
+      page.dispatchEvent(new Event("resume"));
       await vi.advanceTimersByTimeAsync(60_000);
       expect(fetchMock).toHaveBeenCalledTimes(1);
     } finally {
