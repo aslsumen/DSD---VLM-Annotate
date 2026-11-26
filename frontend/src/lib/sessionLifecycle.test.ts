@@ -351,3 +351,47 @@ describe("protected workspace requests", () => {
     expect(abort).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("session review regressions", () => {
+  it("keeps fresh authentication on the sign-in form after acknowledging revocation", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await expect(endSession("previous", signal(), false)).resolves.toEqual({ mode: "signed-out" });
+    expect(authorization(0)).toBe("Bearer previous");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays signed out after revocation if the anonymous probe is offline", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockRejectedValueOnce(new TypeError("Offline"));
+    await expect(endSession("previous", signal())).resolves.toMatchObject({
+      mode: "signed-out", notice: expect.stringContaining("Anonymous access"),
+    });
+  });
+
+  it("shares one check between the timer and visibility changes, and stops on expiry", async () => {
+    vi.useFakeTimers();
+    const page = Object.assign(new EventTarget(), { visibilityState: "hidden" });
+    vi.stubGlobal("document", page);
+    let finish!: (value: Response) => void;
+    fetchMock.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const next = vi.fn();
+    const stop = monitorSession("previous", next);
+    try {
+      page.dispatchEvent(new Event("visibilitychange"));
+      expect(fetchMock).not.toHaveBeenCalled();
+      page.visibilityState = "visible";
+      page.dispatchEvent(new Event("visibilitychange"));
+      page.dispatchEvent(new Event("visibilitychange"));
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      finish(reply(401, {}));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(next).toHaveBeenCalledExactlyOnceWith({ mode: "signed-out", notice: SESSION_ENDED });
+      page.dispatchEvent(new Event("visibilitychange"));
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      stop();
+    }
+  });
+});

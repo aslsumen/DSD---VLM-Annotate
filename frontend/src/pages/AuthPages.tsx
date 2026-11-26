@@ -129,7 +129,7 @@ export function SignInPage() {
 }
 
 export function SessionUnavailablePage() {
-  const { error, retrySession } = useSession();
+  const { error, retrySession, signOut, hasRetainedToken } = useSession();
   return (
     <AuthLayout>
       <div className="stack">
@@ -141,7 +141,12 @@ export function SessionUnavailablePage() {
             onRetry={retrySession}
           />
         ) : null}
-        <a className="btn btn-ghost align-start" href="#/signin">Go to sign in</a>
+        {hasRetainedToken && (
+          <button className="btn btn-secondary align-start" onClick={() => void signOut()}>Sign out</button>
+        )}
+        <a className="btn btn-ghost align-start" href="#/signin" onClick={() => void signOut("signin")}>
+          Go to sign in
+        </a>
       </div>
     </AuthLayout>
   );

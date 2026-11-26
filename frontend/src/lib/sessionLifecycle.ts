@@ -5,7 +5,7 @@ export const SESSION_ENDED = "Your session ended. Sign in again to continue.";
 const SESSION_CHECK_INTERVAL = 30_000;
 
 export type SessionSnapshot =
-  | { mode: "loading" | "signing-out" | "open" }
+  | { mode: "loading" | "open" }
   | { mode: "signed-out"; notice?: string }
   | { mode: "unavailable"; error: ApiError }
   | { mode: "signed-in"; user: User; token: string };
@@ -37,7 +37,7 @@ export async function resolveSession(
   }
 }
 
-export async function endSession(token: string, signal: AbortSignal): Promise<SessionSnapshot> {
+export async function endSession(token: string, signal: AbortSignal, checkAnonymous = true): Promise<SessionSnapshot> {
   try {
     if (token) await api.logout(token, signal);
   } catch (failure) {
@@ -47,7 +47,11 @@ export async function endSession(token: string, signal: AbortSignal): Promise<Se
       return { mode: "signed-out", notice: "Signed out locally. Server sign-out could not be confirmed." };
     }
   }
-  return resolveAnonymousSession(signal);
+  if (!checkAnonymous) return { mode: "signed-out" };
+  const anonymous = await resolveAnonymousSession(signal);
+  return anonymous.mode === "unavailable"
+    ? { mode: "signed-out", notice: "Signed out. Anonymous access could not be verified." }
+    : anonymous;
 }
 
 /** Legacy project routes do not validate session tokens. Check independently of the active page. */
@@ -58,17 +62,29 @@ export function monitorSession(
   const { signal } = controller;
   let timer = setTimeout(() => void check(), SESSION_CHECK_INTERVAL);
 
+  let checking = false;
   async function check() {
+    if (checking || signal.aborted) return;
+    checking = true;
+    clearTimeout(timer);
     const result = await resolveSession(signal, token).catch(() => null);
+    checking = false;
     if (signal.aborted || !result) return;
     onResult(result);
-    if (!signal.aborted && result.mode !== "signed-out") {
+    if (result.mode === "signed-out") stop();
+    else if (!signal.aborted) {
       timer = setTimeout(() => void check(), SESSION_CHECK_INTERVAL);
     }
   }
 
-  return () => {
+  function onVisible() {
+    if (document.visibilityState === "visible") void check();
+  }
+  function stop() {
     clearTimeout(timer);
     controller.abort();
-  };
+    if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisible);
+  }
+  if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVisible);
+  return stop;
 }

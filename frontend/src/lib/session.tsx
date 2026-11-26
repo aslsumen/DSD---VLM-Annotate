@@ -23,7 +23,8 @@ export interface SessionState {
   reviewerName: string;
   signIn: (email: string, password: string, signal: AbortSignal) => Promise<void>;
   acceptInvitation: (token: string, fullName: string, password: string, signal: AbortSignal) => Promise<void>;
-  signOut: () => Promise<void>;
+  hasRetainedToken: boolean;
+  signOut: (destination?: "signin") => Promise<void>;
   error: ApiError | null;
   notice: string;
   retrySession: () => void;
@@ -33,6 +34,13 @@ export interface SessionState {
 
 const SessionContext = createContext<SessionState | null>(null);
 const TAB_SIGNED_OUT = "The session ended in another tab. Sign in again to continue.";
+
+// A non-secret generation distinguishes deliberate logout from expiry across tabs.
+const LOGOUT_KEY = "vlm-annotate.logout-generation";
+
+function logoutGeneration() {
+  try { return window.localStorage.getItem(LOGOUT_KEY); } catch { return null; }
+}
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [snapshot, setSnapshot] = useState<SessionSnapshot>({ mode: "loading" });
@@ -44,6 +52,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const reviewDrafts = useRef(new Map<string, ReviewDraft>());
   const draftOwner = useRef<number | null>(null);
 
+  const generation = useRef(logoutGeneration());
+  const syncDrafts = useCallback(() => {
+    const current = logoutGeneration();
+    if (generation.current !== current) {
+      generation.current = current;
+      reviewDrafts.current.clear();
+    }
+  }, []);
+
   const show = useCallback((next: SessionSnapshot) => {
     const current = workspace.current;
     const allowed = next.mode === "signed-in" ? { token: next.token, user: next.user }
@@ -54,12 +71,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       workspace.current = allowed;
       setWorkspaceKey((key) => key + 1);
     }
+    syncDrafts();
     if (allowed && draftOwner.current !== (allowed.user?.id ?? null)) {
       reviewDrafts.current.clear();
       draftOwner.current = allowed.user?.id ?? null;
     }
     setSnapshot(next);
-  }, []);
+  }, [syncDrafts]);
 
   const begin = useCallback(() => {
     operation.current?.abort();
@@ -113,7 +131,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       show({ mode: "signed-out", notice: SESSION_ENDED });
     });
     const sync = (event: StorageEvent) => {
-      if (event.key !== null && event.key !== TOKEN_STORAGE_KEY) return;
+      if (event.key !== null && event.key !== TOKEN_STORAGE_KEY && event.key !== LOGOUT_KEY) return;
+      syncDrafts();
       const token = getStoredToken();
       if (token === knownToken.current) return;
       if (token) retrySession();
@@ -134,13 +153,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setWorkspaceSession(null);
       workspace.current = null;
     };
-  }, [begin, clearToken, retrySession, show]);
+  }, [begin, clearToken, retrySession, show, syncDrafts]);
 
   const authenticate = useCallback(async (
     request: (signal: AbortSignal) => Promise<LoginResponse>, pageSignal: AbortSignal,
   ) => {
     const token = getStoredToken();
-    const current = operation.current?.signal;
+    // A fresh sign-in takes precedence over a pending logout acknowledgement.
+    const current = snapshot.mode === "signed-out" ? begin() : operation.current?.signal;
     const signal = current ? AbortSignal.any([current, pageSignal]) : pageSignal;
     const response = await request(signal);
     signal.throwIfAborted();
@@ -150,7 +170,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     knownToken.current = response.access_token;
     show({ mode: "signed-in", user: response.user, token: response.access_token });
     watch(response.access_token, next);
-  }, [begin, show, watch]);
+  }, [begin, show, snapshot.mode, watch]);
 
   const signIn = useCallback((email: string, password: string, signal: AbortSignal) =>
     authenticate((requestSignal) => api.login(email, password, requestSignal), signal), [authenticate]);
@@ -158,24 +178,33 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const acceptInvitation = useCallback((token: string, fullName: string, password: string, signal: AbortSignal) =>
     authenticate((requestSignal) => api.acceptInvitation(token, fullName, password, requestSignal), signal), [authenticate]);
 
-  const signOut = useCallback(async () => {
-    const token = workspace.current?.token;
+  const signOut = useCallback(async (destination?: "signin") => {
+    // Use the identity this UI observed, even after /me closed its workspace.
+    const token = knownToken.current;
     const revocation = logoutLifetime.current;
-    if (!token || !revocation) return;
     const signal = begin();
-    show({ mode: "signing-out" });
     reviewDrafts.current.clear();
-    if (getStoredToken() === token) clearToken();
-    try {
-      const result = await endSession(token, revocation.signal);
-      if (signal.aborted) return;
-      const current = getStoredToken();
-      if (current && current !== token) retrySession();
-      else if (current) show({ mode: "signed-out", notice: "Signed out here. Browser storage could not be cleared." });
-      else show(result);
-    } catch (failure) {
-      if (!signal.aborted) show({ mode: "unavailable", error: toApiError(failure) });
+    const stored = getStoredToken();
+    if (token && stored === token) {
+      try {
+        window.localStorage.setItem(LOGOUT_KEY, crypto.getRandomValues(new Uint32Array(4)).join("-"));
+      } catch {
+        // Token removal and server revocation still run if the marker cannot be written.
+      }
+      clearToken();
     }
+    const replacement = getStoredToken();
+    if (replacement && replacement !== token) retrySession();
+    else show({ mode: "signed-out", notice: "Signed out locally." });
+    if (!token || !revocation) return;
+
+    const result = await endSession(token, revocation.signal, destination !== "signin")
+      .catch(() => null);
+    if (signal.aborted || !result) return;
+    const current = getStoredToken();
+    if (current && current !== token) retrySession();
+    else if (current) show({ mode: "signed-out", notice: "Signed out here. Browser storage could not be cleared." });
+    else show(result);
   }, [begin, clearToken, retrySession, show]);
 
   const value = useMemo<SessionState>(() => {
@@ -183,6 +212,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const role = user?.role ?? (snapshot.mode === "open" ? "administrator" : null);
     return {
       mode: snapshot.mode, user, role,
+      hasRetainedToken: Boolean(knownToken.current),
       canManage: role !== null && canManage(role),
       reviewerName: user ? user.full_name || user.email : "anonymous",
       signIn, acceptInvitation, signOut, retrySession, workspaceKey,

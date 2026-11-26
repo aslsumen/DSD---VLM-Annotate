@@ -47,14 +47,18 @@ function Routed() {
     }
   }, [session.mode, route.name]);
 
-  if (session.mode === "loading" || session.mode === "signing-out") {
+  if (session.mode === "loading") {
     return (
       <div className="auth-screen">
-        <Loading label={session.mode === "signing-out" ? "Signing out…" : "Checking access…"} />
+        <Loading label="Checking access…" />
+        {session.hasRetainedToken && (
+          <button className="btn btn-secondary" onClick={() => void session.signOut()}>Sign out</button>
+        )}
       </div>
     );
   }
 
+  if (session.mode === "unavailable" && session.hasRetainedToken) return <SessionUnavailablePage />;
   if (route.name === "invite") {
     return <AcceptInvitePage key={route.token} token={route.token} />;
   }
