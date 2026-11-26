@@ -159,12 +159,41 @@ def get_job_or_404(session: Session, job_id: int) -> ProcessingJob:
     return job
 
 
+def get_optional_principal(
+    request: Request,
+    session: Session = Depends(get_db),
+) -> Principal:
+    """Like :func:`get_current_principal` but never answers ``401`` itself.
+
+    The shared legacy routes (``/videos/{id}``, ``/jobs/*``, ``/candidates/*``)
+    serve both project-owned rows, which were never authenticated, and
+    dataset-owned rows, which must be.  Refusing anonymous callers here would
+    break the project routes whenever ``VLM_AUTH_REQUIRED`` is on, so this
+    variant returns an anonymous principal instead and lets the per-row guard
+    decide: project rows stay open, dataset rows refuse it (``401`` for an
+    anonymous caller, ``404`` for a signed-in stranger).
+
+    A *presented* token is still validated — an invalid or expired one raises
+    ``401`` rather than silently degrading to anonymous.
+    """
+    settings: Settings = request.app.state.settings
+    token = _bearer_token(request)
+
+    if token:
+        return get_current_principal(request, session)
+
+    if settings.auth_required:
+        return Principal(user=None, role=UserRole.annotator, is_authenticated=False)
+    return Principal(user=None, role=UserRole.administrator, is_authenticated=False)
+
+
 __all__ = [
     "Principal",
     "extractor_dep",
     "get_current_principal",
     "get_db",
     "get_job_or_404",
+    "get_optional_principal",
     "get_project_or_404",
     "get_video_or_404",
     "probe_dep",

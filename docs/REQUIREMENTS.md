@@ -66,9 +66,9 @@ Status column: **I** implemented in the current repository · **P** partial · *
 
 | ID | Requirement | Priority | Source | Status |
 |---|---|---|---|---|
-| DS-1 | Administrator or Dataset Administrator uploads **MP4** videos into a dataset; Annotators cannot upload | Must | CP/CM/CE | **P** (upload works; MP4-only not enforced; roles missing) |
-| DS-2 | Dataset = collection of videos, named after its use case; list of its videos | Must | CM/CE | **P** (Project entity; no roles/assignment) |
-| DS-3 | User selects a dataset as the target of a search | Must | CM | **P** (project selection exists) |
+| DS-1 | Administrator or Dataset Administrator uploads **MP4** videos into a dataset; Annotators cannot upload | Must | CP/CM/CE | **P** (upload works through `POST /datasets/{id}/videos` and now requires `administrator`/`dataset_admin`; MP4-only still not enforced) |
+| DS-2 | Dataset = collection of videos, named after its use case; list of its videos | Must | CM/CE | **P** (`Dataset` entity + `GET /datasets/{id}/videos`; the name is free text and `use_case` was dropped in Design v1.2, so "named after its use case" is a convention, not a field) |
+| DS-3 | User selects a dataset as the target of a search | Must | CM | **I** (a search is created against `dataset_id`; dataset selection exists in the API, UI pending) |
 | DS-4 | Accept videos **up to 5 minutes** | Must | CM | **I** (limit is higher) |
 | DS-5 | Accept videos **up to 30 minutes**; longer videos may be split | Should | CP/CM | **P** (limit configured; not validated on real 30-min footage) |
 
@@ -76,14 +76,14 @@ Status column: **I** implemented in the current repository · **P** partial · *
 
 | ID | Requirement | Priority | Source | Status |
 |---|---|---|---|---|
-| PR-1 | Administrator/Dataset Admin writes a free-text prompt describing a temporal event; several prompts can be run on the same dataset, each a separate search | Must | CP/CM/CE | **P** (action text exists; no search entity/history) |
-| PR-2 | Edit a previous prompt and run it again on the same dataset | Could | T | **N** |
+| PR-1 | Administrator/Dataset Admin writes a free-text prompt describing a temporal event; several prompts can be run on the same dataset, each a separate search | Must | CP/CM/CE | **I** (`Search` entity: `searches.prompt` + auto `title`, one row per prompt run over a dataset, with per-video `search_videos` fan-out and aggregated status) |
+| PR-2 | Edit a previous prompt and run it again on the same dataset | Could | T | **P** (the prompt is stored per search and a new search reuses it; editing a stored prompt is not offered) |
 
 ### 3.3 Detection (DET)
 
 | ID | Requirement | Priority | Source | Status |
 |---|---|---|---|---|
-| DET-1 | Zero-shot detection without training a model for the event | Must | CP/CM | **P** (`videojev` adapter integrated 2026-11-16; mock is still the default; real-model smoke on the 8 GB laptop pending; KPI check on held-out composite benchmarks pending, Charades-STA is reference only) |
+| DET-1 | Zero-shot detection without training a model for the event | Must | CP/CM | **P** (`videojev` adapter integrated 2026-11-16; mock is still the default; 52-second real-model web smoke passed on the 8 GB laptop on 2026-11-23; KPI check on held-out long videos 2026-11-22: recall 0.86 cooking (CI 0.81–0.90, not confirmed) / 0.47 driving vs 0.85, CCR 0.78 / 0.82 vs 0.85, targets not met, see `video_grounding/docs/EVALUATION.md`; Charades-STA is reference only) |
 | DET-2 | Each candidate has start/end timestamps in the video, in minutes and seconds | Must | CP/CM | **I** (stored in seconds; UI formats) |
 | DET-3 | Search runs in the background; user sees queued/running/done/failed and can leave the page | Must | CM/T | **I** (per-video jobs; dataset-level search missing) |
 | DET-4 | Confidence score shown when available; candidates sortable by it | Could | T | **I** (score stored/sorted) |
@@ -117,7 +117,7 @@ Status column: **I** implemented in the current repository · **P** partial · *
 | ID | Requirement | Priority | Source | Status |
 |---|---|---|---|---|
 | USR-1 | Personal account; **sign in with email** (no username, CE-2) | Must | CE/T | **P** (login/session API; UI pending) |
-| USR-2 | Two base roles with the permissions in §2; **roles are global** | Must | CM/CE | **P** (global roles enforced on auth/dataset routes; legacy routes pending) |
+| USR-2 | Two base roles with the permissions in §2; **roles are global** | Must | CM/CE | **I** (global `administrator`/`dataset_admin`/`annotator` enforced on the auth, dataset, search and — since 2026-11-25 — shared legacy video/job/candidate routes; UI pending) |
 | USR-3 | Administrator assigns datasets to any user; users see only assigned datasets | Must | CM/CE | **P** (dataset memberships; annotators filtered) |
 | USR-4 | Dataset Administrator: almost all rights within own datasets; sees all annotators; assigns only within own datasets; **may invite users (CE-2)** | Should | CE-2 | **P** (create dataset + invite annotators; UI pending) |
 | USR-5 | Administrator (and Dataset Admin) enters email + role; system sends a single-use invitation; person sets password; account created | Must | T/CE-2 | **P** (single-use 48 h token; no mail transport yet) |
@@ -146,7 +146,7 @@ Status column: **I** implemented in the current repository · **P** partial · *
 ## 5. Detection engine requirements (ENG-1…ENG-13)
 
 These refine DET-1/DET-2 and are owned by the detection-engine workstream (Design Description v1.1 §6.1).
-**Status (2026-11-16): engine code exists (`video_grounding/`, integrated as the `videojev` adapter); per-requirement status not re-assessed. KPI check against the targets is pending on the held-out composite benchmarks (Charades-STA is reference only, in-domain), see `video_grounding/docs/EVALUATION.md`.**
+**Status (2026-11-16): engine code exists (`video_grounding/`, integrated as the `videojev` adapter); per-requirement status not re-assessed. The KPI check on the held-out long-video benchmark ran 2026-11-20 to 22 (Charades-STA is reference only, in-domain): recall 0.86 cooking (CI 0.81–0.90, not confirmed) and 0.47 driving vs 0.85, CCR 0.78 and 0.82 vs 0.85, targets not met; see `video_grounding/docs/EVALUATION.md`.**
 
 | ID | Requirement (short) | Priority |
 |---|---|---|
@@ -174,6 +174,23 @@ These refine DET-1/DET-2 and are owned by the detection-engine workstream (Desig
 | Event recall | Share of manually marked events found (a candidate overlaps the event at temporal IoU ≥ 0.3), on a fully watched sample | ≥ 0.85 |
 | False candidates on absent prompts | Candidates returned for prompts whose event never happens in the videos (reviewer time wasted) | Reported; target TBD |
 | R@IoU 0.3/0.5/0.7, mIoU | Strict boundary overlap; diagnostic only | Reported, no target |
+| Engine real-time factor (RTF) | For one video × one prompt, engine wall-clock processing time divided by that video’s duration; RTF < 1 means faster than the video duration | Required reporting; target TBD after 10–30 min video measurements |
+| Upload-to-candidates latency | Elapsed time from upload completion to candidates and their preview clips being available, or a successful zero-candidate result; includes queueing and backend work | Required reporting; target TBD after 10–30 min video measurements |
+| Per-stage processing time | Seconds spent in queueing, model loading, coarse scan, refinement, optional verification, preview extraction and result persistence | Required reporting; diagnostic, no separate target |
+
+For speed measurements, use **one video × one prompt per job** and report actual processing seconds and
+seconds / video duration for that pair. Do not use multi-prompt job totals or divide them by prompt count to
+infer product speed. Record the exact prompt, hardware (GPU/VRAM and CPU/RAM), code/model revision, video
+duration/resolution, config, verification setting, model-loaded state and initial video-cache state. Separate
+model cold starts, model-warm/cache-empty searches and searches reusing visual features. Report Recall and
+complete clip rate under the same configuration. Start processing immediately after upload for the latency
+benchmark; report upload transfer and manual delays separately. Report failed jobs and missing preview clips.
+For repeated runs of the same pair and state, report sample count, median and p90; for a single observation,
+report its individual value without a percentile claim.
+
+Backend job processing time (`finished_at − started_at`) excludes pre-claim queueing and is reported as a
+single-prompt job time/RTF, separately from full engine RTF and upload-to-candidates latency. Current measured
+pairs, prompts, model/cache states and sample sizes are in [the speed report](../video_grounding/docs/EVALUATION.md#speed-kpis).
 
 *2026-11-16: R@IoU=0.5 ≥ 0.70 dropped as a target. This is an engineering tool, not a research benchmark: candidates only need to land in a reasonable range, because reviewers correct and confirm the span. Whether a span is good enough is measured by the complete clip rate (2 s tolerance per end) and the boundary adjustment.*
 
@@ -222,12 +239,12 @@ invitation.
 | Requirement group | Current code | Tests |
 |---|---|---|
 | DS-1/2/3, DS-4/5 | `backend/app/api/videos.py`, `projects.py`; `services/storage.py`, `media.py` | `test_api_videos.py`, smoke |
-| PR-1 | `models.ActionDefinition`, `api/projects.py` | `test_api_projects.py` |
+| PR-1 | `models.Search`/`SearchVideo`, `api/searches.py` | `test_searches.py` (fan-out, status aggregation, idempotency request scope, cancel/restart) |
 | DET-2/3/4 | `services/pipeline.py`, `worker.py`, `models.ProcessingJob/Candidate` | `test_flow.py`, `test_worker.py` |
 | REV-1…4 | `api/candidates.py`, `frontend/src/pages/ReviewPage.tsx` | `test_flow.py`, UI E2E report |
 | EXP-1/2 | `services/pipeline.py` (ZIP export) — **needs rewrite to JSON** | `test_flow.py` |
 | USR-1…5 | `api/auth.py`, `security.py`, `deps.py`, `models.User/Invitation/UserSession` | `test_auth.py` |
-| DS-1/2/3 (access) | `api/datasets.py`, `models.Dataset/DatasetMembership` | `test_datasets.py`, `test_auth.py` |
+| DS-1/2/3 (access) | `api/datasets.py`, `app/access.py`, `models.Dataset/DatasetMembership` | `test_datasets.py`, `test_auth.py`, `test_dataset_authz.py` |
 | NFR-8 | generated storage keys, deletion, token | `test_storage.py` |
 
 > The **authoritative submission** for 2026-11-13 is the team's PDF (v1.1 or a regenerated v1.2). This

@@ -54,6 +54,8 @@ class ProposalRequest:
     # retries of the same job (resumable engines) and a 0..1 progress callback.
     work_dir: Path | None = None
     progress: Callable[[float], None] | None = None
+    # Per-video directory for the adapter's reusable visual features. Deleting the video removes it.
+    feature_cache_dir: Path | None = None
 
 
 @dataclass(frozen=True)

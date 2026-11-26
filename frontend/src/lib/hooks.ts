@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ApiError } from "./api";
 import { toApiError } from "./api";
+import { schedulePoll } from "./polling";
+import { useSession } from "./session";
 
 export interface ApiDataState<T> {
   data: T | null;
@@ -65,6 +67,24 @@ export function useApiData<T>(
   const reload = useCallback(() => setVersion((current) => current + 1), []);
 
   return { data, error, loading, reload };
+}
+
+export function useSearchPolling(
+  { error, loading, reload }: ApiDataState<unknown>,
+  active: boolean,
+  delay: number,
+): void {
+  const { mode, sessionExpired } = useSession();
+  const status = error?.status;
+  useEffect(
+    () => schedulePoll(
+      { active, loading, status },
+      delay,
+      reload,
+      mode === "signed-in" ? sessionExpired : undefined,
+    ),
+    [active, delay, loading, mode, reload, sessionExpired, status],
+  );
 }
 
 function readPreference(key: string, fallback: string): string {

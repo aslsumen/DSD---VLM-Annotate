@@ -65,7 +65,8 @@ class GroundingResult:
     raw_response: dict = field(default_factory=dict)
     # raw_response documented keys (all optional): interval, score_bounds (global cell edges,
     # len = len(probabilities)+1), fps_actual, frames, grid_thw, tokens, context_tokens,
-    # resolution [w, h], inference_ms, peak_vram_bytes, timestamp_error_sec, sampling_mode
+    # resolution [w, h], inference_ms, peak_vram_bytes, timestamp_error_sec, sampling_mode,
+    # feature_source ("memory" | "disk" | "encoded": where the visual features came from)
 
     def __post_init__(self):
         if len(self.probabilities) != len(self.sample_source_pts):

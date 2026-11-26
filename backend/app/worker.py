@@ -32,6 +32,7 @@ from .services.pipeline import (
     fail_job_now,
     heartbeat,
     reap_stale_jobs,
+    reconcile_search_state,
 )
 from .services.storage import LocalStorage
 
@@ -56,6 +57,9 @@ class JobWorker:
         with SessionLocal() as session:
             # Stale = 3 missed beats; a requeued job is then claimed like any other.
             reap_stale_jobs(session, 3 * self.settings.worker_heartbeat_seconds)
+            # Repair any SearchVideo/Search row an older write path (or a hard
+            # kill) left out of step with its job before picking up new work.
+            reconcile_search_state(session)
             job = claim_next_job(session)
             if job is None:
                 return False

@@ -15,6 +15,11 @@ Historical spec name: `SPEC_ZeroShot_Video_Event_Grounding_MVP_v1.1` (not includ
 - `predict_video(processor, path, questions, fps, max_frames, context, threshold)` =
   `prepare_video` -> `encode_video` -> `predict_features`. The `record` (score times) is NOT
   returned by `predict_video`, so the adapter calls the three steps itself.
+- Feature cache (`feature_cache.py`, `feature_cache.dir`): `encode_video` output plus `record` are stored per window under
+  sha256(clip bytes, fps, max_frames, context, model id/revision, attention, torch/transformers versions); a later
+  prompt on the same video reloads them instead of decoding and encoding again. `FeatureCache(root, max_bytes, subdir=None)`
+  keeps entries in `root/subdir` (one per video in the product) while the `max_bytes` LRU cap covers all of `root`. The features do not depend on the
+  prompt, so results are identical. `raw_response["feature_source"]` is `encoded`, `memory` or `disk`.
 - `prepare_video(processor, path, *, fps, max_frames, context) -> (pixel_values, record)`,
   `record = {frames, fps, grid_thw, tokens, score_times, score_bounds, sampled_duration}`.
 - Sampling: requested grid `arange(ceil(dur*fps))/fps` relative to the first decoded frame's PTS;
@@ -45,7 +50,7 @@ Historical spec name: `SPEC_ZeroShot_Video_Event_Grounding_MVP_v1.1` (not includ
   floor 0.05 at an inner window edge). A window edge that lies on the video start or end truncates
   nothing, so it is not treated as an edge. `max_weight < 0.5` at an event boundary sets
   `boundary_near_window_edge`.
-- Events whose `raw_score_max` is below `fusion.min_event_score` (default 0.5, provisional: chosen on Charades-STA for VideoJev-4B, to be re-checked on the held-out composites)
+- Events whose `raw_score_max` is below `fusion.min_event_score` (default 0.5, provisional: chosen on Charades-STA for VideoJev-4B, checked on the held-out long-video benchmark, which keeps 3.5 candidates per absent cooking prompt and 8.4 per absent driving prompt, see EVALUATION.md)
   are dropped before refinement and export. events.json lists each query's events by descending
   `raw_score_max`, so reviewers see the likely ones first.
 
@@ -102,7 +107,7 @@ Scheduling and data pipeline:
 ## Job directory (`--out`)
 ```
 job.sqlite                 # jobs / windows / predictions / events / artifacts / verdicts (source of truth)
-config.yaml                # resolved settings snapshot; config_hash = sha256 of canonical JSON of the resolved settings minus `verify` (settings.config_hash)
+config.yaml                # resolved settings snapshot; config_hash = sha256 of canonical JSON of the resolved settings minus `verify` and `feature_cache` (settings.config_hash; neither changes the scan result)
 windows/                   # temp window clip, deleted once the window is grounded
 window_predictions.jsonl   # regenerated from SQLite; SPEC 8.2 fields
 events.json                # SPEC 8.1 schema + coverage_gaps + per-query warnings

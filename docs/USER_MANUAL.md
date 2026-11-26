@@ -1,17 +1,28 @@
 # User Manual
 
 **Applies to:** Sprint 2 vertical slice (2026-11-05) · **UI:** desktop and mobile browser
+**API status:** updated 2026-11-26 — the dataset/search API and accounts exist behind this UI (see the vocabulary
+note below).
+
+> **Vocabulary note (2026-11-26).** Datasets and searches — a *search* being one prompt run over every video of a
+> dataset — are implemented in the API (`/api/v1/datasets…`, `/api/v1/searches/…`) with global roles and dataset
+> membership enforced. **The UI in this build still drives projects and action definitions**, so the walkthrough
+> below says "project" and "action". After the frontend cutover, read "project" as "dataset" and "action" as
+> "search prompt".
 
 > **Current limitation — read before demoing.** By default, candidate intervals are produced by the **mock
 > adapter**: a deterministic generator that does *not* look at the video pixels. The UI shows a MOCK banner on
 > such jobs and the exported manifest marks them. A real detector, the `videojev` adapter (VideoJev-4B), is
 > available on a worker configured with a GPU ([INSTALLATION_MANUAL.md](INSTALLATION_MANUAL.md) §5.1). It is
-> integrated, but not yet validated on product footage. On an 8 GB laptop it takes about 0.66× the video
-> duration on ~30 s Charades-STA videos (2026-11-16); longer videos are not measured. With it, review every candidate: accuracy on held-out benchmarks is still being measured.
+> integrated, but not yet validated on product footage. Search time is measured for one video and one prompt
+> per job; see the [single-prompt speed results](../video_grounding/docs/EVALUATION.md#speed-kpis) for actual
+> times and model/cache conditions. Later searches reuse visual features for the same uploaded video.
+> Deleting the video or its project clears those features. Deleting a search keeps them available for other searches.
+> With it, review every candidate: on held-out long videos it found 86% of the true cooking events and 47% of the true driving events, and on driving it gives almost as many candidates for actions that are not in the video as for ones that are (`video_grounding/docs/EVALUATION.md`).
 
 ## 1. What you can do
 
-1. Organise work into **projects**.
+1. Organise work into **projects** (datasets, from the v1.2 vocabulary — see the note above).
 2. Describe the action you are looking for in **natural language**.
 3. Upload a long single-view RGB **video**.
 4. Start **asynchronous** processing and watch its progress.
@@ -112,12 +123,12 @@ include unreviewed items.
 
 | Limitation | Effect | Planned |
 |---|---|---|
-| Mock candidate generation (default adapter) | Intervals are plausible but arbitrary | Use the `videojev` adapter on a GPU worker; real-model smoke and product-footage validation pending |
-| Real detector quality | Held-out benchmark results pending; on Charades-STA (reference only, in-domain) recall was 0.690 vs the 0.85 target and short events were missed most | Human review of every candidate; validation on product footage |
+| Mock candidate generation (default adapter) | Intervals are plausible but arbitrary | Use the `videojev` adapter on a GPU worker; the real-model web smoke passed on a public clip. Product footage still needs validation |
+| Real detector quality | Held-out long videos (2026-11-22): recall 0.86 cooking and 0.47 driving vs the 0.85 target; on driving, turns are found but lane moves, overtakes and most stops are missed; a prompt for something not in the video still returns about 3.5 candidates per cooking video and 8.4 per driving video | Human review of every candidate; validation on product footage |
 | Single worker | One long job delays others | Parallel workers with PostgreSQL (later) |
-| No multi-user accounts | One shared optional token | Deferred (OPT-06) |
+| No multi-user accounts **in the UI** | One shared optional token | Accounts, global roles, invitations and sessions exist in the API (2026-11-19/25); the sign-in screens are Sprint 3 work |
 | No bulk review | One label at a time | Deferred (OPT-05) |
-| Cancel only while queued | A running ffmpeg/model call finishes | Documented trade-off |
+| Cancel semantics | A running ffmpeg/model call finishes; its result is then dropped | The search settles `failed` with reason "Job canceled" even if the worker is mid-run (2026-11-25), and a whole search can be canceled with `POST /datasets/{id}/searches/{id}/cancel` |
 | English UI | — | Acceptable for the course |
 
 ## 11. Getting help

@@ -1,0 +1,131 @@
+{
+  "date": "2026-11-22",
+  "code": {
+    "main_base": "a1b827905b808d10813177a87207794ee134e225",
+    "tested_head": "02cdaf71d190f3268e7b4353aab72a7f0ae08817",
+    "scope": "main baseline plus feature-cache changes"
+  },
+  "measurement": {
+    "unit": "one video x one prompt per backend job",
+    "time_s": "job.finished_at - job.started_at",
+    "timestamp_resolution_s": 1,
+    "queue_and_upload_time_included": false,
+    "jobs_per_case": 1,
+    "worker_reused_across_all_six_jobs": true,
+    "verification_enabled": false
+  },
+  "results": [
+    {
+      "video": "-AwyG1JcMp8",
+      "duration_s": 307.467,
+      "jobs": [
+        {
+          "label": "A_cold",
+          "video_id": 1,
+          "wall_s": 231.0,
+          "candidates": 6,
+          "cache_files_after": 26,
+          "prompt": "place the filling on a wrapper and press the edges together",
+          "prompt_count": 1,
+          "video_count": 1,
+          "model_loaded_before_job": false,
+          "video_cache_before_job": "empty",
+          "job_rtf": 0.7513001395271688
+        },
+        {
+          "label": "B_warm",
+          "video_id": 1,
+          "wall_s": 97.0,
+          "candidates": 2,
+          "cache_files_after": 32,
+          "prompt": "place the dumplings above a pot of boiling water",
+          "prompt_count": 1,
+          "video_count": 1,
+          "model_loaded_before_job": true,
+          "video_cache_before_job": "existing_from_prompt_A",
+          "job_rtf": 0.315481010970283
+        },
+        {
+          "label": "B_cold",
+          "video_id": 1,
+          "wall_s": 178.0,
+          "candidates": 2,
+          "cache_files_after": 21,
+          "prompt": "place the dumplings above a pot of boiling water",
+          "prompt_count": 1,
+          "video_count": 1,
+          "model_loaded_before_job": true,
+          "video_cache_before_job": "empty",
+          "job_rtf": 0.5789239170382513
+        }
+      ],
+      "same_prompt_B_cache_saving_fraction": 0.4550561797752809
+    },
+    {
+      "video": "2014-06-25-16-45-34_stereo_centre_02",
+      "duration_s": 394.5,
+      "jobs": [
+        {
+          "label": "A_cold",
+          "video_id": 1,
+          "wall_s": 322.0,
+          "candidates": 5,
+          "cache_files_after": 39,
+          "prompt": "the ego vehicle is stopped",
+          "prompt_count": 1,
+          "video_count": 1,
+          "model_loaded_before_job": true,
+          "video_cache_before_job": "empty",
+          "job_rtf": 0.8162230671736375
+        },
+        {
+          "label": "B_warm",
+          "video_id": 1,
+          "wall_s": 186.0,
+          "candidates": 10,
+          "cache_files_after": 54,
+          "prompt": "the ego vehicle turns left",
+          "prompt_count": 1,
+          "video_count": 1,
+          "model_loaded_before_job": true,
+          "video_cache_before_job": "existing_from_prompt_A",
+          "job_rtf": 0.4714828897338403
+        },
+        {
+          "label": "B_cold",
+          "video_id": 1,
+          "wall_s": 303.0,
+          "candidates": 10,
+          "cache_files_after": 35,
+          "prompt": "the ego vehicle turns left",
+          "prompt_count": 1,
+          "video_count": 1,
+          "model_loaded_before_job": true,
+          "video_cache_before_job": "empty",
+          "job_rtf": 0.7680608365019012
+        }
+      ],
+      "same_prompt_B_cache_saving_fraction": 0.38613861386138615
+    }
+  ],
+  "source_files": {
+    "ct4.log": {
+      "path": "/root/vg/cachetest/ct4.log",
+      "sha256": "1e21f4f9e97e10dfaba0bd49fd1fcb5e205b0b530bf4454fc7dba416a10d14fd"
+    },
+    "ct4.py": {
+      "path": "/root/vg/cachetest/ct4.py",
+      "sha256": "7d37d47d0aae3dd01313195a9e7214fca6efc8968e64d63481f472e136831c55"
+    },
+    "ct4.sh": {
+      "path": "/root/vg/cachetest/ct4.sh",
+      "sha256": "39d8072b886dc1c71b51045c178792b1af16c75b170c3ac8972452e63dec382d"
+    },
+    "cfg4.yaml": {
+      "path": "/root/vg/cachetest/cfg4.yaml",
+      "sha256": "0636abba96614b66c8258edb978475bb75fbd54624090a5eb746888735bc1db7"
+    }
+  },
+  "config_yaml": "runtime:\n  profile: dev_low_vram\n  backend: videojev\n  device_map: auto\n  max_memory:\n    0: 6GiB\n    cpu: 9GiB\nverify:\n  enabled: false\n",
+  "raw_log": "START 10:04:44\nHEAD 02cdaf7 docs: state cache size as measured, drop unverified in-search reuse claim\nPASS upload \nPASS A_cold enqueue \nPASS A_cold succeeded \n{\"label\": \"A_cold\", \"video_id\": 1, \"wall_s\": 231.0, \"candidates\": 6, \"cache_files_after\": 26}\nPASS cache dir created under data dir \nPASS B_warm enqueue \nPASS B_warm succeeded \n{\"label\": \"B_warm\", \"video_id\": 1, \"wall_s\": 97.0, \"candidates\": 2, \"cache_files_after\": 32}\nPASS delete video 204 \nPASS delete video removes its cache dir \nPASS delete video removes engine job dirs \nPASS upload \nPASS B_cold enqueue \nPASS B_cold succeeded \n{\"label\": \"B_cold\", \"video_id\": 1, \"wall_s\": 178.0, \"candidates\": 2, \"cache_files_after\": 21}\nPASS B warm == B cold candidates \nPASS delete project 204 \nPASS delete project removes cache dir \n{\"video\": \"-AwyG1JcMp8\", \"duration_s\": 307.467, \"A_cold\": 231.0, \"B_warm\": 97.0, \"B_cold\": 178.0, \"rtf\": [0.75, 0.32, 0.58], \"saved\": 0.46}\nCT4 VIDEO PASSED\nPASS upload \nPASS A_cold enqueue \nPASS A_cold succeeded \n{\"label\": \"A_cold\", \"video_id\": 1, \"wall_s\": 322.0, \"candidates\": 5, \"cache_files_after\": 39}\nPASS cache dir created under data dir \nPASS B_warm enqueue \nPASS B_warm succeeded \n{\"label\": \"B_warm\", \"video_id\": 1, \"wall_s\": 186.0, \"candidates\": 10, \"cache_files_after\": 54}\nPASS delete video 204 \nPASS delete video removes its cache dir \nPASS delete video removes engine job dirs \nPASS upload \nPASS B_cold enqueue \nPASS B_cold succeeded \n{\"label\": \"B_cold\", \"video_id\": 1, \"wall_s\": 303.0, \"candidates\": 10, \"cache_files_after\": 35}\nPASS B warm == B cold candidates \nPASS delete project 204 \nPASS delete project removes cache dir \n{\"video\": \"2014-06-25-16-45-34_stereo_centre_02\", \"duration_s\": 394.5, \"A_cold\": 322.0, \"B_warm\": 186.0, \"B_cold\": 303.0, \"rtf\": [0.82, 0.47, 0.77], \"saved\": 0.39}\nCT4 VIDEO PASSED\nworker_tracebacks=0 features_left=0\nCT4 END 10:27:14\n"
+}

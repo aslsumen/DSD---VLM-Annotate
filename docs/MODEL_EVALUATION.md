@@ -1,11 +1,15 @@
 # Model and Test-Data Evaluation
 
-**Status:** v1.2 working note · **Date:** 2026-11-12 · **Owner:** ML/adapter workstream (role placeholder)
-**Real inference:** VideoJev-4B was measured on Charades-STA only (2026-11-16, §5.1, §8); that is a reference set, in-domain for VideoJev, not an accuracy claim. The held-out composite benchmarks (YouCook2, BDD-X) are running since 2026-11-16, results pending. The real-model smoke on the project laptop and any run on project videos are **NOT RUN**; `mock` is still the default adapter.
+**Status:** model-selection context and current experiment summary · **Updated:** 2026-11-22
 
-> This document separates three things that are easy to confuse: what a model *claims*, what we have
-> *verified in a primary source*, and what we have *measured ourselves*. Only the last one is evidence of
-> quality. Our own measurements so far are Charades-STA runs of the VideoJev engine (§5.1); VideoJev was trained on Charades-STA, so they are reference numbers, not evidence of accuracy on new footage.
+The experiment report is [Detection engine evaluation](../video_grounding/docs/EVALUATION.md). It contains the
+new KPI results on 53 long videos, the comparison with Gemini Decision under the same engine workflow, and
+paired ablations, with definitions, conclusions and saved score files. This document keeps the model-selection,
+hardware and dataset context; the experiment report is the source of measured results.
+
+VideoJev found 258/300 cooking events and 112/238 driving events. Cooking recall reaches the 85% target as a
+point estimate; driving recall and both complete clip rates remain below it. These are public-dataset results,
+not customer-footage validation. `mock` remains the default product adapter.
 
 > **As-built detail for the implemented prototype:** [docs/as-built/IMPLEMENTED_BASELINE_2026-11-05.md](as-built/IMPLEMENTED_BASELINE_2026-11-05.md).
 
@@ -33,7 +37,7 @@
 | Option | Licence | Temporal grounding evidence | Fit | Status |
 |---|---|---|---|---|
 | **Gemini API** (Flash-class model) | Commercial API terms; customer-provided key | Not verified for temporal grounding; prompt/schema must be tested | No local GPU needed; quota-bound | Optional verify stage in the engine, off in the product adapter (2026-11-16, §5.1); not the first detector |
-| **VideoJev-4B** (MCG-NJU, Qwen3.5-4B base) | Apache-2.0 per team design | Team design says it returns a **per-frame-pair probability curve** plus one interval — suited to windowed fusion | 4 B; needs ~8–16 GB depending on quantisation | **Integrated as the `videojev` adapter (ADR-0007); measured on Charades-STA, below SPEC targets** |
+| **VideoJev-4B** (MCG-NJU, Qwen3.5-4B base) | Apache-2.0 per team design | Team design says it returns a **per-frame-pair probability curve** plus one interval — suited to windowed fusion | 4 B; needs ~8–16 GB depending on quantisation | **Integrated as the `videojev` adapter (ADR-0007); measured on held-out long videos (recall 0.86 cooking, 0.47 driving) and Charades-STA, below SPEC targets or not confirmed** |
 | Qwen2.5-VL-7B / 3B | 7B Apache-2.0; **3B `qwen-research`** | Card claims segment pinning, mRoPE absolute time, Charades-STA mIoU 43.6 (row malformed); fps passed to processor | 7B no; 3B yes | Stub only (superseded as first real model by ADR-0007) |
 | SmolVLM2-2.2B | Apache-2.0 | No grounding claim; card documents **5.2 GB** video inference | Yes | Presence-classifier fallback |
 | InternVL3.x / LLaVA-Video / VideoLLaMA3 | Apache/MIT mix | No temporal-grounding claim | Mostly no | Describe-only; not timestamp sources |
@@ -52,8 +56,9 @@ contains the whole action (ENG-6). VideoJev-4B's reported per-pair probability c
 - flagging boundaries seen only at a window edge or with sparse sampling;
 - re-thresholding without re-running inference (ENG-8).
 
-Gemini-class chat APIs return text, not a calibrated curve; any timestamps must be parsed from JSON and
-validated. That is acceptable for a first MVP but must be measured, not assumed.
+The experimental Gemini Decision backend obtains a score curve by asking a yes/no question for each time cell
+inside a sampled window. It reuses the engine workflow, but requires an output adapter and fixed-threshold
+evaluation rather than treating a clip-level probability as a timestamp. Its measured comparison is in §5.1.
 
 ## 5. Decision (working, supersedable)
 
@@ -62,24 +67,51 @@ validated. That is acceptable for a first MVP but must be measured, not assumed.
 | Sprint 2 prototype | **Mock adapter only**, labelled (still the default adapter) | Pipeline and review correctness first |
 | First real detector (Sprint 3) | ~~Gemini API~~ **Superseded 2026-11-16:** VideoJev-4B via the `videojev` adapter (§5.1). Gemini remains an optional engine verify stage, off in the adapter | The self-hosted engine was built and measured first; no footage leaves the machine |
 | Self-hosted target (Sprint 3–4) | **VideoJev-4B**; runs on the 8 GB RTX 3070 laptop with CPU offload (slow), no quantisation used; 12 GB laptop or 24 GB GPU if granted | Apache-2.0, score curve, offline (ENG-12) |
-| Comparator | Qwen2.5-VL-3B or SmolVLM2 windowed presence (not planned; stub only) | Licence/feasibility fallback |
+| Comparator | Gemini Decision via an experimental grounding backend; Qwen2.5-VL remains a stub | Same-workflow detector comparison measured on three composites; see §5.1 |
 | Forbidden | Sending face-containing customer footage to any API without written approval | NFR-8 |
 
 **Blocking question for the customer (13 Nov):** may videos that show faces be sent to Gemini? Until answered,
 use public/team footage for API experiments and keep the self-hosted path for customer data.
 
-### 5.1 Update 2026-11-16: VideoJev-4B integrated as the `videojev` adapter
+### 5.1 Current experiment evidence
 
-[ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md) plugs the `video_grounding/` engine into
-the job queue. Why VideoJev-4B: it is a temporal-grounding model with a score curve, and it runs on an 8 GB
-laptop GPU with CPU offload. Reference numbers (in-domain: VideoJev was trained on Charades-STA; the main benchmarks are the held-out composites in `video_grounding/docs/EVALUATION.md`, results pending), Charades-STA test subset (300 videos / 822 queries), before verification:
-recall 0.771, precision 0.737, R1@0.3/0.5/0.7 = 0.760/0.507/0.237, mIoU 0.486, Complete Clip Rate (oracle
-reviewer) 0.786, at the current default `min_event_score` 0.5. Scan + refine takes about 0.66× the video duration on
-an RTX 3070 Laptop 8 GB (details: `video_grounding/docs/EVALUATION.md`). At the old default 0.9 the same videos gave
-recall 0.690, R1@0.5 0.460. The SPEC targets (recall 0.85, CCR 0.85; R@IoU 0.5 is diagnostic since 2026-11-16) are missed on
-this in-domain reference set; the target check is pending on the held-out composites. Spans under 5 s are the weakest (recall 0.58). `min_event_score` 0.5 was chosen on Charades-STA and is provisional until re-checked on the composites.
-Gemini verification is off in the product adapter: on Charades-STA (reference) it removed 37 of 171 false events and cost recall.
-The Qwen2.5-VL comparator row above is not implemented (stub only).
+[ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md) connects the VideoJev engine to the job
+queue. The current quality check is the 2026-11-20 to 22 long-video run, with one job per video and Gemini
+verification disabled. All 53 videos completed. Intervals below are 95% bootstrap confidence intervals over
+videos; they describe sampling uncertainty rather than an additional acceptance rule.
+
+| KPI | YouCook2 cooking, 33 videos | ROAD driving, 20 videos |
+|---|---|---|
+| Recall, target ≥ 85% | 86.0% [81.1%, 90.3%], 258/300 | 47.1% [39.5%, 56.1%], 112/238 |
+| Complete clip rate, target ≥ 85% | 77.5% [70.3%, 84.7%] | 82.1% [72.5%, 91.5%] |
+| Oracle accept rate, including absent-prompt candidates | 12.3%, 258/2,100 | 9.0%, 112/1,242 |
+| Mean boundary adjustment | 4.2 seconds | 7.9 seconds |
+| Candidates per present / absent prompt | 5.85 / 3.47 | 9.20 / 8.39 |
+
+An oracle reviewer accepts one-to-one matches at temporal IoU ≥ 0.3. Complete clip rate uses those matches as
+its denominator and allows up to 2 seconds missing at either clip end. It does not account for missed events.
+Cooking recall is uncertain around the target; driving misses lateral moves, most stops and most overtakes.
+Both domains still impose substantial candidate-review work.
+
+The Gemini Decision detector comparison used the same engine workflow and fixed sampling/fusion parameters,
+with verification off for both backends. It covered three earlier composites, not the 53 long videos. On its
+96 GT events, recall was 55/96 (57.3%) for VideoJev and 32/96 (33.3%) for Gemini; total candidates fell from 738
+to 241. This supports keeping VideoJev under the tested configuration, not a universal model ranking.
+
+The ablations support the denser sampling and provisional `min_event_score=0.5` as recall/quality tradeoffs;
+4 fps refinement and simple fusion narrowing did not improve the tested results. Verification on the small
+cooking composites reduced candidates from 585 to 75 without losing matched GT events, but on BDD-X it lost
+9/34 matched events. Product verification therefore remains off. Charades-STA is used only for the relevant
+paired parameter experiments because it is in-domain for VideoJev.
+
+Speed reporting uses **one video × one prompt per backend job**, with actual job processing seconds and
+job RTF = those seconds / video duration. A 2026-11-22 API/worker test on main base `a1b8279` plus cache changes
+`02cdaf7` measured the same cooking prompt at 178 s with an empty video cache and 97 s with reused features
+(307.467 s video), and the same driving prompt at 303 s / 186 s (394.5 s video). The model was already loaded
+in both matched comparisons; these are single observations. Cooking's earlier prompt A took 231 s including
+model loading; driving A took 322 s with the model already loaded. Full upload-to-candidates latency was not
+measured. See [single-prompt speed results](../video_grounding/docs/EVALUATION.md#speed-kpis) for prompts,
+cache/model state and measurement boundaries. Multi-prompt benchmark totals are excluded from product speed.
 
 ## 6. Gemini API operations and security
 
@@ -111,25 +143,26 @@ own footage (with permission) is the only fully realistic test for their domains
 
 ## 8. Evaluation protocol
 
-Charades-STA (300 videos, 822 queries) has been run with `video-grounding eval` as a reference (in-domain for VideoJev; §5.1; results in
-`video_grounding/docs/EVALUATION.md`). The main accuracy check is the held-out composite benchmarks (`video_grounding/scripts/composite_bench.py`; results pending). The table below is the protocol for project footage and is **not yet
-executed**.
+The main accuracy check is the long-video benchmark (`video_grounding/scripts/heldout_bench.py`; §5.1).
+Charades-STA is retained in the report only for paired parameter ablations. The table below is the protocol for
+customer footage and is **not yet executed**.
 
 | Item | Definition |
 |---|---|
 | Ground truth | 20–30 hand-labelled clips across 3–5 videos, two action types, boundaries to ±0.5 s |
-| Metrics | Event recall, R@IoU 0.3/0.5/0.7, precision (accept rate), complete-clip rate, boundary adjustment (seconds), proposals per minute, latency, peak VRAM |
-| Protocol | One prompt per video; windowed inference with fixed config; record model revision and prompt template |
-| Reporting | `docs/MODEL_EVALUATION_RESULTS.md` with raw outputs, config and date; no metric is reported without the exact command/config |
-| Reference | Held-out composites (YouCook2, BDD-X) for accuracy, Charades-STA as in-domain reference only; TimeLens-Bench for KPI comparison; MEVA/DMD for customer-domain demos |
+| Metrics | Event recall, R@IoU 0.3/0.5/0.7, precision (accept rate), complete-clip rate, boundary adjustment (seconds), proposals per minute, engine real-time factor (RTF), upload-to-candidates latency, per-stage processing time, peak VRAM |
+| Protocol | One prompt per video; windowed inference with fixed config; record model revision, prompt template, hardware, video duration/resolution, verification setting and model-loaded state; measure cold and warm runs separately |
+| Speed protocol | Time one video × one prompt per job; report actual seconds and seconds / video duration for each pair. Separate model cold starts, model-warm/cache-empty searches and cache reuse; never infer product speed by averaging multi-prompt jobs. Measure representative 10–30 min pairs. For upload-to-candidates latency, include queueing, inference, persistence and preview extraction; exclude upload transfer and report manual delays. Report failures, sample count and median/p90 only for repeated runs. Thresholds TBD; report quality under the same configuration (REQUIREMENTS.md §6) |
+| Reporting | `video_grounding/docs/EVALUATION.md`, with definitions, configuration, conclusions and linked score snapshots under `video_grounding/benchmarks/results/2026-11-22/` |
+| Reference | Held-out long videos (YouCook2, ROAD) for accuracy, Charades-STA as in-domain reference only; TimeLens-Bench for KPI comparison; MEVA/DMD for customer-domain demos |
 
 ## 9. Risks
 
 | Risk | Impact | Mitigation |
 |---|---|---|
 | No written approval for cloud API on face videos | Blocks the Gemini verify stage only (off in the adapter); detection is self-hosted | Keep verify off; self-hosted VideoJev for customer data |
-| Gemini timestamps are guesses, not grounding | Bad candidates | Gemini is used only as yes/no verify, not for timestamps; measured on Charades-STA (reference set); human review mandatory |
-| VideoJev-4B misses KPI targets on product footage | Rework | Charades-STA (in-domain reference) misses SPEC targets (EVALUATION.md); target check on the held-out composites and product-footage run pending; human review mandatory |
+| Gemini Decision time-cell scoring loses recall under the tested fixed engine configuration | Missed candidates | Keep VideoJev as the detector; the experimental Gemini backend comparison and its limits are in §5.1; human review mandatory |
+| VideoJev-4B misses KPI targets on product footage | Rework | Charades-STA (in-domain reference) misses SPEC targets (EVALUATION.md); held-out long videos also miss or do not confirm them (recall 0.86 cooking, 0.47 driving, 2026-11-22); product-footage run pending; human review mandatory |
 | Test-dataset licences non-commercial | Cannot publish results | Clarify with customer; use MEVA for demos |
 | Key expiry/leak | Operational and security incident | Secure channel, env vars, rotation, never commit |
 | KPI targets unconfirmed | Cannot declare success | Confirm on 13 Nov |

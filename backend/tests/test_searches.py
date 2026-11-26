@@ -14,9 +14,11 @@ from __future__ import annotations
 import uuid
 from datetime import timedelta
 
+import pytest
 from app import db
 from app.adapters import AdapterUnavailable
 from app.models import (
+    Candidate,
     JobStatus,
     ProcessingJob,
     Search,
@@ -28,7 +30,7 @@ from app.models import (
 )
 from app.services import pipeline
 from app.services.pipeline import _now, claim_next_job, reap_stale_jobs
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from tests.conftest import (
     accept_invitation,
     auth_header,
@@ -179,6 +181,40 @@ def _mark_search_running(search_id: int, video_id: int) -> None:
             update(Search).where(Search.id == search_id).values(status=SearchStatus.running)
         )
         session.commit()
+
+
+def _search_with_two_videos(client, name: str = "Consistency"):
+    """Create a dataset with two ready videos and launch a search over them."""
+    dataset = _create_dev_dataset(client, name)
+    video_ids = [
+        _upload_dataset_video(client, dataset["id"], f"v{index}.mp4")["id"]
+        for index in range(2)
+    ]
+    search = _launch_search(client, dataset["id"])
+    return dataset, search, video_ids
+
+
+def _finish_video(job_id: int) -> None:
+    """Complete one video the way ``execute_job`` does: commit both rows, then derive."""
+    with db.SessionLocal() as session:
+        search_video = session.scalar(
+            select(SearchVideo).where(SearchVideo.job_id == job_id)
+        )
+        session.execute(
+            update(ProcessingJob)
+            .where(ProcessingJob.id == job_id)
+            .values(status=JobStatus.succeeded, progress=1.0, finished_at=_now())
+            .execution_options(synchronize_session=False)
+        )
+        search_video.status = SearchVideoStatus.done
+        search_video.error_message = None
+        session.commit()
+        pipeline._settle_search_status(session, search_video.search_id)
+
+
+def _count_rows(model) -> int:
+    with db.SessionLocal() as session:
+        return session.scalar(select(func.count()).select_from(model)) or 0
 
 
 # --------------------------------------------------------------------------- #
@@ -900,12 +936,7 @@ def test_concurrent_completion_settles_the_search(client, monkeypatch) -> None:
 
     monkeypatch.setattr(pipeline, "_recompute_search_status", spy)
 
-    with db.SessionLocal() as session:
-        pipeline._sync_search_video_status(
-            session,
-            session.get(ProcessingJob, job_id),
-            SearchVideoStatus.done,
-        )
+    _finish_video(job_id)
 
     # At every derivation the row just written was already committed and visible
     # to a peer, so a concurrent worker cannot miss it.
@@ -913,15 +944,669 @@ def test_concurrent_completion_settles_the_search(client, monkeypatch) -> None:
     assert all(SearchVideoStatus.done in seen for seen in observed)
 
     # Finish the second video and confirm the search settles.
-    with db.SessionLocal() as session:
-        pipeline._sync_search_video_status(
-            session,
-            session.get(ProcessingJob, jobs[video_ids[1]]),
-            SearchVideoStatus.done,
-        )
+    _finish_video(jobs[video_ids[1]])
 
     detail = _search_detail(client, search["id"])
     assert detail["status"] == "done"
     assert detail["done_videos"] == 2
     assert detail["finished_at"] is not None
+
+
+# --------------------------------------------------------------------------- #
+# 7. Job / SearchVideo / Search consistency across a crash or an interruption
+# --------------------------------------------------------------------------- #
+
+
+def test_execute_job_does_not_resurrect_a_canceled_video(client, worker) -> None:
+    """A cancel that lands between the claim and the start must stick.
+
+    ``execute_job`` used to paint the SearchVideo "running" before checking that it
+    still owned the job, so a cancel in that window was overwritten and the search
+    hung in ``running`` with nothing left to finish it.
+    """
+    _, search, video_ids = _search_with_two_videos(client)
+    job_id = _job_by_video(search["id"])[video_ids[0]]
+
+    with db.SessionLocal() as session:
+        claimed = claim_next_job(session)
+        assert claimed is not None and claimed.id == job_id
+        # Exactly what POST /jobs/{id}/cancel does, one moment after the claim.
+        pipeline.cancel_job(session, claimed)
+
+    assert _job_row(job_id).status == JobStatus.canceled
+
+    with db.SessionLocal() as session:
+        pipeline.execute_job(
+            session,
+            job_id,
+            storage=worker.storage,
+            probe=worker.probe,
+            extractor=worker.extractor,
+            adapter=FailingAdapter(),
+            settings=worker.settings,
+        )
+
+    assert _job_row(job_id).status == JobStatus.canceled
+
+    detail = _search_detail(client, search["id"])
+    assert detail["running_videos"] == 0
+    canceled = next(row for row in detail["videos"] if row["video_id"] == video_ids[0])
+    assert canceled["status"] == "failed"
+    assert canceled["error_message"] == "Job canceled"
+    # The other video is still queued, so the search itself is legitimately in
+    # progress; what matters is that the canceled video was not flipped back.
+    assert detail["queued_videos"] == 1
+
+
+def test_reconcile_repairs_a_video_left_running_by_a_crashed_job(client) -> None:
+    """Drift written by an older build is repaired from the job, the source of truth."""
+    _, search, video_ids = _search_with_two_videos(client)
+    jobs = _job_by_video(search["id"])
+
+    # What the old code left behind: both jobs succeeded, but the row of the
+    # first one still says "running", so the search stays "running" forever.
+    with db.SessionLocal() as session:
+        session.execute(
+            update(ProcessingJob)
+            .where(ProcessingJob.id.in_(list(jobs.values())))
+            .values(status=JobStatus.succeeded, progress=1.0, finished_at=_now())
+        )
+        session.execute(
+            update(SearchVideo)
+            .where(SearchVideo.job_id == jobs[video_ids[0]])
+            .values(status=SearchVideoStatus.running)
+        )
+        session.execute(
+            update(SearchVideo)
+            .where(SearchVideo.job_id == jobs[video_ids[1]])
+            .values(status=SearchVideoStatus.done)
+        )
+        session.execute(
+            update(Search).where(Search.id == search["id"]).values(status=SearchStatus.running)
+        )
+        session.commit()
+
+    with db.SessionLocal() as session:
+        assert pipeline.reconcile_search_state(session) >= 1
+
+    detail = _search_detail(client, search["id"])
+    assert detail["done_videos"] == 2
+    assert detail["running_videos"] == 0
+    assert detail["status"] == "done"
+    assert detail["finished_at"] is not None
+
+
+def test_reconcile_settles_a_search_whose_videos_all_finished(client) -> None:
+    """A kill between the child commit and the aggregate commit leaves only the Search stale.
+
+    ``execute_job`` commits the job and its ``SearchVideo`` first and derives the parent
+    afterwards, so this window is real: both rows say ``done`` while the ``Search`` still
+    says ``running``.  ``reap_stale_jobs`` ignores it (no job is stale any more), which is
+    exactly why the worker runs this sweep on every tick.  The sweep must also report the
+    repair, or a caller would take the torn database for a clean one.
+    """
+    _, search, _ = _search_with_two_videos(client)
+    jobs = _job_by_video(search["id"])
+
+    with db.SessionLocal() as session:
+        session.execute(
+            update(ProcessingJob)
+            .where(ProcessingJob.id.in_(list(jobs.values())))
+            .values(status=JobStatus.succeeded, progress=1.0, finished_at=_now())
+            .execution_options(synchronize_session=False)
+        )
+        session.execute(
+            update(SearchVideo)
+            .where(SearchVideo.job_id.in_(list(jobs.values())))
+            .values(status=SearchVideoStatus.done, error_message=None)
+            .execution_options(synchronize_session=False)
+        )
+        session.execute(
+            update(Search)
+            .where(Search.id == search["id"])
+            .values(status=SearchStatus.running, finished_at=None)
+        )
+        session.commit()
+
+    # The torn state: every video finished, the aggregate never derived.
+    detail = _search_detail(client, search["id"])
+    assert detail["done_videos"] == 2
+    assert detail["status"] == "running"
+
+    with db.SessionLocal() as session:
+        assert pipeline.reconcile_search_state(session) == 1
+
+    detail = _search_detail(client, search["id"])
+    assert detail["status"] == "done"
+    assert detail["finished_at"] is not None
+    assert detail["error_message"] is None
+
+    with db.SessionLocal() as session:
+        assert pipeline.reconcile_search_state(session) == 0
+
+
+def test_reconcile_repairs_a_requeued_job_and_settles_an_idle_search(client) -> None:
+    """A retried job whose row still says "failed" goes back to "queued".
+
+    Neither video is running, so a Search stuck at ``running`` is stale as well:
+    the sweep has to fix both the row and the aggregate in one pass.
+    """
+    _, search, video_ids = _search_with_two_videos(client)
+    job_id = _job_by_video(search["id"])[video_ids[0]]
+
+    with db.SessionLocal() as session:
+        session.execute(
+            update(ProcessingJob)
+            .where(ProcessingJob.id == job_id)
+            .values(status=JobStatus.queued, attempts=0, finished_at=None)
+            .execution_options(synchronize_session=False)
+        )
+        session.execute(
+            update(SearchVideo)
+            .where(SearchVideo.job_id == job_id)
+            .values(status=SearchVideoStatus.failed, error_message="stale failure")
+            .execution_options(synchronize_session=False)
+        )
+        # Stale aggregate: nothing is running, yet the Search says it is.
+        session.execute(
+            update(Search)
+            .where(Search.id == search["id"])
+            .values(status=SearchStatus.running, finished_at=None)
+        )
+        session.commit()
+
+    with db.SessionLocal() as session:
+        assert pipeline.reconcile_search_state(session) >= 1
+
+    with db.SessionLocal() as session:
+        row = session.scalar(select(SearchVideo).where(SearchVideo.job_id == job_id))
+    assert row.status == SearchVideoStatus.queued
+    assert row.error_message is None
+
+    detail = _search_detail(client, search["id"])
+    assert detail["queued_videos"] == 2
+    assert detail["failed_videos"] == 0
+    assert detail["running_videos"] == 0
+    assert detail["status"] == "queued"
+    assert detail["finished_at"] is None
+
+    # Reconcile is idempotent: a second sweep changes nothing.
+    with db.SessionLocal() as session:
+        assert pipeline.reconcile_search_state(session) == 0
+
+
+# --------------------------------------------------------------------------- #
+# 8. Video deletion: one transaction with the search settle, and a clean cascade
+# --------------------------------------------------------------------------- #
+
+
+def test_video_delete_rolls_back_with_its_search_settle(client, monkeypatch) -> None:
+    """A failure after the settle must leave the video, its job and its row in place.
+
+    Before the fix ``refresh_searches_for_video`` committed the row removals and the
+    derived status itself, so a crash before the ``Video`` delete was durable: the
+    video and its job survived while the search already claimed to be ``done`` with
+    zero videos.
+    """
+    from app.api import videos as videos_api
+
+    dataset = _create_dev_dataset(client)
+    video = _upload_dataset_video(client, dataset["id"], "only.mp4")
+    search = _launch_search(client, dataset["id"])
+    job_id = search["videos"][0]["job_id"]
+
+    real_refresh = videos_api.refresh_searches_for_video
+
+    def boom(session, video_id, *, commit=True):
+        real_refresh(session, video_id, commit=False)
+        raise RuntimeError("simulated crash between the settle and the delete")
+
+    monkeypatch.setattr(videos_api, "refresh_searches_for_video", boom)
+
+    with pytest.raises(RuntimeError):
+        client.delete(f"/api/v1/videos/{video['id']}")
+
+    # Everything the request touched is still there after the session is gone.
+    with db.SessionLocal() as session:
+        assert session.get(Video, video["id"]) is not None
+        assert session.get(ProcessingJob, job_id) is not None
+        assert (
+            session.scalar(
+                select(SearchVideo).where(SearchVideo.video_id == video["id"])
+            )
+            is not None
+        )
+    detail = _search_detail(client, search["id"])
+    assert detail["total_videos"] == 1
+    assert detail["status"] != "done"
+
+    # With the fault removed the same request succeeds and settles the search.
+    monkeypatch.setattr(videos_api, "refresh_searches_for_video", real_refresh)
+    assert client.delete(f"/api/v1/videos/{video['id']}").status_code == 204
+    detail = _search_detail(client, search["id"])
+    assert detail["total_videos"] == 0
+    assert detail["status"] == "done"
+    assert detail["finished_at"] is not None
+
+
+def test_deleting_a_video_mid_run_does_not_strand_the_job(client, worker, monkeypatch) -> None:
+    """Deleting the video under a running job must not leave an ownerless ``running`` job.
+
+    The old ``Video.jobs`` relationship nulled ``processing_jobs.video_id`` instead of
+    letting the foreign key cascade, so the job survived with no video and no project;
+    the next candidate insert failed, the session was left unusable and the job stayed
+    ``running`` for ever.
+    """
+    from app.adapters.mock import MockTemporalAdapter
+
+    dataset = _create_dev_dataset(client)
+    video = _upload_dataset_video(client, dataset["id"], "midrun.mp4")
+    search = _launch_search(client, dataset["id"])
+    url = f"/api/v1/videos/{video['id']}"
+
+    def infer(self, request):
+        assert client.delete(url).status_code == 204
+        request.progress(0.5)  # the job is gone; this must interrupt cleanly
+
+    monkeypatch.setattr(MockTemporalAdapter, "propose", infer)
+
+    assert worker.run_once() is True
+
+    with db.SessionLocal() as session:
+        assert session.get(Video, video["id"]) is None
+        assert session.scalar(select(ProcessingJob)) is None
+        assert session.scalar(select(SearchVideo)) is None
+        assert (
+            session.scalar(select(func.count()).select_from(Candidate)) or 0
+        ) == 0
+    detail = _search_detail(client, search["id"])
+    assert detail["total_videos"] == 0
+    assert detail["status"] == "done"
+
+
+def test_deleting_a_video_cascades_its_jobs_and_candidates(client, worker) -> None:
+    """The job history of a deleted video goes with it, as the DDL always intended."""
+    dataset = _create_dev_dataset(client)
+    video = _upload_dataset_video(client, dataset["id"], "cascade.mp4")
+    search = _launch_search(client, dataset["id"])
+
+    assert worker.run_once() is True
+    assert _count_rows(Candidate) > 0
+    job_id = _job_by_video(search["id"])[video["id"]]
+
+    assert client.delete(f"/api/v1/videos/{video['id']}").status_code == 204
+
+    with db.SessionLocal() as session:
+        assert session.get(ProcessingJob, job_id) is None
+    assert _count_rows(Candidate) == 0
+    with db.SessionLocal() as session:
+        assert session.scalar(select(SearchVideo)) is None
+
+    detail = _search_detail(client, search["id"])
+    assert detail["total_videos"] == 0
+    assert detail["status"] == "done"
+
+
+# --------------------------------------------------------------------------- #
+# 9. Idempotency request scope, and search-level cancel / restart
+# --------------------------------------------------------------------------- #
+
+
+def _create_search(
+    client,
+    dataset_id: int,
+    payload: dict,
+    *,
+    key: str = "scope-key",
+    expected: int = 202,
+) -> dict:
+    response = client.post(
+        f"/api/v1/datasets/{dataset_id}/searches",
+        json=payload,
+        headers={"Idempotency-Key": key},
+    )
+    assert response.status_code == expected, response.text
+    return response.json()
+
+
+def test_idempotent_replay_survives_deleting_the_selected_video(client) -> None:
+    """The original request must keep matching itself after its video is gone.
+
+    This is the local regression from the review: the replay used to be judged
+    against the live ``search_videos`` rows, so deleting the selected video made
+    the very same request come back as 409 instead of the original search.
+    """
+    dataset = _create_dev_dataset(client, "Replay after delete")
+    video = _upload_dataset_video(client, dataset["id"], "keep.mp4")
+    payload = {"prompt": "a person waves", "video_ids": [video["id"]]}
+
+    created = _create_search(client, dataset["id"], payload)
+    assert created["total_videos"] == 1
+
+    assert client.delete(f"/api/v1/videos/{video['id']}").status_code == 204
+
+    replay = _create_search(client, dataset["id"], payload)
+    assert replay["id"] == created["id"]
+    assert replay["total_videos"] == 0
+    assert replay["status"] == "done"
+
+    with db.SessionLocal() as session:
+        assert len(list(session.scalars(select(Search)))) == 1
+
+
+def test_idempotency_key_reuse_with_different_params_conflicts(client) -> None:
+    dataset = _create_dev_dataset(client, "Param conflict")
+    _upload_dataset_video(client, dataset["id"], "clip.mp4")
+
+    _create_search(
+        client, dataset["id"], {"prompt": "a cat", "params": {"threshold": 0.5}}
+    )
+    conflict = _create_search(
+        client,
+        dataset["id"],
+        {"prompt": "a cat", "params": {"threshold": 0.9}},
+        expected=409,
+    )
+    assert conflict["code"] == "IDEMPOTENCY_KEY_REUSED"
+    assert conflict["details"]["mismatched_fields"] == ["params"]
+
+
+def test_idempotency_key_reuse_switching_from_subset_to_all_conflicts(client) -> None:
+    dataset = _create_dev_dataset(client, "Subset then all")
+    video = _upload_dataset_video(client, dataset["id"], "clip.mp4")
+
+    _create_search(client, dataset["id"], {"prompt": "a dog", "video_ids": [video["id"]]})
+    conflict = _create_search(client, dataset["id"], {"prompt": "a dog"}, expected=409)
+    assert conflict["details"]["mismatched_fields"] == ["video_ids"]
+
+
+def test_idempotency_key_reuse_switching_from_all_to_subset_conflicts(client) -> None:
+    """The reverse direction is the same mistake and must also be refused."""
+    dataset = _create_dev_dataset(client, "All then subset")
+    video = _upload_dataset_video(client, dataset["id"], "clip.mp4")
+
+    _create_search(client, dataset["id"], {"prompt": "a dog"})
+    conflict = _create_search(
+        client, dataset["id"], {"prompt": "a dog", "video_ids": [video["id"]]}, expected=409
+    )
+    assert conflict["details"]["mismatched_fields"] == ["video_ids"]
+
+
+def test_idempotency_key_tolerates_video_order_and_duplicates(client) -> None:
+    """The scope is a set: order and repeats are not a different request."""
+    dataset = _create_dev_dataset(client, "Order")
+    first = _upload_dataset_video(client, dataset["id"], "a.mp4")
+    second = _upload_dataset_video(client, dataset["id"], "b.mp4")
+
+    created = _create_search(
+        client,
+        dataset["id"],
+        {"prompt": "a bird", "video_ids": [first["id"], second["id"]]},
+    )
+    replay = _create_search(
+        client,
+        dataset["id"],
+        {"prompt": "a bird", "video_ids": [second["id"], first["id"], first["id"]]},
+    )
+    assert replay["id"] == created["id"]
+    assert replay["total_videos"] == 2
+
+
+def test_idempotency_key_ignores_the_title(client) -> None:
+    """``title`` is presentation only, so it is not part of the request scope."""
+    dataset = _create_dev_dataset(client, "Title")
+    _upload_dataset_video(client, dataset["id"], "clip.mp4")
+
+    created = _create_search(client, dataset["id"], {"prompt": "a boat", "title": "Boat"})
+    replay = _create_search(
+        client, dataset["id"], {"prompt": "a boat", "title": "Another title"}
+    )
+    assert replay["id"] == created["id"]
+    assert replay["title"] == "Boat"
+
+
+def test_idempotency_key_treats_the_default_adapter_as_equivalent(client) -> None:
+    """Omitting ``adapter_name`` and naming the configured default are one request."""
+    dataset = _create_dev_dataset(client, "Adapter default")
+    _upload_dataset_video(client, dataset["id"], "clip.mp4")
+
+    created = _create_search(client, dataset["id"], {"prompt": "a train"})
+    replay = _create_search(
+        client, dataset["id"], {"prompt": "a train", "adapter_name": "mock"}
+    )
+    assert replay["id"] == created["id"]
+
+
+def test_idempotency_key_reuse_with_different_adapter_conflicts(client) -> None:
+    dataset = _create_dev_dataset(client, "Adapter conflict")
+    _upload_dataset_video(client, dataset["id"], "clip.mp4")
+
+    _create_search(client, dataset["id"], {"prompt": "a train", "adapter_name": "mock"})
+    conflict = _create_search(
+        client,
+        dataset["id"],
+        {"prompt": "a train", "adapter_name": "qwen2.5-vl"},
+        expected=409,
+    )
+    assert conflict["details"]["mismatched_fields"] == ["adapter_name"]
+
+
+def test_idempotency_key_conflict_lists_every_mismatched_field(client) -> None:
+    dataset = _create_dev_dataset(client, "Multi conflict")
+    video = _upload_dataset_video(client, dataset["id"], "clip.mp4")
+
+    _create_search(
+        client,
+        dataset["id"],
+        {"prompt": "first", "params": {"threshold": 0.5}, "video_ids": [video["id"]]},
+    )
+    conflict = _create_search(
+        client,
+        dataset["id"],
+        {"prompt": "second", "params": {"threshold": 0.9}},
+        expected=409,
+    )
+    assert conflict["details"]["mismatched_fields"] == ["prompt", "params", "video_ids"]
+
+
+def test_legacy_search_without_a_stored_scope_still_replays(client) -> None:
+    """Rows written before the column existed fall back to the old comparison."""
+    dataset = _create_dev_dataset(client, "Legacy scope")
+    _upload_dataset_video(client, dataset["id"], "clip.mp4")
+    created = _create_search(client, dataset["id"], {"prompt": "a cup"})
+
+    with db.SessionLocal() as session:
+        session.execute(
+            update(Search)
+            .where(Search.id == created["id"])
+            .values(request_scope_json="{}")
+        )
+        session.commit()
+
+    replay = _create_search(client, dataset["id"], {"prompt": "a cup"})
+    assert replay["id"] == created["id"]
+
+    conflict = _create_search(client, dataset["id"], {"prompt": "a mug"}, expected=409)
+    assert conflict["details"]["mismatched_fields"] == ["prompt"]
+
+
+def test_search_cancel_cancels_every_video_and_settles_the_search(client) -> None:
+    dataset = _create_dev_dataset(client, "Cancel search")
+    for index in range(2):
+        _upload_dataset_video(client, dataset["id"], f"c{index}.mp4")
+    search = _launch_search(client, dataset["id"])
+    jobs = _job_by_video(search["id"])
+
+    response = client.post(
+        f"/api/v1/datasets/{dataset['id']}/searches/{search['id']}/cancel"
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "failed"
+    assert body["failed_videos"] == 2
+    assert body["queued_videos"] == 0
+    assert body["running_videos"] == 0
+    assert body["finished_at"] is not None
+    assert all(video["error_message"] == "Job canceled" for video in body["videos"])
+    for job_id in jobs.values():
+        assert _job_row(job_id).status == JobStatus.canceled
+
+
+def test_search_cancel_is_a_no_op_once_settled(client, worker) -> None:
+    """The frontend may retry a cancel; a settled search is returned unchanged."""
+    dataset = _create_dev_dataset(client, "Cancel twice")
+    _upload_dataset_video(client, dataset["id"], "clip.mp4")
+    search = _launch_search(client, dataset["id"])
+    assert worker.run_once() is True
+
+    for _ in range(2):
+        response = client.post(
+            f"/api/v1/datasets/{dataset['id']}/searches/{search['id']}/cancel"
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["status"] == "done"
+        assert response.json()["done_videos"] == 1
+
+
+def test_search_cancel_wins_against_a_worker_that_already_claimed(
+    client, worker
+) -> None:
+    """A cancel between claim and start must survive the worker resuming.
+
+    This is the concurrent-cancellation case from the review: the job is already
+    ``running`` in a worker's hands when the user cancels the search.  The worker
+    then runs the job anyway; it must drop its result instead of repainting the
+    video ``running``/``done`` and un-settling the search.
+    """
+    dataset = _create_dev_dataset(client, "Cancel mid run")
+    _upload_dataset_video(client, dataset["id"], "clip.mp4")
+    search = _launch_search(client, dataset["id"])
+    job_id = next(iter(_job_by_video(search["id"]).values()))
+
+    with db.SessionLocal() as session:
+        claimed = claim_next_job(session)
+    assert claimed is not None
+    assert claimed.id == job_id
+
+    response = client.post(
+        f"/api/v1/datasets/{dataset['id']}/searches/{search['id']}/cancel"
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "failed"
+    assert response.json()["failed_videos"] == 1
+    assert response.json()["videos"][0]["error_message"] == "Job canceled"
+
+    # The worker resumes the job it had claimed and finds it canceled.
+    with db.SessionLocal() as session:
+        pipeline.execute_job(
+            session,
+            job_id,
+            storage=worker.storage,
+            probe=worker.probe,
+            extractor=worker.extractor,
+            adapter=FailingAdapter(),
+            settings=worker.settings,
+        )
+
+    assert _job_row(job_id).status == JobStatus.canceled
+    detail = _search_detail(client, search["id"])
+    assert detail["status"] == "failed"
+    assert detail["failed_videos"] == 1
+    assert detail["running_videos"] == 0
+    assert detail["done_videos"] == 0
+
+
+def test_search_retry_requeues_only_the_failed_videos(
+    client, worker, monkeypatch
+) -> None:
+    from app.adapters.registry import get_adapter as real_get_adapter
+
+    dataset = _create_dev_dataset(client, "Retry search")
+    for index in range(2):
+        _upload_dataset_video(client, dataset["id"], f"r{index}.mp4")
+    search = _launch_search(client, dataset["id"])
+
+    # One video succeeds, the other fails non-retryably.
+    assert worker.run_once() is True
+    monkeypatch.setattr("app.worker.get_adapter", lambda name, cfg: FailingAdapter())
+    assert worker.run_once() is True
+
+    detail = _search_detail(client, search["id"])
+    assert detail["status"] == "partial"
+    assert detail["done_videos"] == 1
+    assert detail["failed_videos"] == 1
+
+    response = client.post(
+        f"/api/v1/datasets/{dataset['id']}/searches/{search['id']}/retry"
+    )
+    assert response.status_code == 202, response.text
+    body = response.json()
+    # One video finished, one is back in the queue, so the search is in progress
+    # again rather than partial/done.
+    assert body["status"] == "running"
+    assert body["queued_videos"] == 1
+    assert body["done_videos"] == 1
+    assert body["failed_videos"] == 0
+    assert body["finished_at"] is None
+
+    # With the fault removed the retried video runs and the search finishes green.
+    monkeypatch.setattr("app.worker.get_adapter", real_get_adapter)
+    assert worker.run_once() is True
+    detail = _search_detail(client, search["id"])
+    assert detail["status"] == "done"
+    assert detail["done_videos"] == 2
+
+
+def test_search_retry_without_failures_is_refused(client) -> None:
+    dataset = _create_dev_dataset(client, "Retry nothing")
+    _upload_dataset_video(client, dataset["id"], "clip.mp4")
+    search = _launch_search(client, dataset["id"])
+
+    response = client.post(
+        f"/api/v1/datasets/{dataset['id']}/searches/{search['id']}/retry"
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "SEARCH_NOT_RETRYABLE"
+
+
+def test_search_cancel_and_retry_respect_the_dataset_boundary(auth_client) -> None:
+    admin = bootstrap_admin(auth_client)
+    admin_token = admin["access_token"]
+    dataset = create_dataset(auth_client, admin_token, "Guarded search")
+
+    invitation = invite_user(auth_client, admin_token, "reader@example.com")
+    annotator = accept_invitation(auth_client, invitation["token"], "Ana Reader")
+    annotator_token = annotator["access_token"]
+    added = auth_client.post(
+        f"/api/v1/datasets/{dataset['id']}/members",
+        json={"user_id": annotator["user"]["id"]},
+        headers=auth_header(admin_token),
+    )
+    assert added.status_code == 201
+
+    outsider_invite = invite_user(
+        auth_client, admin_token, "outsider-ds@example.com", role="dataset_admin"
+    )
+    outsider = accept_invitation(auth_client, outsider_invite["token"], "Otto Outsider")
+    outsider_token = outsider["access_token"]
+
+    _upload_dataset_video_auth(auth_client, dataset["id"], admin_token)
+    search = _launch_search_auth(auth_client, dataset["id"], admin_token)
+    for action in ("cancel", "retry"):
+        url = f"/api/v1/datasets/{dataset['id']}/searches/{search['id']}/{action}"
+        # A member annotator lacks the write role.
+        assert auth_client.post(url, headers=auth_header(annotator_token)).status_code == 403
+        # A non-member never sees the dataset, whatever their global role.
+        denied = auth_client.post(url, headers=auth_header(outsider_token))
+        assert denied.status_code == 404
+        assert denied.json()["code"] == "DATASET_NOT_FOUND"
+
+    # The admin (a member by definition) may cancel.
+    assert (
+        auth_client.post(
+            f"/api/v1/datasets/{dataset['id']}/searches/{search['id']}/cancel",
+            headers=auth_header(admin_token),
+        ).status_code
+        == 200
+    )
 

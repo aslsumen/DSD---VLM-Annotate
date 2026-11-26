@@ -12,18 +12,18 @@ Target 80–85 % of declared capacity once the table is filled.
 > through the `videojev` adapter ([ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md)), not
 > Gemini; Gemini exists only as an optional engine verify stage, off in the adapter. S3-11 is superseded,
 > S3-12 is done (Charades-STA only), S3-13 is partly done (engine `eval` CLI). Charades-STA is reference only (VideoJev
-> was trained on it); the SPEC target check moves to the held-out composite benchmarks (S3-17, running since
-> 2026-11-16, results pending; `video_grounding/docs/EVALUATION.md`). The real-model smoke on the RTX 3070 laptop is pending.
+> was trained on it); the SPEC target check moved to the held-out long-video benchmark (S3-17, done 2026-11-22: recall 0.86 cooking /
+> 0.47 driving vs 0.85, targets not met or not confirmed; `video_grounding/docs/EVALUATION.md`). A 52-second public clip passed the real VideoJev web smoke on the RTX 3070 laptop on 2026-11-23.
 
 ## 1. Committed scope (Must)
 
 | ID | Task | Refs | Est. | Owner (role) | Notes |
 |---|---|---|---|---|---|
-| S3-01 | Auth data model + migration: users, invitations, sessions, dataset_assignments | USR-1…5, NFR-11 | 8 | Backend | **PR #48** — migration verified |
+| S3-01 | Auth data model + migration: users, invitations, sessions, dataset memberships (planned as `dataset_assignments`; implemented as `dataset_memberships`) | USR-1…5, NFR-11 | 8 | Backend | **PR #48** — migration verified |
 | S3-02 | Auth API: login/logout/refresh, password hashing, session revocation, lockout | NFR-12…14 | 8 | Backend | **In review** — login/logout/session/lockout; refresh pending |
 | S3-03 | Invitation flow + email abstraction (SMTP/provider) | USR-5 | 5 | Backend | **In review** — token returned once; no SMTP transport yet |
-| S3-04 | RBAC middleware + dataset scoping on every route | USR-2/3/4 | 5 | Backend | **Partial** — enforced on auth/dataset routes; legacy routes still bearer |
-| S3-05 | Dataset entity + API + assignments (migrate Project) | DS-1/2/3 | 8 | Backend | **In review** — Dataset + memberships; videos still under Project |
+| S3-04 | RBAC middleware + dataset scoping on every route | USR-2/3/4 | 5 | Backend | **Done (API) 2026-11-25** — roles enforced on the auth/dataset/search routes by `require_roles`/`_require_access`, and on the shared legacy video/job/candidate routes by `backend/app/access.py` (anonymous → 401, non-member → 404 hiding existence, wrong role → 403), covered by `backend/tests/test_dataset_authz.py` (9 tests). Frontend route guards still missing |
+| S3-05 | Dataset entity + API + assignments (migrate Project) | DS-1/2/3 | 8 | Backend | **Done (API) 2026-11-19/20** — `datasets` + `dataset_memberships` (the plan said `dataset_assignments`; the implemented table has a surrogate `id` and a unique `(dataset_id, user_id)`, with no `assigned_by`/`assigned_at`), `POST/GET /datasets/{id}/videos`, `videos.dataset_id`. `projects` remains untouched for the legacy slice; membership revocation, the data migration and the frontend cutover are still open |
 | S3-06 | Search entity: one prompt over all videos, fan-out jobs, status aggregation | PR-1, DET-3 | 8 | Backend | **Implemented 2026-11-20** — models + migration (`e5b9c3d7a2f1`, `c9f0d3a1b2e4`), `POST /datasets/{id}/searches` fan-out, worker sync, aggregated status, read endpoints; tests added 2026-11-21. **Extended 2026-11-24** — `GET /datasets/{id}/searches` (list + `status`/`limit`/`offset`) and `Idempotency-Key` on search creation (migration `f1a4b8c2d6e9`) |
 | S3-07 | UI: login, invitation acceptance, user management | USR-1…7 | 5 | Frontend | Route guards |
 | S3-08 | UI: datasets list/detail, upload, search launch, search history | DS-1…3, PR-1 | 8 | Frontend | Reuse upload component |
@@ -31,11 +31,11 @@ Target 80–85 % of declared capacity once the table is filled.
 | S3-10 | OpenLABEL-based JSON export (multi-interval) + async job | EXP-1 | 8 | Backend | Schema confirmed with customer |
 | S3-11 | Gemini adapter: `GroundingBackend`, quota guard, retry, JSON validation | DET-1, NFR-6 | 8 | ML | **Superseded 2026-11-16** by the `videojev` adapter (ADR-0007). Gemini is only the engine's optional verify stage (off in the adapter); privacy approval R-20 matters only if verify is on |
 | S3-12 | Test-data ingestion (Charades-STA subset) + licence check | NFR-5 | 5 | ML | Done 2026-11-16 (Charades-STA only). Non-commercial caveat |
-| S3-13 | KPI harness: recall, R@IoU, complete clip, boundary adjustment | NFR-5 | 5 | ML | First measurements done 2026-11-16 (engine `eval` CLI; Charades-STA reference only, composites in S3-17); reviewer boundary-adjustment KPI not built |
+| S3-13 | KPI harness: recall, R@IoU, complete clip, boundary adjustment | NFR-5 | 5 | ML | First measurements done 2026-11-16 (engine `eval` CLI; Charades-STA reference only, held-out benchmark in S3-17); reviewer boundary-adjustment KPI not built |
 | S3-14 | Alpha deck + evidence + upload checklist | D-19 | 5 | Scrum Master | Upload 2026-11-30 |
 | S3-15 | Carry-over: validate a real 10–30 min video | NFR-4 | 3 | QA | From Sprint 2 |
-| S3-16 | Integration tests: auth, permissions, dataset scoping | NFR-11…14 | 5 | QA | Security-critical. **Done 2026-11-21** — `backend/tests/test_searches.py` (9 tests) covers search fan-out, status aggregation, role + dataset scoping; full suite 103 passed. **Extended 2026-11-24** — 10 more tests for dataset search listing and `Idempotency-Key` (20 in the file, 114 total). **Extended 2026-11-25** — 7 lifecycle regression tests for cancel / reaper / retry / video delete (27 in the file, 121 total). **Extended again 2026-11-25** — `test_review_filters.py` (3) + concurrent-completion test (28 in `test_searches.py`), 125 total |
-| S3-17 | Run held-out composite benchmarks, re-check `min_event_score` (0.5 is provisional), report KPIs | NFR-5 | 5 | ML | Started 2026-11-16 on the RTX 3070 laptop (PB-70); results pending |
+| S3-16 | Integration tests: auth, permissions, dataset scoping | NFR-11…14 | 5 | QA | Security-critical. **Done 2026-11-21** — `backend/tests/test_searches.py` (9 tests) covers search fan-out, status aggregation, role + dataset scoping; full suite 103 passed. **Extended 2026-11-24** — 10 more tests for dataset search listing and `Idempotency-Key` (20 in the file, 114 total). **Extended 2026-11-25** — 7 lifecycle regression tests for cancel / reaper / retry / video delete (27 in the file, 121 total). **Extended again 2026-11-25** — `test_review_filters.py` (3) + concurrent-completion test (28 in `test_searches.py`), 125 total. **Extended once more 2026-11-25** — `test_dataset_authz.py` (9) for the shared-route authorization matrix, 134 total. **And again 2026-11-25** — 3 consistency tests in section 7 of `test_searches.py` (31 in the file), 137 total. **Plus 2026-11-25** — a fourth (`test_reconcile_settles_a_search_whose_videos_all_finished`, the kill between the child commit and the aggregate) and a `reconcile_search_state` return-value fix (32 in the file), 143 total. **One more 2026-11-25** — 3 video-deletion tests in section 8 (35 in `test_searches.py`) and a rewritten `test_dataset_authz.py::test_job_whose_video_was_deleted_fails_closed`, 146 total. **Latest 2026-11-26** — 15 tests in section 9 for the idempotency request scope and search-level cancel / restart, plus a concurrent-cancellation case (51 in `test_searches.py`), 162 total |
+| S3-17 | Run held-out benchmarks (long YouCook2 and ROAD videos), re-check `min_event_score`, report KPIs | NFR-5 | 5 | ML | **Done** 2026-11-22 on the RTX 3070 laptop (PB-70): recall 0.86 cooking (CI 0.81–0.90) / 0.47 driving, CCR 0.78 / 0.82, targets not met or not confirmed; absent prompts give 3.5 / 8.4 candidates; `min_event_score` 0.5 checked, not re-tuned (PB-72). Earlier small composites (2026-11-17) superseded |
 
 **Status 2026-11-19:** S3-01…S3-05 implemented in PR #48 (10 new tests, 90 total); JSON schema is in PR #47
 (docs only).
@@ -64,8 +64,67 @@ once on both `GET /projects/{id}/candidates` and `GET /searches/{id}/candidates`
 last two videos of a search no longer leaves it `running`: the `SearchVideo` row is committed **before** the
 aggregate is derived (`_settle_search_status`, re-derived until stable), so a peer worker always sees it. New
 `test_review_filters.py` (3 tests) plus `test_concurrent_completion_settles_the_search` — 125 total, green.
-Still open from the same review: the legacy `/videos/{id}` and `/candidates/{id}` routes have no dataset
-membership check when `VLM_API_TOKEN` is unset (pre-existing, deliberately out of scope here).
+Still open from the same review at the time: the legacy `/videos/{id}` and `/candidates/{id}` routes had no dataset
+membership check when `VLM_API_TOKEN` is unset — closed in the entry below.
+
+**Status 2026-11-25 (dataset authorization):** the merge-blocker from the same review is fixed. The shared legacy
+routes (`GET/DELETE /videos/{id}`, `GET /videos/{id}/stream`, `GET /jobs`, `GET /jobs/{id}`, retry, cancel,
+`GET /jobs/{id}/candidates`, `GET/PUT/DELETE /candidates/{id}*`) now resolve the dataset that owns the row
+(`app/access.py`) and apply the same rules as the dataset routes: `401` for an anonymous caller once the row is
+dataset-owned, `404` for a signed-in non-member whatever the global role (existence must not leak), `403` for a
+member without the write role. `GET /jobs` filters instead of refusing. Rows belonging to no dataset keep their
+historical unauthenticated behaviour, which is why the handlers use the new `get_optional_principal` rather than a
+required dependency — and annotation writes need membership only, not a write role. New
+`backend/tests/test_dataset_authz.py` (9 tests) covers the four-caller matrix and asserts refusals have no side
+effects. 134 total. Owner-unattributable rows (a search job whose video was deleted) are administrator-only.
+
+**Status 2026-11-25 (job / SearchVideo / Search consistency):** the third defect in that review — state diverging
+across the three levels when a worker is interrupted — is fixed. Every write path (`_finish`, `_record_failure`,
+`fail_job_now`, `retry_job`, `reap_stale_jobs`, `cancel_job`) now commits the job row and its `SearchVideo` mirror in
+one transaction and only then derives the aggregate; the first child write in `execute_job` is fenced against job
+ownership, so a cancel landing between the claim and the start is no longer overwritten. The worker also runs a new
+`reconcile_search_state` sweep each tick: it repaints a `SearchVideo` that disagrees with its job (the job is the
+source of truth, `canceled` → `failed` / `"Job canceled"`) and re-derives any Search still `queued`/`running`/`partial`
+whose videos have all settled. It is idempotent and returns 0 on a consistent database. No migration — pure Python,
+and the search enums still match `DESIGN_DESCRIPTION.md:121` (no `canceled` member). Four tests in section 7 of
+`backend/tests/test_searches.py` (32 in the file); **143 tests collected** (135 test functions, two of them
+parametrised). **Plus 2026-11-25** — 3 video-deletion tests in section 8 (35 in the file), 146 total.
+
+**Status 2026-11-25 (consistency follow-up):** a PR harness reported the exact windows; two needed more work.
+`reconcile_search_state` now counts both repairs it can perform, so a sweep that only settles a stale aggregate
+reports 1 instead of 0 (it used to read as "consistent"). A fourth test,
+`test_reconcile_settles_a_search_whose_videos_all_finished`, pins the child-committed/aggregate-stale window, which
+`reap_stale_jobs` cannot see because no job is stale — the per-tick sweep is the only thing that repairs it.
+
+**Status 2026-11-25 (video deletion):** `DELETE /videos/{id}` is now one transaction with its search settle.
+`refresh_searches_for_video` and `_settle_search_status` grew a `commit=False` mode, so the endpoint detaches the
+video's `SearchVideo` rows, deletes the `Video` row and commits, and only then converges the affected Searches
+(afterwards on purpose: the derivation has to see a peer worker's committed row). Storage files are removed only
+after that commit. `Video.jobs` declares `passive_deletes=True`, so deleting a video now cascades to its jobs and
+candidates instead of nulling `processing_jobs.video_id` and leaving an ownerless `running` job, and `execute_job`
+gained an `except SQLAlchemyError` branch that rolls back, re-reads the job and either returns (row gone or taken
+over) or fails it cleanly — a failed statement no longer escapes as `PendingRollbackError`. No migration: the DDL
+already declared the cascade, this is an ORM relationship option plus Python. Three tests in section 8 of
+`backend/tests/test_searches.py` (35 in the file), and `test_dataset_authz.py::test_job_whose_video_was_deleted_fails_closed`
+now builds its ownerless job with a raw update; **146 tests collected** (138 test functions, two of them
+parametrised).
+
+**Status 2026-11-26 (idempotency request scope and search cancel / restart):** the review's first finding — an
+`Idempotency-Key` replay was compared against *live* `search_videos` rows, so deleting a selected video made the
+original request stop matching itself (409), and `params` / an omitted `video_ids` were never compared at all — is
+closed by persisting the request on the row: migration `b8d2e5a4c9f3` adds `searches.request_scope_json` (NOT NULL
+`Text`, `{}` server default for existing rows), holding a canonical JSON snapshot of `dataset_id`, `prompt`,
+`params`, the resolved `adapter_name` and the requested `video_ids` (`null` distinct from any subset, order and
+duplicates erased). Replay now compares that snapshot and never the live rows; `409 IDEMPOTENCY_KEY_REUSED` carries
+`details.mismatched_fields`; `title` is deliberately not part of the identity, and a legacy `{}` row falls back to
+the old rule with a warning. The second cutover dependency, cancel/restart, adds
+`POST /datasets/{id}/searches/{search_id}/cancel` (200, a no-op once settled) and `.../retry` (202, re-queues only
+failed videos, `409 SEARCH_NOT_RETRYABLE` otherwise), both `dataset_admin` and both routed through `cancel_job` /
+`enqueue_candidate_job` so there is still one writer per state. No table dropped or renamed. Sixteen tests in
+section 9 of `backend/tests/test_searches.py` (51 in the file); **162 tests collected** (154 test functions, two of
+them parametrised). **Confirmed green:** `pytest -q` reported **162 passed** and `ruff check` was clean, run by the
+team on Windows on 2026-11-26. Migration `b8d2e5a4c9f3` still needs an explicit `alembic upgrade head` — the
+fixtures build their schema with `Base.metadata.create_all`, so a green suite does not exercise it.
 
 **Total committed:** ~99 SP. **This is likely more than the team can absorb in two weeks without capacity
 data** (R-22). Triage proposal: S3-01…S3-07 and S3-14 are the minimum; S3-08…S3-13 can slip into Sprint 4 if
@@ -82,7 +141,7 @@ the detector or JSON schema is blocked.
 | Fri 20 Nov | Invitations; dataset UI; real-video validation | invite → sign-in works |
 | Mon 23 Nov | JSON export v1; real-model smoke on the 8 GB laptop (replaces the Gemini adapter spike) | first JSON export |
 | Tue 24 Nov | Cross-video review; review flags | one list across videos |
-| Wed 25 Nov | KPI harness; composite benchmark results (S3-17); product-footage run | KPI numbers on product footage |
+| Wed 25 Nov | KPI harness; held-out benchmark results (S3-17); product-footage run | KPI numbers on product footage |
 | Thu 26 Nov | Integration tests; fix defects | tests green |
 | Fri 27 Nov | Alpha deck draft; limitations documented | deck source ready |
 | Sat 28 Nov | **No work assumed** | — |
@@ -95,7 +154,7 @@ the detector or JSON schema is blocked.
 - [ ] Search over all videos of a dataset returns candidates
 - [ ] Review across videos with accept/reject and final timestamps
 - [ ] JSON export with intervals and provenance
-- [ ] Real detector measured on a public test set (or documented blocker) — VideoJev-4B on held-out composites (S3-17, running since 2026-11-16, pending; Charades-STA is reference only)
+- [x] Real detector measured on a public test set (or documented blocker) — VideoJev-4B on held-out long videos (S3-17, 2026-11-22: recall 0.86 cooking / 0.47 driving vs 0.85 target, not met or not confirmed; Charades-STA is reference only)
 - [ ] Alpha deck ready for upload by 2026-11-30 23:59
 - [ ] Limitations explicit; no fabricated metrics
 

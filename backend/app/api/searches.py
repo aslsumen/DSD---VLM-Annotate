@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, Query, status
@@ -23,6 +25,8 @@ from ..models import (
     Annotation,
     Candidate,
     Dataset,
+    JobStatus,
+    ProcessingJob,
     Search,
     SearchStatus,
     SearchVideo,
@@ -40,10 +44,23 @@ from ..schemas import (
     SearchOut,
     SearchVideoOut,
 )
-from ..services.pipeline import enqueue_candidate_job
+from ..services.pipeline import cancel_job, enqueue_candidate_job, settle_searches
 from .datasets import _require_access
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["searches"])
+
+#: Fields that define *what a search does*.  Two requests may share an
+#: Idempotency-Key only if all of them match; ``title`` is deliberately absent
+#: (presentation only) and so is the resolved video set (derived, not requested).
+SCOPE_FIELDS: tuple[str, ...] = (
+    "dataset_id",
+    "prompt",
+    "params",
+    "adapter_name",
+    "video_ids",
+)
 
 
 def _search_or_404(session: Session, search_id: int) -> Search:
@@ -136,40 +153,95 @@ def _video_ids_for(session: Session, search_id: int) -> list[int]:
     )
 
 
-def _replay_matches(
-    session: Session,
-    existing: Search,
+def _request_scope(
     dataset_id: int,
     prompt: str,
+    params: dict[str, object],
+    adapter_name: str | None,
     requested_ids: list[int] | None,
-) -> bool:
-    """True when a stored search was created by the same request payload.
+) -> dict[str, object]:
+    """The fields that define *what a search does*, in canonical form.
 
-    ``requested_ids`` is ``None`` when the caller omitted ``video_ids`` ("every
-    ready video"), in which case the resolved set is not part of the request and
-    is ignored -- otherwise uploading one more video would turn a legitimate
-    replay into a conflict.
+    ``video_ids`` is ``None`` when the caller omitted it ("every ready video").
+    That is a different request from any explicit subset, so ``None`` must not be
+    normalised to a list here -- it only becomes a set on comparison.
     """
-    if existing.dataset_id != dataset_id or existing.prompt != prompt:
-        return False
-    if requested_ids is None:
-        return True
-    return _video_ids_for(session, existing.id) == sorted(set(requested_ids))
+    return {
+        "dataset_id": dataset_id,
+        "prompt": prompt,
+        "params": params,
+        "adapter_name": adapter_name,
+        "video_ids": None if requested_ids is None else sorted(set(requested_ids)),
+    }
+
+
+def _dump_scope(scope: dict[str, object]) -> str:
+    """Serialise a scope deterministically, so equal requests store equal text."""
+    return json.dumps(scope, sort_keys=True, separators=(",", ":"))
+
+
+def _load_scope(raw: str | None) -> dict[str, object] | None:
+    """Parse a stored scope, or ``None`` when the row predates the column."""
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):  # pragma: no cover - only a corrupt row
+        logger.warning("unreadable request scope stored on a search: %r", raw)
+        return None
+    if not isinstance(parsed, dict) or not parsed:
+        return None
+    return parsed
+
+
+def _mismatched_fields(
+    session: Session, existing: Search, wanted: dict[str, object]
+) -> list[str]:
+    """Names of the scope fields whose stored value differs from ``wanted``.
+
+    An empty list means the stored search answers the same request, so the call
+    is a replay.  Historical rows (stored before ``request_scope_json`` existed)
+    have no snapshot; for those the old dataset + prompt comparison is used and
+    the video scope is checked against the live rows as a best effort.
+    """
+    stored = _load_scope(existing.request_scope_json)
+    if stored is None:
+        logger.warning(
+            "search %s has no stored request scope; falling back to its current rows",
+            existing.id,
+        )
+        legacy: list[str] = []
+        if existing.dataset_id != wanted["dataset_id"]:
+            legacy.append("dataset_id")
+        if existing.prompt != wanted["prompt"]:
+            legacy.append("prompt")
+        if legacy:
+            return legacy
+        requested_ids = wanted["video_ids"]
+        if requested_ids is None:
+            return []
+        if _video_ids_for(session, existing.id) != list(requested_ids):
+            legacy.append("video_ids")
+        return legacy
+
+    mismatches: list[str] = []
+    for field in SCOPE_FIELDS:
+        if stored.get(field) != wanted[field]:
+            mismatches.append(field)
+    return mismatches
 
 
 def _replay_or_conflict(
-    session: Session,
-    existing: Search,
-    dataset_id: int,
-    prompt: str,
-    requested_ids: list[int] | None,
+    session: Session, existing: Search, wanted: dict[str, object]
 ) -> SearchDetailOut:
     """Return the original search, or 409 if the key was reused for another request."""
-    if not _replay_matches(session, existing, dataset_id, prompt, requested_ids):
+    mismatches = _mismatched_fields(session, existing, wanted)
+    if mismatches:
         raise ApiError(
             409,
             "IDEMPOTENCY_KEY_REUSED",
             "this Idempotency-Key was already used with a different request",
+            {"mismatched_fields": mismatches},
         )
     return _detail(session, existing)
 
@@ -206,6 +278,19 @@ def create_search(
     # as "" and collide with the next blank one through the unique constraint.
     key = (idempotency_key.strip() or None) if idempotency_key else None
 
+    # What this request asks for, captured before anything is resolved: a replay
+    # must be judged on the request itself, not on rows that later change
+    # (deleting a selected video used to break its own replay).  ``adapter_name``
+    # is stored resolved, so omitting it and naming the same default adapter are
+    # the same request.
+    scope = _request_scope(
+        dataset_id=dataset_id,
+        prompt=payload.prompt,
+        params=payload.params,
+        adapter_name=payload.adapter_name or settings.vlm_adapter,
+        requested_ids=requested_ids,
+    )
+
     # Replay: a double click must return the original search, not fan out again.
     # Checked before resolving the adapter and the videos, so a repeat still
     # returns the original search after a video was deleted or an adapter was
@@ -213,9 +298,7 @@ def create_search(
     if key is not None:
         existing = session.scalar(select(Search).where(Search.idempotency_key == key))
         if existing is not None:
-            return _replay_or_conflict(
-                session, existing, dataset_id, payload.prompt, requested_ids
-            )
+            return _replay_or_conflict(session, existing, scope)
 
     adapter = get_adapter(payload.adapter_name, settings)
 
@@ -244,6 +327,7 @@ def create_search(
         status=SearchStatus.queued,
         created_by_id=principal.user.id if principal.user is not None else None,
         idempotency_key=key,
+        request_scope_json=_dump_scope(scope),
     )
     session.add(search)
     try:
@@ -256,9 +340,7 @@ def create_search(
         existing = session.scalar(select(Search).where(Search.idempotency_key == key))
         if existing is None:  # pragma: no cover - defensive
             raise
-        return _replay_or_conflict(
-            session, existing, dataset_id, payload.prompt, requested_ids
-        )
+        return _replay_or_conflict(session, existing, scope)
 
     if not videos:
         search.status = SearchStatus.done
@@ -323,6 +405,136 @@ def get_search(
 ) -> SearchDetailOut:
     search = _search_or_404(session, search_id)
     _require_search_access(session, principal, search)
+    return _detail(session, search)
+
+
+@router.post(
+    "/datasets/{dataset_id}/searches/{search_id}/cancel",
+    response_model=SearchDetailOut,
+)
+def cancel_search(
+    dataset_id: int,
+    search_id: int,
+    principal: Principal = Depends(
+        require_roles(UserRole.administrator, UserRole.dataset_admin)
+    ),
+    session: Session = Depends(get_db),
+) -> SearchDetailOut:
+    """Cancel every queued or running video of a search.
+
+    The meaning is "make sure nothing is running here", so a search that is
+    already settled is returned unchanged with 200 instead of failing: the
+    frontend retries this on a flaky connection.  A video whose job finishes
+    while this request is in flight is already settled too, so the resulting
+    ``409 JOB_NOT_CANCELABLE`` from ``cancel_job`` is swallowed.
+    """
+    search = _search_or_404(session, search_id)
+    if search.dataset_id != dataset_id:
+        raise ApiError(404, "SEARCH_NOT_FOUND", f"search {search_id} does not exist")
+    _require_search_access(session, principal, search)
+
+    jobs = list(
+        session.scalars(
+            select(ProcessingJob).where(
+                ProcessingJob.id.in_(
+                    select(SearchVideo.job_id).where(SearchVideo.search_id == search_id)
+                ),
+                ProcessingJob.status.in_((JobStatus.queued, JobStatus.running)),
+            )
+        )
+    )
+    for job in jobs:
+        # cancel_job repaints the SearchVideo mirror and settles the aggregate.
+        # A worker may finish this job between the query above and the conditional
+        # update inside cancel_job; that surfaces as JOB_NOT_CANCELABLE, which is
+        # not an error here -- the video is simply already settled.
+        try:
+            cancel_job(session, job)
+        except ApiError as exc:
+            if exc.code != "JOB_NOT_CANCELABLE":
+                raise
+            session.rollback()
+    session.refresh(search)
+    return _detail(session, search)
+
+
+@router.post(
+    "/datasets/{dataset_id}/searches/{search_id}/retry",
+    response_model=SearchDetailOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def retry_search(
+    dataset_id: int,
+    search_id: int,
+    principal: Principal = Depends(
+        require_roles(UserRole.administrator, UserRole.dataset_admin)
+    ),
+    session: Session = Depends(get_db),
+    settings: Settings = Depends(settings_dep),
+) -> SearchDetailOut:
+    """Re-queue the failed videos of a search, leaving the finished ones alone."""
+    search = _search_or_404(session, search_id)
+    if search.dataset_id != dataset_id:
+        raise ApiError(404, "SEARCH_NOT_FOUND", f"search {search_id} does not exist")
+    _require_search_access(session, principal, search)
+
+    scope = _load_scope(search.request_scope_json) or {}
+    fallback_params = scope.get("params") if isinstance(scope.get("params"), dict) else {}
+    fallback_adapter = scope.get("adapter_name")
+
+    retried = 0
+    rows = list(
+        session.scalars(select(SearchVideo).where(SearchVideo.search_id == search_id))
+    )
+    for row in rows:
+        job = session.get(ProcessingJob, row.job_id) if row.job_id else None
+        if job is not None and job.status not in (JobStatus.failed,):
+            continue
+        if job is None and row.status != SearchVideoStatus.failed:
+            # No job and nothing failed: nothing to restart for this video.
+            continue
+        video = session.get(Video, row.video_id)
+        if video is None:
+            # The video is gone; the row would only be re-created as a failure.
+            continue
+        adapter_name = (
+            job.adapter_name
+            if job is not None and job.adapter_name
+            else (fallback_adapter or settings.vlm_adapter)
+        )
+        # Prefer the parameters the failed run actually used; fall back to the
+        # ones recorded in the search scope for rows whose job is gone.
+        if job is not None and job.params_json:
+            params = json.loads(job.params_json)
+        else:
+            params = fallback_params
+        new_job = enqueue_candidate_job(
+            session,
+            video=video,
+            action=None,
+            adapter_name=adapter_name,
+            params=params,
+            idempotency_key=None,
+            max_attempts=settings.worker_max_attempts,
+        )
+        row.job_id = new_job.id
+        row.status = SearchVideoStatus.queued
+        row.error_message = None
+        retried += 1
+
+    if retried == 0:
+        session.rollback()
+        raise ApiError(
+            409,
+            "SEARCH_NOT_RETRYABLE",
+            "this search has no failed videos to retry",
+        )
+
+    session.commit()
+    # The row statuses moved above, so the aggregate has to be derived again --
+    # after the commit, so it sees the same rows a peer worker would.
+    settle_searches(session, [search_id])
+    session.refresh(search)
     return _detail(session, search)
 
 

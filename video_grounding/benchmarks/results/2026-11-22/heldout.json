@@ -1,0 +1,659 @@
+{
+  "source": "/root/vg/bench/held/score_run.json",
+  "results": {
+    "yc": {
+      "videos": 33,
+      "missing_units": [],
+      "video_hours": 3.65,
+      "before_verify": {
+        "recall": [
+          0.86,
+          0.8108974358974359,
+          0.903448275862069
+        ],
+        "complete_clip_rate": [
+          0.7751937984496124,
+          0.7028985507246377,
+          0.8467741935483871
+        ],
+        "boundary_adjust_mean": [
+          4.191860465116279,
+          3.527586206896552,
+          5.007415254237288
+        ],
+        "candidates_per_present_prompt": [
+          5.8533333333333335,
+          5.273076923076923,
+          6.462295081967213
+        ],
+        "candidates_per_absent_prompt": [
+          3.474747474747475,
+          2.787878787878788,
+          4.171717171717172
+        ],
+        "absent_events": 344,
+        "gt": 300,
+        "hits": 258
+      },
+      "after_verify": {
+        "recall": [
+          0.86,
+          0.8108974358974359,
+          0.903448275862069
+        ],
+        "complete_clip_rate": [
+          0.7751937984496124,
+          0.7028985507246377,
+          0.8467741935483871
+        ],
+        "boundary_adjust_mean": [
+          4.191860465116279,
+          3.527586206896552,
+          5.007415254237288
+        ],
+        "candidates_per_present_prompt": [
+          5.8533333333333335,
+          5.273076923076923,
+          6.462295081967213
+        ],
+        "candidates_per_absent_prompt": [
+          3.474747474747475,
+          2.787878787878788,
+          4.171717171717172
+        ],
+        "absent_events": 344,
+        "gt": 300,
+        "hits": 258
+      },
+      "recall_by_prompt_before_verify": {
+        "s0": "26/33",
+        "s1": "31/33",
+        "s10": "8/10",
+        "s11": "7/7",
+        "s12": "5/5",
+        "s13": "2/3",
+        "s14": "0/1",
+        "s2": "29/33",
+        "s3": "28/32",
+        "s4": "30/32",
+        "s5": "22/30",
+        "s6": "24/29",
+        "s7": "22/24",
+        "s8": "13/16",
+        "s9": "11/12"
+      },
+      "timing_s": {
+        "scan_s": 29816.3,
+        "refine_s": 41903.9,
+        "verify_s": 0.0,
+        "export_s": 3487.9
+      },
+      "rtf_no_verify": 5.72,
+      "verify_ratio": 0.0
+    },
+    "road": {
+      "videos": 20,
+      "missing_units": [],
+      "video_hours": 2.75,
+      "before_verify": {
+        "recall": [
+          0.47058823529411764,
+          0.3948339483394834,
+          0.5610859728506787
+        ],
+        "complete_clip_rate": [
+          0.8214285714285714,
+          0.7247706422018348,
+          0.9148936170212766
+        ],
+        "boundary_adjust_mean": [
+          7.876488095238098,
+          5.557035519125685,
+          11.059818481848188
+        ],
+        "candidates_per_present_prompt": [
+          9.204819277108435,
+          8.51086956521739,
+          9.896103896103897
+        ],
+        "candidates_per_absent_prompt": [
+          8.385964912280702,
+          7.74468085106383,
+          9.046875
+        ],
+        "absent_events": 478,
+        "gt": 238,
+        "hits": 112
+      },
+      "after_verify": {
+        "recall": [
+          0.47058823529411764,
+          0.3948339483394834,
+          0.5610859728506787
+        ],
+        "complete_clip_rate": [
+          0.8214285714285714,
+          0.7247706422018348,
+          0.9148936170212766
+        ],
+        "boundary_adjust_mean": [
+          7.876488095238098,
+          5.557035519125685,
+          11.059818481848188
+        ],
+        "candidates_per_present_prompt": [
+          9.204819277108435,
+          8.51086956521739,
+          9.896103896103897
+        ],
+        "candidates_per_absent_prompt": [
+          8.385964912280702,
+          7.74468085106383,
+          9.046875
+        ],
+        "absent_events": 478,
+        "gt": 238,
+        "hits": 112
+      },
+      "recall_by_prompt_before_verify": {
+        "move_left": "0/12",
+        "move_right": "0/12",
+        "overtake": "3/12",
+        "stop": "35/100",
+        "turn_left": "32/54",
+        "turn_right": "42/48"
+      },
+      "timing_s": {
+        "scan_s": 15513.7,
+        "refine_s": 27970.1,
+        "verify_s": 0.0,
+        "export_s": 3077.9
+      },
+      "rtf_no_verify": 4.71,
+      "verify_ratio": 0.0
+    }
+  },
+  "per_video_counts": {
+    "yc": [
+      {
+        "video": "-AwyG1JcMp8",
+        "duration_s": 307.466667,
+        "gt": 5,
+        "present_prompts": 5,
+        "absent_prompts": 3,
+        "present_candidates": 17,
+        "absent_candidates": 11
+      },
+      {
+        "video": "-Ju39A-G0Dk",
+        "duration_s": 496.0,
+        "gt": 10,
+        "present_prompts": 10,
+        "absent_prompts": 3,
+        "present_candidates": 53,
+        "absent_candidates": 5
+      },
+      {
+        "video": "-goI2-eJO1w",
+        "duration_s": 396.533333,
+        "gt": 6,
+        "present_prompts": 6,
+        "absent_prompts": 3,
+        "present_candidates": 28,
+        "absent_candidates": 16
+      },
+      {
+        "video": "0hb6NShH9hY",
+        "duration_s": 305.733333,
+        "gt": 12,
+        "present_prompts": 12,
+        "absent_prompts": 3,
+        "present_candidates": 71,
+        "absent_candidates": 8
+      },
+      {
+        "video": "10dZTHlkb8w",
+        "duration_s": 359.266667,
+        "gt": 9,
+        "present_prompts": 9,
+        "absent_prompts": 3,
+        "present_candidates": 32,
+        "absent_candidates": 0
+      },
+      {
+        "video": "29Wkj1LqaK8",
+        "duration_s": 369.233333,
+        "gt": 9,
+        "present_prompts": 9,
+        "absent_prompts": 3,
+        "present_candidates": 40,
+        "absent_candidates": 0
+      },
+      {
+        "video": "2HsWZdKKBGg",
+        "duration_s": 386.633333,
+        "gt": 7,
+        "present_prompts": 7,
+        "absent_prompts": 3,
+        "present_candidates": 48,
+        "absent_candidates": 8
+      },
+      {
+        "video": "2IcWR76i1bo",
+        "duration_s": 443.366667,
+        "gt": 13,
+        "present_prompts": 13,
+        "absent_prompts": 3,
+        "present_candidates": 83,
+        "absent_candidates": 11
+      },
+      {
+        "video": "2SxbO4VAgN8",
+        "duration_s": 411.366667,
+        "gt": 7,
+        "present_prompts": 7,
+        "absent_prompts": 3,
+        "present_candidates": 38,
+        "absent_candidates": 6
+      },
+      {
+        "video": "2heP32bqOV0",
+        "duration_s": 613.333333,
+        "gt": 8,
+        "present_prompts": 8,
+        "absent_prompts": 3,
+        "present_candidates": 54,
+        "absent_candidates": 19
+      },
+      {
+        "video": "2zFAZy0zSbw",
+        "duration_s": 374.133333,
+        "gt": 8,
+        "present_prompts": 8,
+        "absent_prompts": 3,
+        "present_candidates": 42,
+        "absent_candidates": 8
+      },
+      {
+        "video": "3dUm-m3iFaI",
+        "duration_s": 313.833333,
+        "gt": 7,
+        "present_prompts": 7,
+        "absent_prompts": 3,
+        "present_candidates": 48,
+        "absent_candidates": 1
+      },
+      {
+        "video": "4ZbNtfqKkiI",
+        "duration_s": 301.266667,
+        "gt": 3,
+        "present_prompts": 3,
+        "absent_prompts": 3,
+        "present_candidates": 12,
+        "absent_candidates": 6
+      },
+      {
+        "video": "4nxbRG6-sfw",
+        "duration_s": 344.566667,
+        "gt": 8,
+        "present_prompts": 8,
+        "absent_prompts": 3,
+        "present_candidates": 46,
+        "absent_candidates": 14
+      },
+      {
+        "video": "5nh2CP22dgY",
+        "duration_s": 479.433333,
+        "gt": 11,
+        "present_prompts": 11,
+        "absent_prompts": 3,
+        "present_candidates": 80,
+        "absent_candidates": 16
+      },
+      {
+        "video": "6seOEuK0ojg",
+        "duration_s": 456.7,
+        "gt": 14,
+        "present_prompts": 14,
+        "absent_prompts": 3,
+        "present_candidates": 71,
+        "absent_candidates": 8
+      },
+      {
+        "video": "7D4uMKxLDT0",
+        "duration_s": 325.666667,
+        "gt": 8,
+        "present_prompts": 8,
+        "absent_prompts": 3,
+        "present_candidates": 22,
+        "absent_candidates": 5
+      },
+      {
+        "video": "9BNRMHGepS4",
+        "duration_s": 317.166667,
+        "gt": 8,
+        "present_prompts": 8,
+        "absent_prompts": 3,
+        "present_candidates": 37,
+        "absent_candidates": 11
+      },
+      {
+        "video": "9guuyTr8EUg",
+        "duration_s": 468.133333,
+        "gt": 14,
+        "present_prompts": 14,
+        "absent_prompts": 3,
+        "present_candidates": 79,
+        "absent_candidates": 16
+      },
+      {
+        "video": "AMBH5L6x3dQ",
+        "duration_s": 423.366667,
+        "gt": 13,
+        "present_prompts": 13,
+        "absent_prompts": 3,
+        "present_candidates": 93,
+        "absent_candidates": 22
+      },
+      {
+        "video": "DVW7nZeeVlk",
+        "duration_s": 349.633333,
+        "gt": 11,
+        "present_prompts": 11,
+        "absent_prompts": 3,
+        "present_candidates": 64,
+        "absent_candidates": 9
+      },
+      {
+        "video": "DpuofwnCI8A",
+        "duration_s": 634.433333,
+        "gt": 8,
+        "present_prompts": 8,
+        "absent_prompts": 3,
+        "present_candidates": 86,
+        "absent_candidates": 15
+      },
+      {
+        "video": "DrXVuj1Qowo",
+        "duration_s": 469.366667,
+        "gt": 12,
+        "present_prompts": 12,
+        "absent_prompts": 3,
+        "present_candidates": 70,
+        "absent_candidates": 3
+      },
+      {
+        "video": "EedEYHqLfP8",
+        "duration_s": 346.133333,
+        "gt": 7,
+        "present_prompts": 7,
+        "absent_prompts": 3,
+        "present_candidates": 29,
+        "absent_candidates": 12
+      },
+      {
+        "video": "EsQbw20TQPA",
+        "duration_s": 308.333333,
+        "gt": 8,
+        "present_prompts": 8,
+        "absent_prompts": 3,
+        "present_candidates": 36,
+        "absent_candidates": 7
+      },
+      {
+        "video": "GgM8IIglBLw",
+        "duration_s": 349.133333,
+        "gt": 9,
+        "present_prompts": 9,
+        "absent_prompts": 3,
+        "present_candidates": 33,
+        "absent_candidates": 5
+      },
+      {
+        "video": "J7gBorrGvDU",
+        "duration_s": 367.133333,
+        "gt": 5,
+        "present_prompts": 5,
+        "absent_prompts": 3,
+        "present_candidates": 22,
+        "absent_candidates": 12
+      },
+      {
+        "video": "JqjwJIV6pI0",
+        "duration_s": 385.366667,
+        "gt": 7,
+        "present_prompts": 7,
+        "absent_prompts": 3,
+        "present_candidates": 42,
+        "absent_candidates": 6
+      },
+      {
+        "video": "LQDP3xm8aRk",
+        "duration_s": 601.2,
+        "gt": 15,
+        "present_prompts": 15,
+        "absent_prompts": 3,
+        "present_candidates": 143,
+        "absent_candidates": 26
+      },
+      {
+        "video": "LeCwqp8Bic8",
+        "duration_s": 342.8,
+        "gt": 8,
+        "present_prompts": 8,
+        "absent_prompts": 3,
+        "present_candidates": 39,
+        "absent_candidates": 11
+      },
+      {
+        "video": "LjfTvZ-cmzs",
+        "duration_s": 347.033333,
+        "gt": 9,
+        "present_prompts": 9,
+        "absent_prompts": 3,
+        "present_candidates": 41,
+        "absent_candidates": 12
+      },
+      {
+        "video": "LpBsoQ6TAL0",
+        "duration_s": 368.466667,
+        "gt": 11,
+        "present_prompts": 11,
+        "absent_prompts": 3,
+        "present_candidates": 88,
+        "absent_candidates": 19
+      },
+      {
+        "video": "MCtF5tRCRUk",
+        "duration_s": 387.066667,
+        "gt": 10,
+        "present_prompts": 10,
+        "absent_prompts": 3,
+        "present_candidates": 69,
+        "absent_candidates": 16
+      }
+    ],
+    "road": [
+      {
+        "video": "2014-06-25-16-45-34_stereo_centre_02",
+        "duration_s": 394.5,
+        "gt": 14,
+        "present_prompts": 6,
+        "absent_prompts": 1,
+        "present_candidates": 45,
+        "absent_candidates": 7
+      },
+      {
+        "video": "2014-06-26-09-31-18_stereo_centre_02",
+        "duration_s": 500.0,
+        "gt": 14,
+        "present_prompts": 3,
+        "absent_prompts": 4,
+        "present_candidates": 26,
+        "absent_candidates": 31
+      },
+      {
+        "video": "2014-06-26-09-53-12_stereo_centre_02",
+        "duration_s": 500.0,
+        "gt": 14,
+        "present_prompts": 4,
+        "absent_prompts": 3,
+        "present_candidates": 37,
+        "absent_candidates": 26
+      },
+      {
+        "video": "2014-07-14-14-49-50_stereo_centre_01",
+        "duration_s": 500.1,
+        "gt": 11,
+        "present_prompts": 3,
+        "absent_prompts": 4,
+        "present_candidates": 25,
+        "absent_candidates": 33
+      },
+      {
+        "video": "2014-07-14-15-42-55_stereo_centre_03",
+        "duration_s": 500.0,
+        "gt": 21,
+        "present_prompts": 6,
+        "absent_prompts": 1,
+        "present_candidates": 64,
+        "absent_candidates": 6
+      },
+      {
+        "video": "2014-08-08-13-15-11_stereo_centre_01",
+        "duration_s": 500.1,
+        "gt": 17,
+        "present_prompts": 5,
+        "absent_prompts": 2,
+        "present_candidates": 41,
+        "absent_candidates": 16
+      },
+      {
+        "video": "2014-11-14-16-34-33_stereo_centre_06",
+        "duration_s": 500.0,
+        "gt": 8,
+        "present_prompts": 5,
+        "absent_prompts": 2,
+        "present_candidates": 30,
+        "absent_candidates": 17
+      },
+      {
+        "video": "2014-11-18-13-20-12_stereo_centre_05",
+        "duration_s": 500.0,
+        "gt": 11,
+        "present_prompts": 4,
+        "absent_prompts": 3,
+        "present_candidates": 41,
+        "absent_candidates": 21
+      },
+      {
+        "video": "2014-11-21-16-07-03_stereo_centre_01",
+        "duration_s": 500.1,
+        "gt": 11,
+        "present_prompts": 3,
+        "absent_prompts": 4,
+        "present_candidates": 27,
+        "absent_candidates": 31
+      },
+      {
+        "video": "2014-11-25-09-18-32_stereo_centre_04",
+        "duration_s": 500.0,
+        "gt": 11,
+        "present_prompts": 5,
+        "absent_prompts": 2,
+        "present_candidates": 37,
+        "absent_candidates": 18
+      },
+      {
+        "video": "2014-12-09-13-21-02_stereo_centre_01",
+        "duration_s": 500.1,
+        "gt": 13,
+        "present_prompts": 5,
+        "absent_prompts": 2,
+        "present_candidates": 50,
+        "absent_candidates": 14
+      },
+      {
+        "video": "2014-12-10-18-10-50_stereo_centre_02",
+        "duration_s": 500.0,
+        "gt": 8,
+        "present_prompts": 4,
+        "absent_prompts": 3,
+        "present_candidates": 39,
+        "absent_candidates": 22
+      },
+      {
+        "video": "2015-02-03-08-45-10_stereo_centre_02",
+        "duration_s": 500.0,
+        "gt": 11,
+        "present_prompts": 5,
+        "absent_prompts": 2,
+        "present_candidates": 55,
+        "absent_candidates": 15
+      },
+      {
+        "video": "2015-02-03-19-43-11_stereo_centre_04",
+        "duration_s": 500.0,
+        "gt": 9,
+        "present_prompts": 3,
+        "absent_prompts": 4,
+        "present_candidates": 39,
+        "absent_candidates": 45
+      },
+      {
+        "video": "2015-02-06-13-57-16_stereo_centre_01",
+        "duration_s": 500.1,
+        "gt": 14,
+        "present_prompts": 6,
+        "absent_prompts": 1,
+        "present_candidates": 53,
+        "absent_candidates": 5
+      },
+      {
+        "video": "2015-02-06-13-57-16_stereo_centre_02",
+        "duration_s": 500.0,
+        "gt": 7,
+        "present_prompts": 3,
+        "absent_prompts": 4,
+        "present_candidates": 33,
+        "absent_candidates": 37
+      },
+      {
+        "video": "2015-02-13-09-16-26_stereo_centre_02",
+        "duration_s": 500.0,
+        "gt": 11,
+        "present_prompts": 3,
+        "absent_prompts": 4,
+        "present_candidates": 27,
+        "absent_candidates": 29
+      },
+      {
+        "video": "2015-02-13-09-16-26_stereo_centre_05",
+        "duration_s": 500.0,
+        "gt": 14,
+        "present_prompts": 5,
+        "absent_prompts": 2,
+        "present_candidates": 44,
+        "absent_candidates": 15
+      },
+      {
+        "video": "2015-02-24-12-32-19_stereo_centre_04",
+        "duration_s": 500.0,
+        "gt": 7,
+        "present_prompts": 2,
+        "absent_prompts": 5,
+        "present_candidates": 23,
+        "absent_candidates": 52
+      },
+      {
+        "video": "2015-03-03-11-31-36_stereo_centre_01",
+        "duration_s": 500.1,
+        "gt": 12,
+        "present_prompts": 3,
+        "absent_prompts": 4,
+        "present_candidates": 28,
+        "absent_candidates": 38
+      }
+    ]
+  }
+}

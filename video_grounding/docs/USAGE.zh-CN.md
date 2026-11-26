@@ -62,6 +62,7 @@ YAML 只覆盖写出的字段，其余使用 `settings.py` 默认值；未知字
 | 导出 | `export.cut_clips` | true；关闭时仍生成事件 JSON |
 | 导出 | `pre_roll` / `post_roll` | 各 0.5 秒 |
 | 重试 | `retry.max_attempts` / `oom_ladder` | 3 / [48, 32, 24, 16, 12, 8, 4] |
+| 特征缓存 | `feature_cache.dir` / `max_gb` | `~/.cache/video_grounding/features` / 50；同一视频换提示词时复用已编码的窗口特征，超过上限先删最久未用的；`dir: null` 关闭。产品后端适配器改放在数据目录下、每个视频一个子目录（`engine/features/video-<id>`，随视频删除），上限仍是全局的。开不开缓存结果都相同 |
 
 VideoJev 的目标帧数同时受窗口时长、fps 和 max_frames 约束：超过上限时在整段内均匀降低有效采样率。提高密度必须同时检查 fps 与帧数上限；保持窗口和步长不变才能比较密度变化。显存不足仍可能降帧，实际情况看 `metrics.json` 的 `oom_downgrades` 和 `window_predictions.jsonl` 的采样元数据。更密集采样不保证更高准确率。
 
@@ -126,7 +127,7 @@ Gemini 接收重编码后的事件片段（含前后留白），不是 VideoJev 
 
 真值标注格式为 `{"events":[{"query_id":"open_door","start_sec":12.5,"end_sec":18.0}]}`，时间使用原视频秒数。`eval` 输出时间 IoU 召回。
 
-准确率基准脚本在 `scripts/` 下：`composite_bench.py`（留出的 YouCook2 与 BDD-X 复合视频，主要准确率检查）和 `charades_sta.py`（仅作参考：VideoJev 的训练数据包含 Charades-STA）。方法与结果见 [EVALUATION.md](EVALUATION.md)。
+准确率基准脚本在 `scripts/` 下：`heldout_bench.py`（留出的 YouCook2 与 ROAD 长视频，每个视频单独一次扫描任务，主要准确率检查）、`composite_bench.py`（早期的小型复合视频检查，仅作历史保留）和 `charades_sta.py`（仅作参考：VideoJev 的训练数据包含 Charades-STA）。方法与结果见 [EVALUATION.zh-CN.md](EVALUATION.zh-CN.md)。
 
 ## 输出、保留与清理
 

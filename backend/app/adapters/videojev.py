@@ -45,6 +45,7 @@ class VideoJevAdapter:
     def propose(self, request: ProposalRequest) -> list[ProposedInterval]:
         try:
             from video_grounding.adapters.base import make_backend
+            from video_grounding.feature_cache import FeatureCache
             from video_grounding.models import Query
             from video_grounding.scheduler import ResumeMismatch, resume, run_scan
             from video_grounding.settings import Settings as EngineSettings
@@ -65,6 +66,17 @@ class VideoJevAdapter:
             backend = _BACKENDS.get(self._config_path)
             if backend is None:
                 backend = _BACKENDS[self._config_path] = make_backend(engine)
+            # The backend is shared across jobs, so its cache is (re)set on every call.
+            fc = engine.feature_cache
+            max_bytes = int(fc.max_gb * 1e9)
+            if fc.dir is None:
+                backend.feature_cache = None
+            elif request.feature_cache_dir:  # product: one dir per video under the data dir
+                backend.feature_cache = FeatureCache(
+                    request.feature_cache_dir.parent, max_bytes, subdir=request.feature_cache_dir.name
+                )
+            else:
+                backend.feature_cache = FeatureCache(Path(fc.dir).expanduser(), max_bytes)
             kwargs: dict[str, Any] = {
                 "backend": backend,
                 "keep_loaded": True,

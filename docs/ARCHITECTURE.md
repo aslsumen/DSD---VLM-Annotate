@@ -89,15 +89,57 @@ flowchart LR
 - Known limit: `updated_at` is stamped with worker clocks, so several worker hosts need synchronized clocks.
 - SQLite with WAL; Alembic migration verified. PostgreSQL-compatible models but untested.
 - Local storage behind a `StorageBackend` protocol; generated keys, traversal guard.
-- Optional single bearer token enforced in middleware; **no users/roles/datasets**.
+- Optional single bearer token enforced in middleware; session auth, global roles, datasets, memberships and
+  searches exist in the API (2026-11-19 → 2026-11-26), and the shared legacy routes enforce the dataset boundary
+  through `app/access.py` (anonymous → 401, non-member → 404, wrong role → 403). The UI still drives projects.
 - Adapters: `mock` (CI default), `videojev` (real detector, the `video_grounding/` engine with VideoJev-4B, run
   in the worker process only; [ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md)), and a
   registered `qwen2.5-vl` stub. The `videojev` adapter is *exhaustive* (all events kept, zero events is
   success), resumes from a per-job work dir `data/storage/engine/job-<id>/` on retry, and loads the model once
-  per worker. `POST /projects/{id}/actions/{id}/jobs` queues one job per video.
+  per worker. `POST /projects/{id}/actions/{id}/jobs` queues one job per video. It also keeps a per-video
+  visual feature cache under `data/storage/engine/features/` (see "Visual feature cache" below).
 - Export is a ZIP with `manifest.json` + `labels.csv` + clips (not OpenLABEL JSON).
 
-**Tests:** 80 backend (pytest), 21 UI (vitest), real-ffmpeg smoke 26/26; adapter tests use a fake engine (`backend/tests/test_videojev.py`), the engine has its own tests (`video_grounding/tests`); real-model `scripts/smoke_videojev.py` on the RTX 3070 laptop is pending (2026-11-16).
+### Visual feature cache
+
+**What.** The worker stores each video window's visual features (the expensive decode + visual-encode step) on
+its own disk. A later search on the same video skips that step. Results are identical: verified bit-exact on
+180 window predictions and 28 events. The job config hash ignores the cache, so it never blocks a resume.
+
+**Used (cache hit)** when the worker runs a search on a video that an earlier search already processed with the
+same model and sampling settings:
+
+- adding a new search to a project whose videos were already searched;
+- "Run pending searches" over existing videos;
+- re-running or retrying a search;
+- engine CLI scans with several prompts, which share refine tiles at the same positions.
+
+**Not used:**
+
+- the first search on a video (it fills the cache);
+- after changing the model or revision, sampling fps/frames, context, attention implementation, or upgrading
+  torch/transformers (the keys change; old entries age out);
+- on a different worker host (each host has its own cache);
+- after LRU eviction;
+- for the same file uploaded again as another video (the cache is per video);
+- when `feature_cache.dir: null`.
+
+**Saves vs. does not save.** It saves decoding and visual encoding: on the 8 GB laptop a later search on the
+same 5–6.6 minute video took 38.6–45.5% less time in the 2026-11-22 measurements
+([`video_grounding/docs/PERFORMANCE.md`](../video_grounding/docs/PERFORMANCE.md)). It does not save per-search
+scoring, refine tiles at new positions, clip cutting, or backend preview extraction.
+
+**Where and how big.** `data/storage/engine/features/video-<id>/` in the product (engine CLI:
+`~/.cache/video_grounding/features`). Measured: one 8-prompt search of a 307 s cooking video left 1.9 GB
+(15 coarse windows and 50 refine tiles, about 29 MB per entry); size grows with video length and with the
+number of refine tiles. The cap is global across all videos (`feature_cache.max_gb`, default 50)
+and evicts the least recently used entries.
+
+**Deletion.** Deleting a video or a project removes its features and its `engine/job-<id>/` work dirs. Deleting
+a search keeps the video's features (other searches use them). Deleting the whole features directory is always
+safe: it only costs speed.
+
+**Tests:** 162 backend (pytest; this count is current as of 2026-11-26 and on Windows all 162 pass; on macOS the Windows-path case `test_path_for_rejects_traversal[..\\escape.mp4]` fails, as it does on main), 21 UI (vitest), real-ffmpeg smoke 26/26; adapter tests use a fake engine (`backend/tests/test_videojev.py`), the engine has its own tests (`video_grounding/tests`). The real model ran through the API and worker on the RTX 3070 laptop on 2026-11-22: two videos, two prompts each, with video and project deletes clearing the feature cache (`video_grounding/docs/PERFORMANCE.md`).
 
 ## 4. Gap and migration plan
 
@@ -106,8 +148,8 @@ flowchart LR
 | PostgreSQL | SQLite | Keep models portable; add Compose service; run migrations; test |
 | Redis + Celery | DB queue | Introduce Celery only if throughput/parallelism demands it; otherwise keep DB queue as a documented simplification (decide Sprint 3) |
 | Object storage | Local FS | Implement `StorageBackend` for S3/MinIO; signed URL issuance belongs to the API |
-| Users/roles/invitations | Bearer token | New auth module, tables and screens; RBAC middleware; dataset scoping |
-| Dataset/Search domain | Project/Action | Rename + new entities; data migration for existing rows; adapt UI |
+| Users/roles/invitations | Bearer token | **Partly done (2026-11-19/25):** `users`, `user_sessions`, `invitations`, global roles and the RBAC guards exist; the shared legacy routes enforce the dataset boundary. Remaining: frontend sign-in screens, password reset and user deactivation (R-18 for signed media) |
+| Dataset/Search domain | Project/Action | **Partly done (2026-11-20/26):** `datasets`, `dataset_memberships`, `searches` and `search_videos` exist alongside the untouched `projects`/`action_definitions`/`processing_jobs`; videos carry a nullable `dataset_id`, candidates a nullable `search_id`. Remaining: the data migration for existing rows, dataset-scoped exports, and the frontend cutover |
 | Detection engine | `videojev` adapter in the worker (in-process) | Separate engine service + Gemini backend only if GPU hosting must be split from the worker |
 | JSON export | ZIP/CSV | New async export job writing the schema in Design §9 |
 | Signed media URLs | Token or open | Time-limited signed URLs/cookies so `<video>` works (also fixes R-18) |

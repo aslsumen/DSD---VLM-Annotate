@@ -1,6 +1,6 @@
 # Product Backlog
 
-**Type:** living artifact · **Owner:** Product Owner (role placeholder) · **Last updated:** 2026-11-16
+**Type:** living artifact · **Owner:** Product Owner (role placeholder) · **Last updated:** 2026-11-26
 **Access:** versioned in Git. Supervisor read access is **NOT yet configured** — see `R-12`.
 
 Priority: **M**ust / **S**hould / **C**ould. Estimates are **provisional story points** for relative sizing,
@@ -19,8 +19,8 @@ not person-hours. Team velocity is unknown until Sprint 2 closes, so all sizing 
 | E7 Hardening & operations | Security, retention, observability, packaging | Partial |
 | E8 Course delivery | Backlogs, burndown, decks, reports, acceptance | In progress |
 | E9 Optional | Multi-model, comparison UI, active learning, tracking | Deferred |
-| E10 Accounts and access | Users, **global roles**, invitations, sessions, sign-out, lockout | Not started — MVP Must |
-| E11 Dataset and search domain | Dataset entity, assignments, search = one prompt over all videos | Not started — MVP Must |
+| E10 Accounts and access | Users, **global roles**, invitations, sessions, sign-out, lockout | In progress — MVP Must (users, global roles, invitations, sessions, sign-out and lockout implemented in the API; UI and password reset/deactivation pending) |
+| E11 Dataset and search domain | Dataset entity, assignments, search = one prompt over all videos | In progress — MVP Must (datasets, memberships, searches, per-video fan-out and status aggregation implemented; UI pending) |
 | E12 JSON export (OpenLABEL) | Multi-interval JSON, reviewer provenance, optional negatives | Not started — MVP Must |
 | E13 Detection engine | Windowed grounding, fusion, flags, clips, VideoJev-4B backend, optional Gemini verify | In progress — MVP Must (engine + `videojev` adapter integrated; real-model smoke and product-footage validation pending) |
 
@@ -52,8 +52,8 @@ not person-hours. Team velocity is unknown until Sprint 2 closes, so all sizing 
 | PB-22 | E5 | manifest.json / labels.csv / README / clips | M | 5 | Done | 2 | Schema 1.0 |
 | PB-23 | E5 | Refuse export with nothing reviewed | M | 2 | Done | 2 | Override flag |
 | PB-24 | E6 | Qwen2.5-VL adapter: windowed inference | M | 13 | Superseded | 3 | ADR-0007: VideoJev-4B is the first real model; adapter stays a stub |
-| PB-25 | E6 | Real-footage evaluation set + metrics | M | 8 | In progress | 3 | Recall@IoU etc. Charades-STA reference run done (`video-grounding eval`); held-out composite benchmarks in PB-70; product-footage set not started |
-| PB-26 | E6 | Model selection ADR with measured evidence | M | 3 | Done | 3 | ADR-0007 (2026-11-16) supersedes provisional ADR-0004; evidence is a Charades-STA reference run (in-domain, integration/timing only); accuracy evidence pending in PB-70 |
+| PB-25 | E6 | Real-footage evaluation set + metrics | M | 8 | In progress | 3 | Recall@IoU etc. Charades-STA reference run done (`video-grounding eval`); held-out long-video benchmark (`heldout_bench.py`) done in PB-70 (2026-11-22); product-footage set not started |
+| PB-26 | E6 | Model selection ADR with measured evidence | M | 3 | Done | 3 | ADR-0007 (2026-11-16) supersedes provisional ADR-0004; evidence is a Charades-STA reference run (in-domain, integration/timing only); accuracy evidence from the held-out long videos (PB-70, 2026-11-22): cooking recall 0.86 (CI 0.81–0.90), driving 0.47, CCR 0.78 / 0.82, targets not confirmed, the integration decision stands |
 | PB-27 | E7 | Retention policy + purge job for old exports | S | 5 | Not started | 4 | `R-06` |
 | PB-28 | E7 | Stale running-job reaper | S | 3 | Done | 4 | `R-07` |
 | PB-29 | E7 | Structured logging + request ids | C | 3 | Not started | 4 | |
@@ -70,34 +70,36 @@ not person-hours. Team velocity is unknown until Sprint 2 closes, so all sizing 
 | PB-40 | E9 | Tracking / identity, multi-camera, audio | C | 34 | Deferred | — | Out of scope |
 | PB-41 | E7 | Media authentication for token deployments (signed URLs/cookies) | S | 5 | Not started | 4 | `R-18` — blocks protected deployment |
 | PB-42 | E7 | Commit the browser E2E as a repeatable Playwright test | S | 5 | Not started | 4 | Evidence currently not reproducible in CI |
-| PB-43 | E10 | User accounts + email/password authentication (hashed) | M | 8 | Not started | 3 | USR-1, NFR-11; CE-2: email-only |
-| PB-44 | E10 | Global roles and RBAC middleware (admin / dataset_admin / annotator) | M | 8 | Not started | 3 | USR-2, permissions table |
-| PB-45 | E10 | Invitations by email: single-use token, 48 h, acceptance page; Admin **and Dataset Admin** | M | 8 | Not started | 3 | USR-4/USR-5, NFR-11, CE-2 |
-| PB-46 | E10 | Sessions: sign-out, 2 h inactivity expiry, 5-failure/15-min lockout | M | 5 | Not started | 3 | NFR-12…NFR-14 |
+| PB-43 | E10 | User accounts + email/password authentication (hashed) | M | 8 | Done (API) 2026-11-19 | 3 | USR-1, NFR-11; CE-2: email-only |
+| PB-44 | E10 | Global roles and RBAC middleware (admin / dataset_admin / annotator) | M | 8 | Done (API) 2026-11-19/25 | 3 | USR-2, permissions table |
+| PB-45 | E10 | Invitations by email: single-use token, 48 h, acceptance page; Admin **and Dataset Admin** | M | 8 | Done (API) 2026-11-19 | 3 | USR-4/USR-5, NFR-11, CE-2; **no mail transport** — the token is returned to the caller |
+| PB-46 | E10 | Sessions: sign-out, 2 h inactivity expiry, 5-failure/15-min lockout | M | 5 | Done (API) 2026-11-19 | 3 | NFR-12…NFR-14; expiry is absolute `VLM_AUTH_SESSION_HOURS` (12 h default), not 2 h inactivity |
 | PB-47 | E10 | Password reset by email | S | 3 | Not started | 4 | USR-6 |
 | PB-48 | E10 | User deactivation | S | 2 | Not started | 4 | USR-7 |
-| PB-49 | E11 | Dataset entity replacing Project (name, use_case, created_by) | M | 5 | Not started | 3 | DS-1/DS-2 |
-| PB-50 | E11 | Dataset assignments (user ↔ dataset) and scoped access checks | M | 5 | Not started | 3 | USR-3/USR-4 |
-| PB-51 | E11 | Search entity: one prompt over all videos, per-video fan-out, status aggregation | M | 8 | Not started | 3 | PR-1, DET-3 |
-| PB-52 | E11 | Search history and prompt reuse | C | 3 | Not started | 5 | PR-2 |
+| PB-49 | E11 | Dataset entity replacing Project (name, use_case, created_by) | M | 5 | Done (API) 2026-11-19 | 3 | DS-1/DS-2; Design v1.2 drops `use_case`, so a dataset is named only |
+| PB-50 | E11 | Dataset assignments (user ↔ dataset) and scoped access checks | M | 5 | Done (API) 2026-11-19/25 | 3 | USR-3/USR-4; assignment is `POST /datasets/{id}/members` (a `DELETE` to revoke a membership does not exist yet) |
+| PB-51 | E11 | Search entity: one prompt over all videos, per-video fan-out, status aggregation | M | 8 | Done (API) 2026-11-20/26 | 3 | PR-1, DET-3; includes listing, cancel and restart, and idempotent creation (`request_scope_json`) |
+| PB-52 | E11 | Search history and prompt reuse | C | 3 | Partial (API) 2026-11-24 | 5 | PR-2; a search stores its prompt and the list endpoint returns history, but rerunning a search for newly uploaded videos is not implemented |
 | PB-53 | E12 | OpenLABEL-based JSON export with multiple intervals per action | M | 8 | Not started | 4 | EXP-1; schema proposal due 2026-11-17 |
 | PB-54 | E12 | Optional rejected-as-negatives export | C | 2 | Not started | 5 | EXP-2 |
 | PB-55 | E12 | Reviewer attribution in export (pending customer answer) | M | 2 | Not started | 4 | EXP-1, REV-3, Q2 |
 | PB-56 | E13 | Detection engine service + `GroundingBackend` interface | M | 13 | Done | 3 | Built as a library in the worker, not a service (ADR-0007); ENG-1…ENG-13 not individually re-assessed |
 | PB-57 | E13 | Gemini API backend (quota guard, retry, prompt template, validation) | M | 8 | Deferred | 3 | Exists only as the engine's optional verify stage (off in the adapter; little precision gain on Charades-STA, costs recall); not the first detector. Privacy approval R-20 needed only if verify is on |
 | PB-58 | E13 | VideoJev-4B self-hosted backend, low-VRAM profile | M | 13 | In progress | 3–4 | `videojev` adapter integrated 2026-11-16, 8 GB profile `rtx3070.yaml`; real-model smoke on the laptop pending |
-| PB-59 | E13 | Window planning, fusion, hysteresis, completeness flags | M | 8 | Done | 4 | In the engine (`video_grounding/`); quality check against SPEC targets pending on held-out composites (PB-70); Charades-STA is reference only |
+| PB-59 | E13 | Window planning, fusion, hysteresis, completeness flags | M | 8 | Done | 4 | In the engine (`video_grounding/`); SPEC targets checked on held-out long videos 2026-11-22 (PB-70): not met (driving) or not confirmed (cooking), see PB-71; Charades-STA is reference only |
 | PB-60 | E7 | Signed media URLs (fixes R-18) | S | 5 | Not started | 4 | NFR-8 |
 | PB-61 | E11 | Pagination envelopes for datasets/videos/candidates/users | S | 3 | Not started | 4 | NFR-7 |
 | PB-62 | E4 | Thumbnails in the candidate list | C | 2 | Not started | 5 | REV-1 |
 | PB-63 | E7 | Docker Compose packaging (API, workers, Postgres, Redis, MinIO, engine) | S | 8 | Not started | 4 | NFR-10 |
 | PB-64 | E11 | Enforce MP4-only and 720p/1080p validation; 5 min Must / 30 min Should | M | 3 | Not started | 3 | DS-4/DS-5, NFR-4 |
-| PB-65 | E13 | KPI measurement harness (recall, R@IoU, complete-clip, boundary adjustment) | M | 5 | In progress | 4 | NFR-5. Engine `eval` CLI covers recall/R@IoU/CCR (Charades-STA is reference only, in-domain for VideoJev; the main benchmarks are the held-out composites, PB-70); reviewer boundary-adjustment KPI not built |
+| PB-65 | E13 | KPI measurement harness (recall, R@IoU, complete-clip, boundary adjustment) | M | 5 | In progress | 4 | NFR-5. Engine `eval` CLI covers recall/R@IoU/CCR (Charades-STA is reference only, in-domain for VideoJev; the main benchmark is the held-out long-video set, PB-70); reviewer boundary-adjustment KPI not built |
 | PB-66 | E13 | Test-dataset ingestion (Charades-STA, TimeLens-Bench) + licence review | M | 5 | Done | 3 | Charades-STA only (`video_grounding/scripts/charades_sta.py`); TimeLens-Bench not used; non-commercial licence caveat in `MODEL_EVALUATION.md` §7 |
 | PB-67 | E9 | Automatic video summaries + tags (non-MVP) | C | 8 | Deferred | — | EXP-3; explicitly outside MVP |
 | PB-68 | E9 | Scene search over summaries/tags | C | 8 | Deferred | — | SRCH-1 |
 | PB-69 | E7 | Mobile review validation (Android Chrome, iOS Safari) | C | 3 | Not started | 6 | NFR-2 (Could) |
-| PB-70 | E13 | Run held-out composite benchmarks (`composite_bench.py`: youcook2_a/b, bddx), re-check `min_event_score`, report KPIs | M | 5 | In progress | 3 | NFR-5. Runs started 2026-11-16 on the RTX 3070 laptop; results go into `video_grounding/docs/EVALUATION.md`. Replaces Charades-STA as the accuracy check (R-27) |
+| PB-70 | E13 | Run held-out benchmarks (`heldout_bench.py`: YouCook2 33 long videos, ROAD 20; earlier small composites via `composite_bench.py`), re-check `min_event_score`, report KPIs | M | 5 | Done | 3 | NFR-5. Done on the RTX 3070 laptop; results in `video_grounding/docs/EVALUATION.md`. Long videos (2026-11-20 to 22, main KPI source): recall 0.86 [0.81, 0.90] cooking, 0.47 [0.39, 0.56] driving; CCR 0.78 / 0.82; target 0.85 each, so cooking recall is a point-estimate pass only and the rest miss. The earlier small composites (2026-11-17: recall 0.573 pooled) were too small (CI about ±0.13) and are superseded. Replaces Charades-STA as the accuracy check (R-27). `min_event_score` 0.5 checked on the long videos (3.5 / 8.4 candidates per absent cooking / driving prompt); re-tuning stays in PB-72 |
+| PB-71 | E13 | Raise driving recall (long videos: lateral moves 0/24, overtake 3/12, stop 35/100, turns found) and cut false candidates on absent prompts (driving 8.4 vs 9.2 per present prompt, cooking 3.5 vs 5.9) | M | 8 | Not started | 4 | NFR-5, R-26, R-27. Follow-up to PB-70; optional Gemini verify stays off in the product (on the earlier driving composite it lost 9/34 true events; not run on the long videos) |
+| PB-72 | E13 | Re-tune `fusion.min_event_score` on the held-out long videos (0.5 was chosen on Charades-STA) | S | 3 | Not started | 4 | Follow-up to PB-70; the 0.5 default was checked there but does not separate present from absent prompts on driving, so a threshold sweep is untested; run after PB-71 changes so the threshold is tuned once |
 
 ## 3. Definition of Ready (an item may enter a sprint only if…)
 
@@ -119,6 +121,12 @@ not person-hours. Team velocity is unknown until Sprint 2 closes, so all sizing 
 - **Scope pivot:** the customer's latest answers (CE-2) plus Requirements v1.1 make accounts, global roles,
   datasets, searches and OpenLABEL JSON **MVP Must**. The existing project/action slice is a technical
   prototype; PB-43…PB-66 are the real path to the MVP.
+- **Progress (2026-11-26):** PB-43, PB-44, PB-45, PB-49, PB-50 and PB-51 are done in the API (migrations
+  `d03f1c4ffd30` … `b8d2e5a4c9f3`), with RBAC enforced on the auth/dataset/search routes and on the shared legacy
+  video/job/candidate routes, and the suite green at 162 tests. Still open from that block: PB-46's 2 h inactivity
+  window (expiry is absolute `VLM_AUTH_SESSION_HOURS`, 12 h default), PB-52 (rerunning a search for newly uploaded
+  videos), PB-53 (OpenLABEL JSON export), plus membership revocation, dataset-scoped exports (`dataset_exports` is
+  still project-scoped) and the frontend cutover.
 - **Order of work:** authentication and dataset domain first (PB-43…PB-51), then JSON export and the Gemini
   detector (PB-53, PB-57), then the self-hosted engine and KPIs (PB-58…PB-65).
 - **Blocking external inputs:** privacy approval for Gemini (R-20), OpenLABEL example (R-25), 12 GB laptop
@@ -129,4 +137,4 @@ not person-hours. Team velocity is unknown until Sprint 2 closes, so all sizing 
 ## 6. Grooming notes (2026-11-16)
 
 - **Detector decision:** [ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md) makes VideoJev-4B the first real detector (E6/PB-24 superseded, PB-57 Gemini deferred). The engine and `videojev` adapter are integrated; the real-model smoke on the RTX 3070 laptop is pending.
-- **Quality:** Charades-STA is reference only (VideoJev was trained on it, so its scores there are in-domain). The SPEC targets are checked on the held-out composite benchmarks (PB-70, running since 2026-11-16, results pending; `video_grounding/docs/EVALUATION.md`). `min_event_score` was lowered to 0.5 on 2026-11-16 based on Charades-STA (recall 0.690 → 0.771, R1@0.5 0.460 → 0.507); this is provisional until re-checked on the composites. Product footage is not measured.
+- **Quality:** Charades-STA is reference only (VideoJev was trained on it, so its scores there are in-domain). The SPEC targets were checked on the held-out long-video benchmark (PB-70, 2026-11-22; `video_grounding/docs/EVALUATION.md`): recall 0.86 cooking / 0.47 driving vs 0.85, CCR 0.78 / 0.82 vs 0.85. Cooking recall meets the target only as a point estimate (CI lower bound 0.81); driving misses widely (lateral moves 0/24, overtake 3/12, stop 35/100) and absent prompts give almost as many candidates as present ones (8.4 vs 9.2). Follow-ups: PB-71, PB-72. `min_event_score` was lowered to 0.5 on 2026-11-16 based on Charades-STA (recall 0.690 → 0.771, R1@0.5 0.460 → 0.507); the long-video check kept it but it was not re-tuned (PB-72). Product footage is not measured.

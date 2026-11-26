@@ -218,7 +218,14 @@ class Video(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, nullable=False)
 
     project: Mapped[Project] = relationship(back_populates="videos")
-    jobs: Mapped[list[ProcessingJob]] = relationship(back_populates="video")
+    # ``passive_deletes`` so the database CASCADE in ``processing_jobs.video_id``
+    # does the deleting.  Without it SQLAlchemy loads the children and NULLs the
+    # foreign key instead, leaving an ownerless job that a running worker then
+    # fails to persist candidates for (``PendingRollbackError``) and that no
+    # dataset mapping can resolve.
+    jobs: Mapped[list[ProcessingJob]] = relationship(
+        back_populates="video", passive_deletes=True
+    )
 
     __table_args__ = (CheckConstraint("size_bytes >= 0", name="ck_video_size_non_negative"),)
 
@@ -509,6 +516,13 @@ class Search(Base):
     # search twice.  Unlike processing_jobs this is not suffixed per video: the
     # Search row is the unit of de-duplication.
     idempotency_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Canonical snapshot of the request that created this search, so an
+    # Idempotency-Key replay is compared against what was asked for rather than
+    # against mutable state.  Comparing against ``search_videos`` (as an earlier
+    # build did) meant deleting one selected video made the original request
+    # stop matching itself.  Plain text JSON: the column is small and
+    # write-once, and SQLite has no JSON type.
+    request_scope_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
 
 
 class SearchVideo(Base):

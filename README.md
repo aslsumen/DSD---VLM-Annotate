@@ -2,10 +2,14 @@
 
 **Human-verified temporal action datasets from long videos.**
 
-A reviewer creates a project, describes an action in natural language, uploads a 10–30 minute single-view RGB
-video, and starts an asynchronous VLM job. The system proposes timestamped candidate clips; a human marks each
-one **true positive** or **false positive** — or leaves it **unreviewed**. The export is a ZIP with labels,
-playable clips and auditable provenance.
+A reviewer picks a **dataset**, describes an action in natural language, uploads a 10–30 minute single-view RGB
+video, and starts a **search** — one prompt run over every video of that dataset, fanned out to one asynchronous
+VLM job per video. The system proposes timestamped candidate clips; a human marks each one **true positive** or
+**false positive** — or leaves it **unreviewed**. The export is a ZIP with labels, playable clips and auditable
+provenance.
+
+The dataset/search vocabulary is the v1.2 design; the older project/action slice still exists underneath and is
+what the current UI drives — see [project_to_dataset_mapping.md](docs/project_to_dataset_mapping.md).
 
 > **AI proposes. Humans decide.** The product never invents a label, and an unreviewed candidate can never
 > silently become a negative.
@@ -122,7 +126,7 @@ The API accepts such jobs without the engine; a worker without it fails the job 
 
 ```powershell
 # Windows
-.\.venv\Scripts\python.exe -m pytest backend -q                 # 125 tests
+.\.venv\Scripts\python.exe -m pytest backend -q                 # 162 tests
 .\.venv\Scripts\python.exe -m ruff check backend\app backend\tests
 .\.venv\Scripts\python.exe scripts\smoke_e2e.py                 # real ffmpeg, 26/26 checks
 cd frontend; npm run build; npm test
@@ -168,7 +172,7 @@ traceback when you ask for help.
 | Dataset export: manifest, labels.csv, clips, provenance | Working, tested |
 | Responsive web UI | Working — build + 21 unit tests + a headless-Chrome end-to-end pass (reported, not committed as a test) |
 | **Real VLM inference** | **Integrated, not yet validated on product footage** — `videojev` adapter (VideoJev-4B, worker GPU); mock stays the default |
-| 10–30 minute real footage validation | Not yet; real-model smoke on the 8 GB laptop pending (2026-11-16) |
+| 10–30 minute real footage validation | Pending for 10–30 minute product footage. A 52-second public clip passed the real VideoJev web smoke on the RTX 3070 laptop. |
 
 ## Repository map
 
@@ -179,9 +183,11 @@ backend/
     services/          storage, media (ffmpeg), pipeline (queue/export)
     adapters/          VLMAdapter boundary: mock, videojev (real), Qwen2.5-VL (stub)
   alembic/             database migrations (initial schema verified)
-  tests/               125 pytest tests (incl. search fan-out / status / scoping / listing / idempotency,
+  tests/               162 pytest tests (incl. search fan-out / status / scoping / listing / idempotency,
                        job-lifecycle sync on cancel / reaper / retry / video delete, review-filter combinations,
-                       concurrent search completion)
+                       concurrent search completion, dataset authorization on the shared legacy routes,
+                       job/SearchVideo/Search consistency and the reconcile sweep, video deletion atomicity,
+                       idempotency request scope and search-level cancel / restart)
 frontend/              React + TypeScript + Vite UI
 video_grounding/       zero-shot grounding engine (VideoJev-4B), see video_grounding/README.md
 presentations/         versioned decks (PPTX + editable Markdown source)
@@ -218,10 +224,16 @@ Read more: [Architecture](docs/ARCHITECTURE.md) · [Design Description](docs/DES
 ## Status
 
 Sprint 3 is in progress (2026-11-16 → 2026-11-29; Alpha gate 29 Nov). `main` contains the tested vertical slice
-(mock adapter is the default), the opt-in `videojev` adapter and the `video_grounding` engine (Linux/WSL2 only;
-Charades-STA reference numbers only, held-out composite results pending — see
-[MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md)). Accounts, global roles, datasets, searches and OpenLABEL JSON
-are the remaining Sprint 3 scope.
+(mock adapter is the default), the opt-in `videojev` adapter and the `video_grounding` engine (Linux/WSL2 only).
+Held-out long-video recall was 0.86 for cooking and 0.47 for driving. Charades-STA serves as an in-domain reference.
+See [MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md).
+
+Accounts, global roles, invitations, sessions, datasets, memberships, searches (fan-out, aggregated status,
+history, cancel and restart, idempotent creation) and dataset authorization on the shared legacy routes are
+implemented in the backend and covered by the suite (162 tests as of 2026-11-26); the frontend has not been cut
+over yet. OpenLABEL JSON export, dataset-scoped exports, membership revocation, rerunning a search for newly
+uploaded videos, signed media URLs (R-18) and the remaining account self-service (password reset, user
+deactivation) are still Sprint 3/4 scope.
 
 Course artifacts are tracked in [docs/course/DSD_DELIVERABLES_REGISTER.md](docs/course/DSD_DELIVERABLES_REGISTER.md).
 Known gap: the official `Guidelines (SCRUM, Presentations)` files are behind a FER login wall, so decks are

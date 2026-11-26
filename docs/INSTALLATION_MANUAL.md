@@ -3,7 +3,8 @@
 **Status:** living document (2027-01-17 static deliverable will freeze this)
 **Verified environment:** Windows 11 · Python 3.14.4 · Node 24.22 · ffmpeg bundled via `imageio-ffmpeg`
 **Verified on:** 2026-11-16 with a clean `git clone` followed by the steps below (80 backend tests, 21 UI tests,
-26/26 smoke checks, API and worker running). macOS/Linux use the same steps with `.venv/bin/python` instead of
+26/26 smoke checks, API and worker running). The backend suite has grown since — as of 2026-11-26 it reports
+**162 passed** (see the test command below). macOS/Linux use the same steps with `.venv/bin/python` instead of
 `.venv\Scripts\python.exe`.
 **GPU engine:** `video_grounding/` is optional, Linux/WSL2 only, and documented separately — it is **not**
 needed to run the web app.
@@ -134,7 +135,7 @@ Environment variables (prefix `VLM_`) or a `.env` file at the repository root:
 | `VLM_DATABASE_URL` | `sqlite:///data/vlm_annotate.db` | SQLAlchemy URL; PostgreSQL supported |
 | `VLM_DATA_DIR` | `./data` | Root for `storage/videos`, `storage/clips`, `storage/exports` |
 | `VLM_API_TOKEN` | *(empty)* | When set, all `/api/v1` routes require `Authorization: Bearer <token>`. **Known limitation:** browsers cannot send this header for `<video>` playback, so stream/clip requests will 401 — do not enable it for demos that need video until PB-41 (signed media URLs) lands |
-| `VLM_AUTH_REQUIRED` | `false` | Session auth for the `/api/v1/auth` and `/api/v1/datasets` routes. Set `true` to reject anonymous calls there |
+| `VLM_AUTH_REQUIRED` | `false` | Session auth for the `/api/v1/auth`, `/api/v1/datasets` and `/api/v1/searches` routes, **and** for any dataset-owned row reached through the legacy video/job/candidate routes (anonymous → 401). Project-owned rows (`dataset_id is None`) stay open either way. Set `true` to reject anonymous calls |
 | `VLM_BOOTSTRAP_TOKEN` | *(empty)* | One-time secret for `POST /api/v1/auth/bootstrap`, which creates the first administrator. Disabled when empty |
 | `VLM_AUTH_SESSION_HOURS` | `12` | Absolute session lifetime |
 | `VLM_AUTH_INVITATION_HOURS` | `48` | Invitation lifetime (single use) |
@@ -175,6 +176,12 @@ Engine state per job is kept in
 `data/storage/engine/job-<id>/` and reused on retry; delete a job's directory to force a rescan. The adapter
 always turns off Gemini verification and engine clip cutting, whatever the YAML says.
 
+The adapter also caches each video's visual features under `data/storage/engine/features/video-<id>/`, so later
+searches on the same video run faster. Size the data volume for the cap (`feature_cache.max_gb`, default 50 GB;
+least recently used entries are evicted; a 5 min video searched once took about 2 GB). To disable or shrink it, set
+`feature_cache: {dir: null}` or a smaller `max_gb` in the YAML named by `VLM_VIDEOJEV_CONFIG`. Details:
+[ARCHITECTURE.md](ARCHITECTURE.md#visual-feature-cache).
+
 To check a GPU host end to end with the real model (API and worker running, several minutes per video):
 
 ```bash
@@ -185,7 +192,7 @@ python scripts/smoke_videojev.py --base-url http://127.0.0.1:8000 --action "pers
 
 ```powershell
 # automated checks
-.\.venv\Scripts\python.exe -m pytest backend -q            # expect 125 passed
+.\.venv\Scripts\python.exe -m pytest backend -q            # expect 162 passed
 .\.venv\Scripts\python.exe scripts\smoke_e2e.py            # expect 26/26 checks
 
 # ffmpeg diagnostics

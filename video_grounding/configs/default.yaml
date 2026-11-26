@@ -7,3 +7,4 @@ fusion: {grid_seconds: 0.5, smooth_cells: 3, high: 0.25, low: 0.15, edge_weight_
 export: {cut_clips: true, pre_roll: 0.5, post_roll: 0.5, crf: 20, preset: fast}
 retry: {max_attempts: 3, oom_ladder: [48, 32, 24, 16, 12, 8, 4]}
 verify: {enabled: true, model: gemini-decision-1, fps: 2.0, max_height: 480}
+feature_cache: {dir: ~/.cache/video_grounding/features, max_gb: 50.0}
