@@ -23,11 +23,12 @@ from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import and_, false, or_, select, update
 from sqlalchemy.orm import Session
 
 from ..models import (
     Candidate,
+    ClipStatus,
     JobStatus,
     PendingDeletion,
     ProcessingJob,
@@ -58,18 +59,70 @@ def record_deletions(
     for key in keys:
         if not key:
             continue
-        session.add(
-            PendingDeletion(storage_key=key, reason=reason, is_tree=is_tree)
-        )
+        session.add(PendingDeletion(storage_key=key, reason=reason, is_tree=is_tree))
         queued += 1
     return queued
 
 
-def _remove_one(storage: LocalStorage, key: str, *, is_tree: bool) -> None:
+def _lock_sqlite_writer(session: Session) -> None:
+    # A SELECT cannot lock a missing row. Reserve SQLite's write transaction
+    # through unlink so another transaction cannot reuse an ID after our check.
+    if session.get_bind().dialect.name == "sqlite":
+        session.execute(
+            update(PendingDeletion).where(false()).values(attempts=PendingDeletion.attempts)
+        )
+
+
+def _in_use(session: Session, key: str, *, is_tree: bool, intent: bool = False) -> bool:
     if is_tree:
-        shutil.rmtree(storage.path_for(key), ignore_errors=True)
-        return
-    storage.path_for(key).unlink(missing_ok=True)
+        if key.startswith("engine/features/video-"):
+            suffix = key.removeprefix("engine/features/video-")
+            if suffix.isdecimal():
+                return (
+                    session.scalar(
+                        select(Video.id).where(Video.id == int(suffix)).with_for_update()
+                    )
+                    is not None
+                )
+        elif key.startswith("engine/job-"):
+            suffix = key.removeprefix("engine/job-")
+            if suffix.isdecimal():
+                state = session.scalar(
+                    select(ProcessingJob.status)
+                    .where(ProcessingJob.id == int(suffix))
+                    .with_for_update()
+                )
+                if intent:
+                    return state is not None
+                return state in (JobStatus.queued, JobStatus.running, JobStatus.failed)
+    elif key.startswith("clips/"):
+        owned = Candidate.clip_storage_key == key
+        # Both historical and new preview names begin with the candidate ID.
+        # Read the pending and published states in the same database snapshot.
+        candidate_id, sep, _ = key.removeprefix("clips/").partition("-")
+        if sep and candidate_id.isdecimal():
+            owned = or_(
+                owned,
+                and_(
+                    Candidate.id == int(candidate_id),
+                    Candidate.clip_status == ClipStatus.pending,
+                    Candidate.job.has(ProcessingJob.status == JobStatus.running),
+                ),
+            )
+        return session.scalar(select(Candidate.id).where(owned).limit(1)) is not None
+    return False
+
+
+def _remove_one(storage: LocalStorage, key: str, *, is_tree: bool) -> None:
+    path = storage.path_for(key)
+    if is_tree:
+        try:
+            shutil.rmtree(path)
+        except FileNotFoundError:
+            if path.exists():
+                raise
+    else:
+        path.unlink(missing_ok=True)
 
 
 def flush_pending_deletions(
@@ -99,8 +152,16 @@ def flush_pending_deletions(
         cap = limit
     statement = statement.limit(cap)
 
+    # Avoid taking a database write lock on an empty worker tick. Once the
+    # lock is acquired, read the queue again: a peer may already have drained it.
+    if session.scalar(statement.with_only_columns(PendingDeletion.id).limit(1)) is None:
+        return 0
+    _lock_sqlite_writer(session)
     removed = 0
-    for row in list(session.scalars(statement)):
+    for row in list(session.scalars(statement.with_for_update())):
+        if _in_use(session, row.storage_key, is_tree=row.is_tree, intent=True):
+            session.delete(row)  # The old intent no longer owns this path.
+            continue
         try:
             _remove_one(storage, row.storage_key, is_tree=row.is_tree)
         except StorageError:
@@ -126,17 +187,13 @@ def _referenced_clip_keys(session: Session) -> set[str]:
     return {
         key
         for key in session.scalars(
-            select(Candidate.clip_storage_key).where(
-                Candidate.clip_storage_key.is_not(None)
-            )
+            select(Candidate.clip_storage_key).where(Candidate.clip_storage_key.is_not(None))
         )
         if key
     }
 
 
-def _sweep_orphan_clips(
-    session: Session, storage: LocalStorage, *, older_than: datetime
-) -> int:
+def _sweep_orphan_clips(session: Session, storage: LocalStorage, *, older_than: datetime) -> int:
     """Delete ``clips/*`` no Candidate points at, older than the grace period."""
     root = storage.path_for(CLIP_PREFIX)
     if not root.is_dir():
@@ -154,6 +211,9 @@ def _sweep_orphan_clips(
                 continue
         except OSError:
             continue
+        _lock_sqlite_writer(session)
+        if _in_use(session, key, is_tree=False):
+            continue
         try:
             path.unlink(missing_ok=True)
             removed += 1
@@ -170,7 +230,7 @@ def _sweep_orphan_engine_dirs(
     A worker whose video was deleted mid-run recreates ``engine/job-N`` (or
     ``engine/features/video-N``) after the delete already collected the old
     directory, and nothing references the new one.  Ownership, not age, is what
-    decides: a ``job-N`` dir is kept while job *N* is queued or running (the
+    decides: a ``job-N`` dir is kept while job *N* is queued, running, or failed and retryable (the
     engine may be mid-inference and silent for minutes), and a
     ``features/video-N`` dir is kept while video *N* still exists, because the
     next search on that video reuses the cache.  Age only gates the *removal* of
@@ -192,7 +252,9 @@ def _sweep_orphan_engine_dirs(
                 for job_id in session.scalars(
                     select(ProcessingJob.id).where(
                         ProcessingJob.id.in_(job_ids),
-                        ProcessingJob.status.in_((JobStatus.queued, JobStatus.running)),
+                        ProcessingJob.status.in_(
+                            (JobStatus.queued, JobStatus.running, JobStatus.failed)
+                        ),
                     )
                 )
             }
@@ -201,8 +263,7 @@ def _sweep_orphan_engine_dirs(
             if not suffix.isdigit() or int(suffix) in live_jobs:
                 continue
             if _is_old_enough(path, older_than) and path.is_dir():
-                shutil.rmtree(path, ignore_errors=True)
-                removed += 1
+                removed += _remove_orphan_tree(session, storage, path)
 
     feature_dirs = list(root.glob("features/video-*"))
     if feature_dirs:
@@ -217,18 +278,28 @@ def _sweep_orphan_engine_dirs(
         if video_ids:
             live_videos = {
                 video_id
-                for video_id in session.scalars(
-                    select(Video.id).where(Video.id.in_(video_ids))
-                )
+                for video_id in session.scalars(select(Video.id).where(Video.id.in_(video_ids)))
             }
         for path in feature_dirs:
             suffix = path.name[len(prefix) :]
             if not suffix.isdigit() or int(suffix) in live_videos:
                 continue
             if _is_old_enough(path, older_than) and path.is_dir():
-                shutil.rmtree(path, ignore_errors=True)
-                removed += 1
+                removed += _remove_orphan_tree(session, storage, path)
     return removed
+
+
+def _remove_orphan_tree(session: Session, storage: LocalStorage, path: Path) -> int:
+    key = path.relative_to(storage.root).as_posix()
+    _lock_sqlite_writer(session)
+    if _in_use(session, key, is_tree=True):
+        return 0
+    try:
+        _remove_one(storage, key, is_tree=True)
+    except OSError as exc:
+        logger.warning("orphan directory %s could not be removed: %s", key, exc)
+        return 0
+    return 1
 
 
 def _is_old_enough(path: Path, older_than: datetime) -> bool:
@@ -258,6 +329,7 @@ def purge_storage(
     older_than = _age_gate(grace_seconds)
     removed += _sweep_orphan_clips(session, storage, older_than=older_than)
     removed += _sweep_orphan_engine_dirs(session, storage, older_than=older_than)
+    session.commit()
     return removed
 
 

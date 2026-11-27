@@ -563,3 +563,20 @@ def test_project_owned_rows_keep_their_unauthenticated_behaviour(auth_client) ->
 
     # Deleting a project video stays open, as it always was.
     assert auth_client.delete(f"/api/v1/videos/{video['id']}").status_code == 204
+
+
+def test_job_list_limit_applies_to_visible_rows(auth_client):
+    from tests.conftest import bootstrap_admin, create_action, create_project, upload_video
+
+    project = create_project(auth_client)
+    action = create_action(auth_client, project["id"])
+    video = upload_video(auth_client, project["id"])
+    before = auth_client.post(f"/api/v1/videos/{video['id']}/jobs", json={"action_id": action["id"]})
+    assert before.status_code == 202, before.text
+    token = bootstrap_admin(auth_client)["access_token"]
+    dataset = _create_dataset(auth_client, token)["id"]
+    _upload_dataset_video(auth_client, dataset, token)
+    _launch_search(auth_client, dataset, token)
+    result = auth_client.get("/api/v1/jobs", params={"limit": 1})
+    assert result.status_code == 200
+    assert [item["id"] for item in result.json()] == [before.json()["id"]], result.text

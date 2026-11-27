@@ -490,19 +490,15 @@ def retry_search(
     fallback_params = scope.get("params") if isinstance(scope.get("params"), dict) else {}
     fallback_adapter = scope.get("adapter_name")
 
-    retried = 0
-    was_failed = False
+    eligible = False
     rows = list(
         session.scalars(select(SearchVideo).where(SearchVideo.search_id == search_id))
     )
     for row in rows:
         job = session.get(ProcessingJob, row.job_id) if row.job_id else None
-        if row.status == SearchVideoStatus.failed:
-            was_failed = True
-        if job is not None and job.status not in (JobStatus.failed,):
+        if row.status != SearchVideoStatus.failed:
             continue
-        if job is None and row.status != SearchVideoStatus.failed:
-            # No job and nothing failed: nothing to restart for this video.
+        if job is not None and job.status not in (JobStatus.failed,):
             continue
         video = session.get(Video, row.video_id)
         if video is None:
@@ -523,6 +519,7 @@ def retry_search(
         # race reuse the winner's job, but two concurrent inserts of the same key
         # fail the unique constraint at flush time and poison the transaction.
         # The compare-and-swap below already guarantees one surviving job.
+        eligible = True
         new_job = enqueue_candidate_job(
             session,
             video=video,
@@ -560,9 +557,8 @@ def retry_search(
                 session.delete(new_job)
             session.expire(row)
             continue
-        retried += 1
 
-    if retried == 0 and not was_failed:
+    if not eligible:
         session.rollback()
         raise ApiError(
             409,

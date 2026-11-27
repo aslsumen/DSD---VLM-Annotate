@@ -1208,7 +1208,8 @@ def test_reconcile_does_not_overwrite_a_newer_result(client, monkeypatch) -> Non
         assert pipeline.reconcile_search_state(session) == 0
 
 
-def test_reconcile_settles_a_parent_left_failed_by_an_interrupted_retry(client) -> None:
+@pytest.mark.parametrize("terminal", [SearchStatus.failed, SearchStatus.partial])
+def test_reconcile_settles_a_terminal_parent_after_interrupted_retry(client, terminal) -> None:
     """A terminal Search with a restarted video is drift, even if the child is fine.
 
     ``retry_search`` commits the replacement job and its row before it settles the
@@ -1245,7 +1246,7 @@ def test_reconcile_settles_a_parent_left_failed_by_an_interrupted_retry(client) 
             update(Search)
             .where(Search.id == search["id"])
             .values(
-                status=SearchStatus.failed,
+                status=terminal,
                 finished_at=_now(),
                 error_message="Job canceled",
             )
@@ -1253,7 +1254,7 @@ def test_reconcile_settles_a_parent_left_failed_by_an_interrupted_retry(client) 
         session.commit()
 
     detail = _search_detail(client, search["id"])
-    assert detail["status"] == "failed"
+    assert detail["status"] == terminal.value
 
     with db.SessionLocal() as session:
         assert pipeline.reconcile_search_state(session) >= 1
@@ -2062,3 +2063,15 @@ def test_preflight_failure_does_not_resurrect_a_canceled_job(client) -> None:
     assert detail["error_message"] == "Job canceled"
     assert detail["videos"][0]["error_message"] == "Job canceled"
 
+
+
+def test_canceled_search_retry_creates_no_work(client):
+    dataset = _create_dev_dataset(client, "Canceled Search")
+    _upload_dataset_video(client, dataset["id"], "cancel.mp4")
+    search = _launch_search(client, dataset["id"])
+    url = f"/api/v1/datasets/{dataset['id']}/searches/{search['id']}"
+    assert client.post(url + "/cancel").status_code == 200
+    response = client.post(url + "/retry")
+    assert response.status_code == 409
+    assert response.json()["code"] == "SEARCH_NOT_RETRYABLE"
+    assert len(_jobs_for_video(search["videos"][0]["video_id"])) == 1

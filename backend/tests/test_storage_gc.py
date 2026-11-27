@@ -357,3 +357,94 @@ def test_failed_delete_queues_nothing(client, monkeypatch) -> None:
         assert session.get(ProcessingJob, job_id) is not None
     assert storage.path_for(source_key).is_file()
     assert _pending_keys() == []
+
+
+def test_stale_intents_preserve_reused_job_and_video_directories(client, worker, monkeypatch):
+    from app.api import videos
+
+    dataset = _create_dataset(client)
+    old = _upload_video(client, dataset["id"])
+    _launch_search(client, dataset["id"])
+    old_job = _job_id_of(old["id"])
+    with monkeypatch.context() as pause:
+        pause.setattr(videos, "flush_pending_deletions", lambda *args, **kwargs: 0)
+        assert client.delete(f"/api/v1/videos/{old['id']}").status_code == 204
+    replacement = _upload_video(client, dataset["id"])
+    _launch_search(client, dataset["id"])
+    assert replacement["id"] == old["id"] and _job_id_of(replacement["id"]) == old_job
+    paths = [
+        worker.storage.path_for(key) / "current"
+        for key in (engine_job_key(old_job), feature_cache_key(replacement["id"]))
+    ]
+    for path in paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"replacement")
+    with db.SessionLocal() as session:
+        purge_storage(session, worker.storage, grace_seconds=0)
+    assert not _pending_keys()
+    assert all(path.read_bytes() == b"replacement" for path in paths)
+
+
+def test_directory_removal_failure_is_retried(client, worker, monkeypatch):
+    from app.services import storage_gc
+
+    key = engine_job_key(999)
+    path = worker.storage.path_for(key)
+    path.mkdir(parents=True)
+    with db.SessionLocal() as session:
+        record_deletions(session, keys=[key], is_tree=True, reason="video")
+        session.commit()
+
+    def locked(*args, **kwargs):
+        raise PermissionError("temporarily locked")
+
+    with monkeypatch.context() as locked_fs, db.SessionLocal() as session:
+        locked_fs.setattr(storage_gc.shutil, "rmtree", locked)
+        assert storage_gc.flush_pending_deletions(session, worker.storage) == 0
+        assert session.scalar(select(PendingDeletion)).attempts == 1
+    with db.SessionLocal() as session:
+        assert storage_gc.flush_pending_deletions(session, worker.storage) == 1
+        assert storage_gc.flush_pending_deletions(session, worker.storage) == 0
+    assert not path.exists()
+
+
+def test_active_preview_survives_sweep_until_published(client, worker, monkeypatch):
+    dataset = _create_dataset(client)
+    video = _upload_video(client, dataset["id"])
+    _launch_search(client, dataset["id"])
+    extract = worker.extractor.extract
+
+    def slow(source, destination, start, end):
+        extract(source, destination, start, end)
+        _age(destination, 3600)
+        with db.SessionLocal() as peer:
+            purge_storage(peer, worker.storage, grace_seconds=300)
+        assert destination.is_file()
+
+    monkeypatch.setattr(worker.extractor, "extract", slow)
+    assert worker.run_once()
+    keys = _clip_keys(video["id"])
+    assert keys and all(worker.storage.exists(key) for key in keys)
+
+
+def test_stale_worker_cannot_fail_or_heartbeat_a_reused_job(client):
+    from app.services.pipeline import claim_next_job, fail_job_now, heartbeat
+
+    dataset = _create_dataset(client)
+    old = _upload_video(client, dataset["id"])
+    _launch_search(client, dataset["id"])
+    with db.SessionLocal() as stale:
+        original = claim_next_job(stale)
+        old_id, old_attempt, old_start = original.id, original.attempts, original.started_at
+        assert client.delete(f"/api/v1/videos/{old['id']}").status_code == 204
+        replacement = _upload_video(client, dataset["id"])
+        _launch_search(client, dataset["id"])
+        assert replacement["id"] == old["id"]
+        with db.SessionLocal() as peer:
+            claimed = claim_next_job(peer)
+            assert (claimed.id, claimed.attempts) == (old_id, old_attempt)
+            assert not heartbeat(peer, old_id, old_attempt, started_at=old_start)
+        stale.expire_all()
+        fail_job_now(stale, original, "OLD", "late preflight")
+    with db.SessionLocal() as peer:
+        assert peer.get(ProcessingJob, old_id).status.value == "running"

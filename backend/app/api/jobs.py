@@ -25,7 +25,7 @@ def list_jobs(
     status_filter: JobStatus | None = Query(default=None, alias="status"),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> list[ProcessingJob]:
-    statement = select(ProcessingJob).order_by(ProcessingJob.id.desc()).limit(limit)
+    statement = select(ProcessingJob).order_by(ProcessingJob.id.desc())
     if project_id is not None:
         get_project_or_404(session, project_id)
         statement = statement.where(ProcessingJob.project_id == project_id)
@@ -36,7 +36,14 @@ def list_jobs(
     if status_filter is not None:
         statement = statement.where(ProcessingJob.status == status_filter)
     # Unfiltered, this is a global list: hide dataset jobs the caller cannot see.
-    return filter_visible_jobs(session, principal, session.scalars(statement))
+    visible = []
+    while len(visible) < limit:
+        page = list(session.scalars(statement.limit(limit)))
+        visible.extend(filter_visible_jobs(session, principal, page))
+        if len(page) < limit:
+            break
+        statement = statement.where(ProcessingJob.id < page[-1].id)
+    return visible[:limit]
 
 
 @router.get("/jobs/{job_id}", response_model=JobOut)

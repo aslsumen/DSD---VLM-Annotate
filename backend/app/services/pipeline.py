@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-import contextlib
 import csv
 import io
 import json
 import logging
-import shutil
 import tempfile
 import zipfile
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
-from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy import and_, delete, func, inspect, or_, select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -49,6 +48,7 @@ from ..models import (
 from ..validation import clamp_to_duration, preview_window
 from .media import ClipExtractor, MediaError, MediaProbe
 from .storage import LocalStorage, StorageError
+from .storage_gc import flush_pending_deletions, record_deletions
 
 logger = logging.getLogger(__name__)
 
@@ -66,16 +66,6 @@ def engine_job_key(job_id: int) -> str:
 
 def feature_cache_key(video_id: int) -> str:
     return f"engine/features/video-{video_id}"
-
-
-def remove_engine_files(
-    storage: LocalStorage, job_ids: Iterable[int] = (), video_ids: Iterable[int] = ()
-) -> None:
-    """Remove engine work dirs (per job) and visual-feature dirs (per video); missing is fine."""
-    keys = [*map(engine_job_key, job_ids), *map(feature_cache_key, video_ids)]
-    for key in keys:
-        with contextlib.suppress(StorageError, OSError):
-            shutil.rmtree(storage.path_for(key), ignore_errors=True)
 
 
 def _now() -> datetime:
@@ -212,10 +202,12 @@ def claim_next_job(session: Session, now: datetime | None = None) -> ProcessingJ
             attempts=ProcessingJob.attempts + 1,
         )
     )
+    job = session.get(ProcessingJob, job_id) if result.rowcount == 1 else None
+    if job is not None:
+        # ORM refresh/rollback must never turn this worker into a later claimant.
+        inspect(job).info["worker_claim"] = (job.id, job.attempts, moment)
     session.commit()
-    if result.rowcount != 1:
-        return None
-    return session.get(ProcessingJob, job_id)
+    return job
 
 
 # --------------------------------------------------------------------------- #
@@ -234,11 +226,15 @@ def _owned(job_id: int, attempts: int) -> tuple[Any, ...]:
     )
 
 
-def heartbeat(session: Session, job_id: int, attempts: int) -> bool:
+def heartbeat(
+    session: Session, job_id: int, attempts: int, *, started_at: datetime | None = None
+) -> bool:
     """Touch updated_at if this worker still owns the job.  False means it no longer does."""
+    guard = update(ProcessingJob).where(*_owned(job_id, attempts))
+    if started_at is not None:
+        guard = guard.where(ProcessingJob.started_at == started_at)
     result = session.execute(
-        update(ProcessingJob)
-        .where(*_owned(job_id, attempts))
+        guard
         .values(updated_at=_now())
         .execution_options(synchronize_session=False)
     )
@@ -252,13 +248,13 @@ def _fence(session: Session, job: ProcessingJob) -> None:
     Deliberately does not commit: the caller's ORM writes and commit share this transaction,
     so the ownership check and the writes are atomic (SQLite write lock, Postgres row lock).
     """
-    # Read the identity before anything else: once the row is gone (job canceled,
-    # reclaimed, or deleted with its action/video) the rollback expires the ORM
-    # object and reading job.id afterwards would raise ObjectDeletedError.
-    job_id, attempts = job.id, job.attempts
+    claim = inspect(job).info.get("worker_claim")
+    if claim is None:
+        claim = (job.id, job.attempts, job.started_at)
+    job_id, attempts, started_at = claim
     result = session.execute(
         update(ProcessingJob)
-        .where(*_owned(job_id, attempts))
+        .where(*_owned(job_id, attempts), ProcessingJob.started_at == started_at)
         .values(updated_at=_now())
         .execution_options(synchronize_session=False)
     )
@@ -379,6 +375,7 @@ def execute_job(
             job_id,
         )
         return job
+    attempts, started_at = job.attempts, job.started_at
     try:
         try:
             if job.kind == JobKind.candidate_proposal:
@@ -432,7 +429,6 @@ def execute_job(
             # session unusable: every later statement raises PendingRollbackError,
             # so the job kept its "running" status and the search never settled.
             # Roll back first, then re-read the row to see whether we still own it.
-            job_id, attempts = job.id, job.attempts
             logger.warning(
                 "job %s hit a database error; rolling back and failing it",
                 job_id,
@@ -444,6 +440,7 @@ def execute_job(
                 current is None
                 or current.status != JobStatus.running
                 or current.attempts != attempts
+                or current.started_at != started_at
             ):
                 # Deleted (its video went away) or taken over by another worker.
                 return current if current is not None else job
@@ -543,10 +540,18 @@ def _run_candidate_job(
     )
     try:
         proposals = adapter.propose(request)
-    finally:
-        # A running adapter can write files after the API has removed the video and its directories.
-        if not request.video_path.is_file():
-            remove_engine_files(storage, [job_id], [video_id])
+    except Exception:
+        if request.video_path.is_file():
+            raise
+        proposals = []
+    if not request.video_path.is_file():
+        # A late adapter can recreate these paths after the video delete committed.
+        session.rollback()
+        keys = [engine_job_key(job_id), feature_cache_key(video_id)]
+        record_deletions(session, keys=keys, reason="video", is_tree=True)
+        session.commit()
+        flush_pending_deletions(session, storage, keys=keys)
+        raise JobInterrupted("source video deleted during inference")
     # Exhaustive adapters report every occurrence they find; none means "does not occur".
     exhaustive = getattr(adapter, "exhaustive", False)
     if not proposals and not exhaustive:
@@ -611,8 +616,8 @@ def _run_candidate_job(
         # while the extractor was paused still wrote its file — a file no row
         # referenced, because the delete had already collected the candidates.
         _set_progress(session, job, 0.55 + 0.4 * (index - 1) / len(created))
-        clip_key = f"clips/{candidate.id}-{round(candidate.preview_start_seconds, 3)}-{round(candidate.preview_end_seconds, 3)}.mp4"
-        clip_key = clip_key.replace(":", "")
+        candidate_id, created_at = candidate.id, candidate.created_at
+        clip_key = f"clips/{candidate_id}-{uuid4().hex}.mp4"
         try:
             destination = storage.path_for(clip_key)
             extractor.extract(
@@ -621,8 +626,15 @@ def _run_candidate_job(
                 candidate.preview_start_seconds,
                 candidate.preview_end_seconds,
             )
+            try:
+                _fence(session, job)
+            except JobInterrupted:
+                storage.delete(clip_key)
+                raise
             still_ours = session.scalar(
-                select(func.count(Candidate.id)).where(Candidate.id == candidate.id)
+                select(func.count(Candidate.id)).where(
+                    Candidate.id == candidate_id, Candidate.created_at == created_at
+                )
             )
             if not still_ours:
                 # The video went away while the extractor ran: drop the bytes it
@@ -1080,7 +1092,7 @@ def reconcile_search_state(session: Session) -> int:
       state — the row is put back to ``queued``/``running``;
     * a Search left in ``queued``/``running`` although all of its videos already
       settled — the aggregate is re-derived;
-    * a terminal Search (``done``/``failed``) that still has a ``queued``/
+    * a terminal Search (``done``/``failed``/``partial``) that still has a ``queued``/
       ``running`` video — the aggregate is re-derived, because a terminal parent
       contradicts a child that is in flight.
 
@@ -1185,7 +1197,7 @@ def reconcile_search_state(session: Session) -> int:
     if still_busy:
         stale_terminal = session.scalars(
             select(Search.id).where(
-                Search.status.in_((SearchStatus.done, SearchStatus.failed)),
+                Search.status.in_((SearchStatus.done, SearchStatus.failed, SearchStatus.partial)),
                 Search.id.in_(list(still_busy)),
             )
         ).all()
@@ -1270,7 +1282,7 @@ def fail_job_now(session: Session, job: ProcessingJob, code: str, message: str) 
     SearchVideo, resurrecting a cancellation that had already settled the search
     as ``failed`` with reason "Job canceled".
     """
-    job_id = job.id
+    job_id = inspect(job).identity[0]
     try:
         _fence(session, job)
     except JobInterrupted:

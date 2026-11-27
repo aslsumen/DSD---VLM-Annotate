@@ -202,7 +202,7 @@ live video rows) with a logged warning.
 `running` video of the search and returns `200` with the settled search; it is idempotent, so a retry after a flaky
 connection returns the already-settled search unchanged instead of failing. `POST .../searches/{search_id}/retry`
 re-queues **only** the videos whose job failed, leaving the finished ones alone, and returns `202`; it answers
-`409 SEARCH_NOT_RETRYABLE` when the search has no failed video at all. Both go through `cancel_job` /
+`409 SEARCH_NOT_RETRYABLE` when no video is eligible, including a search whose jobs were all canceled. Both go through `cancel_job` /
 `enqueue_candidate_job` so there is still exactly one writer per state, and both require the `dataset_admin` role on
 a dataset the caller can access.
 
@@ -232,7 +232,7 @@ search concurrently cannot both write `running` and strand it.
 start of execution aborts with `JobInterrupted` and leaves the canceled row alone instead of resurrecting it.
 The worker additionally runs `reconcile_search_state` on every tick: it repaints any `SearchVideo` row that disagrees
 with its job (job is the source of truth), and re-derives any `Search` still `queued`/`running`/`partial` whose videos
-have all settled — plus any terminal `done`/`failed` `Search` that still has a `queued`/`running` video, which is what an
+have all settled — plus any terminal `done`, `failed`, or `partial` Search that still has a `queued`/`running` video, which is what an
 interruption between the retry commit and the aggregate leaves behind. It is idempotent and a no-op on a consistent
 database, so it repairs rows written by older builds or torn by a hard kill without masking a live write path. Its
 return value counts both kinds of repair — repainted `SearchVideo` rows and `Search` aggregates that actually moved — so
@@ -265,10 +265,11 @@ delete call also flushes the keys it just queued. The same sweep additionally co
 create an unreferenced key: a preview clip extracted for a video that was deleted meanwhile, and an `engine/` scratch
 directory whose job or video no longer exists. Both are keyed by ownership, not by age alone — a file younger than
 `VLM_STORAGE_GC_GRACE_SECONDS` (default 300 s) is assumed to belong to a running writer and an `engine/` directory is
-kept while its job is `queued`/`running` or its video still exists (the next search reuses the feature cache) — so the
+kept while its job is queued, running or retryable after failure, or its video still exists (the next search reuses the feature cache) — so the
 sweep never races a live extraction. A key that `path_for` rejects is dropped from the queue instead of retried forever.
-The preview-clip loop itself now fences *before* writing the clip and re-checks that its candidate row still exists
-afterwards, so the common case never produces the orphan at all.
+A queued deletion checks the current owner before unlinking, including after SQLite reuses an ID.
+A temporary directory-removal error retains the intent. Each preview extraction writes to a unique
+key. A pending candidate with a running job protects its output through publication, even past the grace period.
 
 **Candidate list filters.** `GET /api/v1/projects/{id}/candidates` and `GET /api/v1/searches/{id}/candidates`
 accept `review_state` (`reviewed` / `unreviewed`) and `verdict` (`true_positive` / `false_positive`) together.
