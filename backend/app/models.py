@@ -395,6 +395,36 @@ class DatasetExport(Base):
     job: Mapped[ProcessingJob | None] = relationship(back_populates="export", uselist=False)
 
 
+class PendingDeletion(Base):
+    """A storage key that must be removed once its row was committed away.
+
+    Deleting a video (or a project, action, export) commits the row removal first
+    and only then unlinks the bytes.  A process that dies in that window leaves
+    files no row can find again, because the only record of them was the row just
+    deleted.  Each delete writes these intent rows in the *same* transaction as
+    the row it removes, so "the row is gone" always implies "the cleanup is still
+    queued"; a sweep drains the table.
+
+    There is deliberately no unique constraint on ``storage_key``: the same key
+    can be queued twice (a racing delete, a re-run sweep) and removing a missing
+    file is a no-op, so duplicates are harmless while a unique constraint would
+    force a savepoint to survive an ``IntegrityError``.
+    """
+
+    __tablename__ = "pending_deletions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    # Engine work dirs and feature caches are directories, not files.
+    is_tree: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    reason: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (Index("ix_pending_deletions_created_at", "created_at"),)
+
+
 # --------------------------------------------------------------------------- #
 # Identity and access (Sprint 3)
 # --------------------------------------------------------------------------- #

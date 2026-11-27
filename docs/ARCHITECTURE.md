@@ -139,7 +139,7 @@ and evicts the least recently used entries.
 a search keeps the video's features (other searches use them). Deleting the whole features directory is always
 safe: it only costs speed.
 
-**Tests:** 162 backend (pytest; this count is current as of 2026-11-26 and on Windows all 162 pass; on macOS the Windows-path case `test_path_for_rejects_traversal[..\\escape.mp4]` fails, as it does on main), 21 UI (vitest), real-ffmpeg smoke 26/26; adapter tests use a fake engine (`backend/tests/test_videojev.py`), the engine has its own tests (`video_grounding/tests`). The real model ran through the API and worker on the RTX 3070 laptop on 2026-11-22: two videos, two prompts each, with video and project deletes clearing the feature cache (`video_grounding/docs/PERFORMANCE.md`).
+**Tests:** 179 backend (pytest; this count is current as of 2026-11-27 and on Windows all 179 pass; on macOS the Windows-path case `test_path_for_rejects_traversal[..\\escape.mp4]` fails, as it does on main), 21 UI (vitest), real-ffmpeg smoke 26/26; adapter tests use a fake engine (`backend/tests/test_videojev.py`), the engine has its own tests (`video_grounding/tests`). The real model ran through the API and worker on the RTX 3070 laptop on 2026-11-22: two videos, two prompts each, with video and project deletes clearing the feature cache (`video_grounding/docs/PERFORMANCE.md`).
 
 ## 4. Gap and migration plan
 

@@ -2,6 +2,205 @@
 
 Chronological record of what was actually built, changed and measured. Newest last.
 
+## 2026-11-27 (latest) — A preflight adapter failure can no longer resurrect a canceled job
+
+**Goal:** the fifth defect from PR review. The worker claims a job and only then resolves the model adapter
+(`backend/app/worker.py::_run_claimed`). If that lookup fails, the worker calls `fail_job_now`, which painted
+`failed` without checking that it still owned the job — so a cancel that landed in the claim-to-preflight window was
+overwritten: the job went `canceled` → `failed` and the `SearchVideo` mirror carried the adapter message instead of
+"Job canceled", un-settling the search the canceller had already settled.
+
+**Code**
+
+- `backend/app/services/pipeline.py` — `fail_job_now` now fences first, exactly like `execute_job` already did at the
+  start of a run: `_fence(session, job)` and, on `JobInterrupted`, `session.rollback()` plus a debug log instead of
+  writing the failure. The fence compares `(id, status='running', attempts)` atomically, so a canceled, reaped or
+  re-claimed job keeps the state its new owner gave it. No new imports, no new status, no migration.
+
+**Tests** — `backend/tests/test_searches.py::test_preflight_failure_does_not_resurrect_a_canceled_job`: one ready
+video, claim the job, mark the search running, cancel through `POST /api/v1/jobs/{id}/cancel`, then hand
+`fail_job_now` the `UNKNOWN_ADAPTER` error a preflight would report. The job stays `canceled`, the search stays
+`failed` with `error_message == "Job canceled"`, and the video row keeps "Job canceled" rather than the adapter text.
+
+**Verification:** written in a session where the shell executor is a no-op, so this was **not run here**. Expected:
+`cd backend` then `..\.venv\Scripts\python.exe -m pytest -q` → **179 passed** (178 + 1), and
+`..\.venv\Scripts\python.exe -m ruff check app tests` clean.
+
+**Decisions / trade-offs:** `fail_job_now` is the only writer that runs before the job's first child write, so fencing
+it closes the last pre-execution window without changing what a legitimately owned failure looks like. A fenced-out
+preflight failure leaves the job in whatever terminal state the new owner set — `canceled` here — which is what the
+cancel endpoint already promised the caller.
+
+## 2026-11-27 (earlier) — Durable storage cleanup across the delete commit, and no orphan preview clips
+
+**Goal:** the fourth defect from PR review. `DELETE /api/v1/videos/{id}` (and the project, action and export deletes)
+committed the row changes and *then* unlinked the bytes, so a process that died in that window left the source file,
+its clips and its `engine/` scratch directory on disk with no row left to name them — the reviewer reproduced it by
+stopping at `settle_searches` and running another worker tick (3A). Separately, a preview clip extracted for a video
+that was deleted while the extractor was paused was written afterwards and referenced by nothing (3B, reproducible on
+`main` through the legacy workflow).
+
+**Code**
+
+- `backend/app/models.py` — new `PendingDeletion` (`pending_deletions`): `storage_key` String(512), `is_tree`,
+  `reason`, `created_at`, `attempts`, `last_error`, index on `created_at`. No unique constraint on `storage_key`:
+  duplicate intents are harmless and a unique would need a savepoint to survive the `IntegrityError`.
+- `backend/alembic/versions/c4f7a1e9b2d5_pending_storage_deletions.py` — migration `0007`, `down_revision
+  'b8d2e5a4c9f3'`, creates the table plus the index.
+- `backend/app/services/storage_gc.py` (new) — `record_deletions` writes the intent rows **in the deleting
+  transaction** (it does not commit), so "the row is gone" implies "the cleanup is still queued";
+  `flush_pending_deletions` drains the queue (a key `path_for` rejects is dropped instead of retried forever, an
+  `OSError` increments `attempts`/`last_error` and retries next tick); `purge_storage` drains the queue and sweeps the
+  two places a late writer can create a key nobody references — `clips/` (against the live `candidates.clip_storage_key`
+  set) and `engine/` (`job-*` kept while its job is `queued`/`running`, `features/video-*` kept while the video
+  exists, because the next search reuses the cache). Ownership is checked before age: `VLM_STORAGE_GC_GRACE_SECONDS`
+  (default 300 s) only gates a directory that is already unowned, so a momentarily unowned scratch dir mid-rename is
+  not collected and a live extraction is never raced.
+- `backend/app/api/videos.py`, `projects.py`, `exports.py` — the four delete endpoints queue their keys in the deleting
+  transaction and flush them after the commit, instead of unlinking inline. `delete_action` keeps the feature cache
+  (other searches on the video still use it).
+- `backend/app/worker.py` — `run_once` runs `purge_storage(grace_seconds=..., batch_size=...)` next to
+  `reap_stale_jobs`/`reconcile_search_state`, inside `try/except` + `rollback()`, so a locked file can never stop job
+  processing.
+- `backend/app/config.py` — `storage_gc_grace_seconds = 300.0`, `storage_gc_batch_size = 200`.
+- `backend/app/services/pipeline.py` — the preview-clip loop in `_run_candidate_job` now fences **before** writing the
+  clip (it used to extract first and fence at the bottom of the loop, which is exactly how 3B leaked), and re-checks
+  that its candidate row still exists afterwards: if the video was deleted meanwhile it removes the file it just wrote
+  and raises `JobInterrupted`.
+
+**Tests** — `backend/tests/test_storage_gc.py` (9): a normal delete queues and drains; an interrupted delete (crash
+after the commit) leaves the rows gone and the intents recoverable, and a later purge removes the files; a worker tick
+drains intents from a dead process even with no job to claim; a late clip written after the delete is collected; the
+grace period protects a fresh file and removes an old one; the engine sweep keeps a directory whose job is still live
+and a feature cache whose video still exists, however old, while removing unowned ones; an unusable key is dropped; a
+rolled-back delete queues nothing (otherwise the sweep would unlink a file a surviving row still points at); a failed
+delete before the commit queues nothing and keeps the row and the file.
+
+**Verification:** written in a session where the shell executor is a no-op, so these were **not run here**. Expected:
+`cd backend` then `..\.venv\Scripts\python.exe -m pytest -q` → **178 passed** (169 + 9), and
+`..\.venv\Scripts\python.exe -m ruff check app tests` clean. `alembic upgrade head` must be run once for
+`c4f7a1e9b2d5` — the fixtures build their schema with `Base.metadata.create_all`, so a green suite does not exercise
+the migration. (The suite is now 179 with the preflight regression test above.)
+
+**Decisions / trade-offs:** ordered deletes (bytes first) were rejected because a crash there leaves rows pointing at
+missing media, which is worse than a leak; a rename-to-trash scheme has the same crash window and still needs a sweep;
+an append-only side log was rejected for concurrency and partial-line recovery. The residual gaps are accepted and
+documented: a `.part` upload temp file in `videos/` is not covered by the sweep (uploads land under a final name with
+`os.replace`, and a stale `.part` is inert), and a crash between the delete commit and `settle_searches` is still
+repaired by `reconcile_search_state` rather than by the queue. Concurrent flushes are safe — the unlink is idempotent
+and the first winner deletes the queue row.
+
+## 2026-11-27 (later) — Reconciliation re-checks its observation, and settles stale terminal parents
+
+**Goal:** two defects in `reconcile_search_state`, both reported from PR review with reproductions.
+
+- **It could overwrite a newer result.** The sweep read a page of drifted rows and wrote them in one transaction, so a
+  worker could finish one of those videos in between. The sweep then applied the observation it took before the pause:
+  `SearchVideo` and the derived `Search` went from `done`/`done` back to `running`/`running`. Nothing repaired it,
+  because both rows were then consistent with the stale job status the sweep had read.
+- **It missed a stale terminal parent.** `retry_search` commits the replacement job and the `SearchVideo` row, then
+  settles the aggregate. A kill in between leaves a `failed` `Search` whose only video is `queued` again — and the sweep
+  only re-derived `queued`/`running`/`partial` parents, so it returned `0` and reported a torn database as clean.
+
+**Code** (`app/services/pipeline.py`)
+
+- New `_repair_drifted_search_video(session, *, row_id, row_status, job_id, job_status, wanted, message) -> bool`: the
+  repaint is one conditional `UPDATE` that re-asserts **both** observations — `SearchVideo.id`, `SearchVideo.status` and
+  `SearchVideo.job_id` as read, plus a scalar subquery requiring `ProcessingJob.status` to still be the status that
+  justified the repair. It returns `rowcount == 1`; a mismatch means the world moved on.
+- `reconcile_search_state` now captures scalars before writing, calls the helper, and on a miss does `session.expire_all()`
+  and `continue` — so a skipped observation costs nothing and the next tick observes the newer state. The log line,
+  `settled_searches.add(search_id)` and `repaired += 1` moved inside the applied branch, so a skipped write is not
+  counted as a repair.
+- New terminal-parent block: after the existing `still_busy` / `unfinished` pair, any `Search` in `done`/`failed` that
+  still owns a `queued`/`running` video is added to `settled_searches` and therefore re-derived. The aggregate rules
+  then move it to `queued`/`running`/`partial` as the videos dictate.
+- Docstring updated to the four drift classes and to the accepted residual window.
+
+**Tests** (`backend/tests/test_searches.py`, section 7, 3 new; 55 → 58 in the file, 166 → 169 in the suite)
+
+- `test_reconcile_does_not_overwrite_a_newer_result` — monkeypatches `_repair_drifted_search_video` so a peer completes
+  the very video the sweep is about to repaint; asserts the search stays `done` with `done_videos == 2` and that the
+  next sweep finds nothing (`== 0`).
+- `test_reconcile_settles_a_parent_left_failed_by_an_interrupted_retry` — job and row `queued`, parent `failed` with a
+  stale `finished_at` and `error_message`; asserts `reconcile_search_state` repairs it (`>= 1`), the parent moves to
+  `queued` with `queued_videos == 1`, `finished_at is None`, `error_message is None`, and that a second sweep is `0`.
+- `test_reconcile_still_repairs_other_rows_after_a_skipped_observation` — two drifted rows, a peer completes the first
+  during the sweep; asserts both rows end `done` and the search settles, i.e. one skipped observation does not abort the
+  rest of the page.
+
+**Verification:** implementation only in this session — the shell executor is a no-op here, so no test was run by the
+agent. Run `cd backend`, then `..\\.venv\\Scripts\\python.exe -m pytest tests\\test_searches.py -q` (58 passed) and
+`..\\.venv\\Scripts\\python.exe -m pytest -q` (169 passed), plus `..\\.venv\\Scripts\\python.exe -m ruff check app tests`.
+No `alembic upgrade head` step is needed: no column, enum or constraint changed.
+
+**Decisions:** repair with a conditional update instead of `SELECT ... FOR UPDATE` (SQLite ignores row locks, so a lock
+would be untested by construction); treat a terminal parent with an in-flight video as drift for both `done` and
+`failed`, because a `failed` search whose video was restarted is not a state any writer can produce.
+
+**Open items / blockers:** an ABA on the job (`queued → running → queued` by the reaper between read and write) can slip
+the guard; it self-heals on the next tick and cannot lose a newer finished result. The repaint is limited to the first
+200 drifted rows per tick, as before.
+
+## 2026-11-27 — Concurrent search restart leaves one replacement job
+
+**Goal:** a search restart ran a read-then-write cycle with no guard: it read the failed `SearchVideo`, queued a
+replacement job, then assigned `row.job_id = new_job.id`. Reported from PR review with a reproduction: two restart
+requests released together both answered `202`, leaving **two queued jobs with only one linked to the
+`SearchVideo`** — an orphan job that can never produce a result — and the replaced job could still be re-queued
+through `POST /api/v1/jobs/{job_id}/retry`.
+
+- The orphan was wasted work, not duplicate output: on claim, `_run_candidate_job` looks its `SearchVideo` up by
+  `job_id`, finds none and raises `409 JOB_PRECONDITION_FAILED` before the adapter is called. The real damage was
+  the retryable superseded job and the misleading `202`.
+- `reconcile_search_state` cannot repair this: both the job row and the `SearchVideo` row look internally
+  consistent, just no longer related to each other.
+
+**Code**
+
+- `app/api/searches.py` `retry_search`: the plain assignment became a compare-and-swap on the current link —
+  `update(SearchVideo).where(id == row.id, job_id == row.job_id, status == 'failed')`
+  `.values(job_id=new_job.id, status='queued', error_message=None)`. Exactly one concurrent request matches; the
+  loser deletes the job it just queued (after checking nothing references it) and `continue`s.
+- A restart in which **nothing** won is still `202` with the current search when the snapshot contained a failed
+  video (the sibling request already restarted it) — the same tolerance `cancel_search` already had — and stays
+  `409 SEARCH_NOT_RETRYABLE` when no video had failed, which is a real "nothing to restart".
+- `app/services/pipeline.py` `retry_job`: a `candidate_proposal` job with `action_id IS NULL` is a search job, and
+  it is only runnable while its `SearchVideo` still points at it. When the link is gone, `retry_job` now raises
+  `409 JOB_SUPERSEDED` ("this job was replaced by a newer run of its search") instead of re-queueing a job that is
+  guaranteed to fail its precondition. Project jobs (`action_id` set) and export jobs are untouched.
+- **Rejected alternative:** a deterministic `Idempotency-Key` for the replacement
+  (`search-retry:{search_video_id}:{old_job_id}`). It reads well, but two concurrent inserts of the same key collide
+  on `uq_job_idempotency_key` at flush time and poison the caller's transaction, so the loser would have had to
+  catch `IntegrityError` and retry anyway. The conditional update is one statement and needs no new failure mode.
+- No migration: no column, enum or constraint changed. No new status either — the superseded job stays `failed`
+  for history and nothing links to it.
+
+**Tests** (`backend/tests/test_searches.py`, section 9, 4 new; 51 → 55 in the file, 162 → 166 in the suite)
+
+- `test_concurrent_search_retry_queues_one_replacement_per_video` — simulates the peer request inside the endpoint
+  call so both reach the swap with the same stale snapshot, then asserts exactly two job rows for the video (the
+  original `failed` and exactly one `queued`), the `SearchVideo` pointing at the survivor, and `202` for the loser.
+- `test_job_retry_refuses_a_superseded_search_job` — `POST /jobs/{id}/retry` on the replaced job → `409
+  JOB_SUPERSEDED`, with no queued job created.
+- `test_search_retry_after_a_lost_race_returns_the_restarted_search` — a request that loses the race answers `202`
+  and reports the already-restarted search (`queued_videos == 1`, `failed_videos == 0`).
+- `test_search_retry_still_refuses_when_no_video_failed` — pins the `409 SEARCH_NOT_RETRYABLE` branch so the new
+  tolerance cannot swallow the genuine "nothing to restart" case.
+
+**Verification:** implementation only in this session — the shell executor is a no-op here, so no test was run by
+the agent. Run `cd backend`, then `..\.venv\Scripts\python.exe -m pytest tests\test_searches.py -q` (55 passed) and
+`..\.venv\Scripts\python.exe -m pytest -q` (166 passed), plus `..\.venv\Scripts\python.exe -m ruff check app tests`.
+No `alembic upgrade head` step is needed: this change adds no migration.
+
+**Decisions:** tolerate a lost restart race with `202` rather than `409` (a duplicate click is not an error, and
+`cancel_search` already behaves this way); refuse a superseded search job at `retry_job` rather than only at run
+time; keep the old job `failed` instead of repainting it `canceled` so the history stays honest.
+
+**Open items / blockers:** the loser still inserts and deletes a job row, which is harmless but shows up in
+`processing_jobs` sequence gaps; the frontend must treat `409 JOB_SUPERSEDED` as "already restarted" rather than as
+a hard error.
+
 ## 2026-11-26 — Idempotency request scope, and search-level cancel / restart
 
 **Goal:** an `Idempotency-Key` replay was judged against mutable state instead of the request that created the

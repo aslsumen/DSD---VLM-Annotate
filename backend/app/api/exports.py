@@ -15,6 +15,7 @@ from ..models import DatasetExport, JobStatus, ProcessingJob
 from ..schemas import ExportCreate, ExportCreated, ExportOut, JobOut
 from ..services.pipeline import enqueue_export_job
 from ..services.storage import LocalStorage
+from ..services.storage_gc import flush_pending_deletions, record_deletions
 from .files import range_file_response
 
 router = APIRouter(tags=["exports"])
@@ -93,10 +94,12 @@ def delete_export(
     job = session.scalar(select(ProcessingJob).where(ProcessingJob.export_id == export.id))
     if job is not None:
         session.delete(job)
+    # Queue before the commit: the archive key would otherwise be lost the
+    # moment the row goes, and a crash would strand the file for ever.
+    record_deletions(session, keys=[key], reason="export")
     session.delete(export)
     session.commit()
-    if key:
-        storage.delete(key)
+    flush_pending_deletions(session, storage, keys=[key])
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

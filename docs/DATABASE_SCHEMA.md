@@ -240,20 +240,27 @@ SQLite `data/vlm_annotate.db`, migrations `0001_initial_schema.py`, `d03f1c4ffd3
 | dataset_memberships | which user may see/annotate a dataset (roles stay global) |
 | searches | one free-text prompt run over a dataset; `status` (`queued`/`running`/`done`/`partial`/`failed`), auto `title`, optional unique `idempotency_key`, and `request_scope_json` — the canonical snapshot of the request (prompt, params, adapter, requested video ids) that an `Idempotency-Key` replay is compared against |
 | search_videos | one row per (search, video): `search_id`, `video_id`, nullable `job_id -> processing_jobs.id`, per-video `status` |
+| pending_deletions | durable storage-cleanup queue: `storage_key` (+ `is_tree`), `reason`, `attempts`, `last_error`; written in the same transaction as the row delete, drained by the worker sweep |
 
 Migrations `0002` (`d03f1c4ffd30`) and `0003` (`e5b9c3d7a2f1`) were verified on a fresh SQLite file with
 `alembic upgrade head` and `alembic check` (no pending operations); the API was exercised against that migrated
-schema without `create_all` (bootstrap → login → create dataset). **14 tables total**, migration head is
-`b8d2e5a4c9f3` (migration `0006`/`b8d2e5a4c9f3` adds `searches.request_scope_json`, a NOT NULL `Text` column whose
-server default is `{}` so existing rows keep working; run `alembic upgrade head` to apply it). The schema is
+schema without `create_all` (bootstrap → login → create dataset). **15 tables total**, migration head is
+`c4f7a1e9b2d5` (migration `0006`/`b8d2e5a4c9f3` adds `searches.request_scope_json`, a NOT NULL `Text` column whose
+server default is `{}` so existing rows keep working; migration `0007`/`c4f7a1e9b2d5` adds `pending_deletions`, the
+durable storage-cleanup queue; run `alembic upgrade head` to apply them). The schema is
 portable to PostgreSQL but has not been tested there (R-09).
 
 `search_videos` is the join that replaced the "one job per video" view: a `Search` aggregates the status of its
 `SearchVideo` rows, while each row keeps pointing at the underlying `processing_jobs` job that the worker executes.
-Automated tests for this layer live in `backend/tests/test_searches.py` (**51 tests as of 2026-11-26**: fan-out,
+Automated tests for this layer live in `backend/tests/test_searches.py` (**59 tests as of 2026-11-27**: fan-out,
 status aggregation, role + dataset scoping, dataset search listing, `Idempotency-Key` replay and request scope,
-job-lifecycle sync on cancel / reaper / retry / video delete, concurrent completion, the job / `SearchVideo` /
-`Search` consistency tests with the `reconcile_search_state` sweep, video-deletion atomicity and the job cascade,
-and search-level cancel / restart). The migration head `b8d2e5a4c9f3` is covered by the suite only indirectly —
-the fixtures build the schema with `Base.metadata.create_all` — so applying it to a database that predates it
-remains an explicit `alembic upgrade head`.
+job-lifecycle sync on cancel / reaper / retry / video delete, concurrent completion, concurrent search restart,
+the job / `SearchVideo` / `Search` consistency tests with the `reconcile_search_state` sweep — including the
+conditional repaint and the stale terminal parent — video-deletion atomicity and the job cascade,
+a preflight adapter failure that must not resurrect a canceled job, and search-level cancel / restart). The
+durable-cleanup queue (`pending_deletions`) is covered by
+`backend/tests/test_storage_gc.py` (9 tests: an interrupted delete after the commit, the worker sweep, a
+post-delete preview clip, the grace period, engine directories kept by ownership rather than age, and a rolled-back
+delete). The migration head `c4f7a1e9b2d5` is covered
+by the suite only indirectly — the fixtures build the schema with `Base.metadata.create_all` — so applying it to a
+database that predates it remains an explicit `alembic upgrade head`.

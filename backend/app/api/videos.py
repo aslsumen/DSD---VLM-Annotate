@@ -26,12 +26,14 @@ from ..models import ActionDefinition, Candidate, ProcessingJob, Video, VideoSta
 from ..schemas import JobCreate, JobOut, VideoOut
 from ..services.media import MediaError, MediaProbe
 from ..services.pipeline import (
+    engine_job_key,
     enqueue_candidate_job,
+    feature_cache_key,
     refresh_searches_for_video,
-    remove_engine_files,
     settle_searches,
 )
 from ..services.storage import LocalStorage, StorageError
+from ..services.storage_gc import flush_pending_deletions, record_deletions
 from .files import range_file_response
 
 router = APIRouter(tags=["videos"])
@@ -230,21 +232,29 @@ def delete_video(
     job_ids = list(session.scalars(select(ProcessingJob.id).where(ProcessingJob.video_id == video_id)))
     storage_key = video.storage_key
     # One transaction for the whole deletion: detach the video from its searches,
-    # drop the Video row (which cascades to its jobs and candidates), and settle
-    # each affected Search only after that commit.  Deriving inside the same
-    # transaction would let a crash leave the video alive while its search
-    # already claims to be finished with zero videos.
+    # queue the storage cleanup, drop the Video row (which cascades to its jobs and
+    # candidates), and settle each affected Search only after that commit.  Deriving
+    # inside the same transaction would let a crash leave the video alive while its
+    # search already claims to be finished with zero videos.
+    #
+    # The cleanup keys are queued *inside* that transaction on purpose.  Unlinking
+    # after the commit leaves a window where a crash strands bytes that no row can
+    # name again; queueing them first makes "the row is gone" imply "the cleanup is
+    # still queued" for the next sweep.
     search_ids = refresh_searches_for_video(session, video_id, commit=False)
+    keys = [storage_key, *filter(None, clip_keys)]
+    record_deletions(session, keys=keys, reason="video")
+    tree_keys = [*(engine_job_key(job_id) for job_id in job_ids), feature_cache_key(video_id)]
+    record_deletions(session, keys=tree_keys, reason="video", is_tree=True)
     session.delete(video)
     session.commit()
     # Converge afterwards: a peer worker may be finishing another video of the
     # same search right now, and only a post-commit snapshot sees its row.
     settle_searches(session, search_ids)
-    storage.delete(storage_key)
-    for key in clip_keys:
-        if key:
-            storage.delete(key)
-    remove_engine_files(storage, job_ids, [video_id])
+    # Fast path: usually everything is already unreferenced, so the sweep that the
+    # worker would do later is unnecessary.  A crash before this line is what the
+    # queue exists for.
+    flush_pending_deletions(session, storage, keys=[*keys, *tree_keys])
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

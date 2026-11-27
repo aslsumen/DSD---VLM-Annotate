@@ -34,7 +34,7 @@ Target 80–85 % of declared capacity once the table is filled.
 | S3-13 | KPI harness: recall, R@IoU, complete clip, boundary adjustment | NFR-5 | 5 | ML | First measurements done 2026-11-16 (engine `eval` CLI; Charades-STA reference only, held-out benchmark in S3-17); reviewer boundary-adjustment KPI not built |
 | S3-14 | Alpha deck + evidence + upload checklist | D-19 | 5 | Scrum Master | Upload 2026-11-30 |
 | S3-15 | Carry-over: validate a real 10–30 min video | NFR-4 | 3 | QA | From Sprint 2 |
-| S3-16 | Integration tests: auth, permissions, dataset scoping | NFR-11…14 | 5 | QA | Security-critical. **Done 2026-11-21** — `backend/tests/test_searches.py` (9 tests) covers search fan-out, status aggregation, role + dataset scoping; full suite 103 passed. **Extended 2026-11-24** — 10 more tests for dataset search listing and `Idempotency-Key` (20 in the file, 114 total). **Extended 2026-11-25** — 7 lifecycle regression tests for cancel / reaper / retry / video delete (27 in the file, 121 total). **Extended again 2026-11-25** — `test_review_filters.py` (3) + concurrent-completion test (28 in `test_searches.py`), 125 total. **Extended once more 2026-11-25** — `test_dataset_authz.py` (9) for the shared-route authorization matrix, 134 total. **And again 2026-11-25** — 3 consistency tests in section 7 of `test_searches.py` (31 in the file), 137 total. **Plus 2026-11-25** — a fourth (`test_reconcile_settles_a_search_whose_videos_all_finished`, the kill between the child commit and the aggregate) and a `reconcile_search_state` return-value fix (32 in the file), 143 total. **One more 2026-11-25** — 3 video-deletion tests in section 8 (35 in `test_searches.py`) and a rewritten `test_dataset_authz.py::test_job_whose_video_was_deleted_fails_closed`, 146 total. **Latest 2026-11-26** — 15 tests in section 9 for the idempotency request scope and search-level cancel / restart, plus a concurrent-cancellation case (51 in `test_searches.py`), 162 total |
+| S3-16 | Integration tests: auth, permissions, dataset scoping | NFR-11…14 | 5 | QA | Security-critical. **Done 2026-11-21** — `backend/tests/test_searches.py` (9 tests) covers search fan-out, status aggregation, role + dataset scoping; full suite 103 passed. **Extended 2026-11-24** — 10 more tests for dataset search listing and `Idempotency-Key` (20 in the file, 114 total). **Extended 2026-11-25** — 7 lifecycle regression tests for cancel / reaper / retry / video delete (27 in the file, 121 total). **Extended again 2026-11-25** — `test_review_filters.py` (3) + concurrent-completion test (28 in `test_searches.py`), 125 total. **Extended once more 2026-11-25** — `test_dataset_authz.py` (9) for the shared-route authorization matrix, 134 total. **And again 2026-11-25** — 3 consistency tests in section 7 of `test_searches.py` (31 in the file), 137 total. **Plus 2026-11-25** — a fourth (`test_reconcile_settles_a_search_whose_videos_all_finished`, the kill between the child commit and the aggregate) and a `reconcile_search_state` return-value fix (32 in the file), 143 total. **One more 2026-11-25** — 3 video-deletion tests in section 8 (35 in `test_searches.py`) and a rewritten `test_dataset_authz.py::test_job_whose_video_was_deleted_fails_closed`, 146 total. **Latest 2026-11-26** — 15 tests in section 9 for the idempotency request scope and search-level cancel / restart, plus a concurrent-cancellation case (51 in `test_searches.py`), 162 total. **Extended 2026-11-27** — 4 concurrent-restart tests (55 in `test_searches.py`), 166 total. **Latest 2026-11-27** — 3 reconciliation tests (58 in the file), 169 total. **Durable cleanup 2026-11-27** — `test_storage_gc.py` (9 tests) for the deletion queue, the post-commit crash window and the late preview clip, 178 total. **Preflight fix 2026-11-27** — 1 regression test for a canceled job whose adapter lookup then fails (59 in `test_searches.py`), 179 total |
 | S3-17 | Run held-out benchmarks (long YouCook2 and ROAD videos), re-check `min_event_score`, report KPIs | NFR-5 | 5 | ML | **Done** 2026-11-22 on the RTX 3070 laptop (PB-70): recall 0.86 cooking (CI 0.81–0.90) / 0.47 driving, CCR 0.78 / 0.82, targets not met or not confirmed; absent prompts give 3.5 / 8.4 candidates; `min_event_score` 0.5 checked, not re-tuned (PB-72). Earlier small composites (2026-11-17) superseded |
 
 **Status 2026-11-19:** S3-01…S3-05 implemented in PR #48 (10 new tests, 90 total); JSON schema is in PR #47
@@ -125,6 +125,46 @@ section 9 of `backend/tests/test_searches.py` (51 in the file); **162 tests coll
 them parametrised). **Confirmed green:** `pytest -q` reported **162 passed** and `ruff check` was clean, run by the
 team on Windows on 2026-11-26. Migration `b8d2e5a4c9f3` still needs an explicit `alembic upgrade head` — the
 fixtures build their schema with `Base.metadata.create_all`, so a green suite does not exercise it.
+
+**Status 2026-11-27 (concurrent search restart and reconciliation):** three more findings from the same review, all
+in the recovery paths. Two concurrent `POST .../searches/{id}/retry` requests used to insert a replacement job each
+and overwrite each other's link, leaving one queued job attached to no `SearchVideo` — the restart is now a
+compare-and-swap on `(row id, old job id, status = failed)`, the loser deletes its own job and answers 202 with the
+current state, and `POST /jobs/{id}/retry` on a superseded search job (`candidate_proposal` with `action_id IS NULL`
+and no `SearchVideo` pointing at it) answers `409 JOB_SUPERSEDED`. `reconcile_search_state` used to write back a
+page it had read earlier, so a video finishing inside that window was dragged from `done` back to `running`; each
+repaint is now a conditional update that re-asserts both the observed `SearchVideo` status and the job status, and a
+row that moved on is skipped for the next tick. The sweep also settles a *terminal* parent (`done`/`failed`) that
+still has a `queued`/`running` video, which is the state `retry_search` leaves if the process dies between its commit
+and its aggregate settle. No migration. Seven tests in sections 7 (reconciliation) and 9 (restart) of
+`backend/tests/test_searches.py` (58 in the file); **169 tests collected**. The reconciliation tests are written but
+not yet run for this document — the restart tests were the ones the last `pytest -q` run exercised.
+
+**Status 2026-11-27 (durable storage cleanup):** the fourth finding of the review: `DELETE` committed its rows and
+unlinked the bytes afterwards, so a crash in between stranded the source file, its clips and its `engine/` scratch
+directories with no row left to name them (reviewer 3A), and a preview clip extracted for a video that was deleted
+while the extractor was paused was never referenced by anything (3B, reproducible on `main` through the legacy
+workflow). The delete now writes `pending_deletions` intent rows **in the same transaction** as the row delete — so
+"the row is gone" implies "the cleanup is still queued" — and drains them afterwards; the worker drains the queue on
+every tick (`purge_storage`, before claiming a job, guarded so a locked file cannot stop processing), and every delete
+endpoint (`/videos/{id}`, `/projects/{id}`, `/actions/{id}`, `/exports/{id}`) flushes the keys it just queued. The same
+sweep collects the two places a late writer can create an unreferenced key — orphaned preview clips and `engine/`
+directories whose job/video is gone — with an ownership check first and a `VLM_STORAGE_GC_GRACE_SECONDS` (default
+300 s) age gate, so it never races a live extraction; a feature cache for a video that still exists is kept. The
+preview-clip loop now fences *before* writing and re-checks its candidate row afterwards, so 3B no longer produces the
+orphan at all. Migration `0007`/`c4f7a1e9b2d5` (`pending_deletions`) is new; `pending_deletions` is the 15th table.
+`backend/tests/test_storage_gc.py` adds 9 tests (interrupted delete, dead-process sweep, late clip, grace period,
+engine directories kept by ownership, unusable key, rolled-back and failed deletes); **179 tests collected** — the
+storage tests are written but not yet run
+for this document.
+
+**Status 2026-11-27 (preflight after a cancel):** the worker claims a job and only then resolves the model adapter;
+a failure in that lookup called `fail_job_now`, which wrote `failed` without checking ownership, so a cancel that
+landed in that window was overwritten and the `SearchVideo` carried the adapter error instead of "Job canceled".
+`fail_job_now` now fences on `(id, status='running', attempts)` first, like `execute_job`, and gives up when the job
+is no longer its own. One regression test
+(`backend/tests/test_searches.py::test_preflight_failure_does_not_resurrect_a_canceled_job`) — **179 tests
+collected** with it, not yet run for this document.
 
 **Total committed:** ~99 SP. **This is likely more than the team can absorb in two weeks without capacity
 data** (R-22). Triage proposal: S3-01…S3-07 and S3-14 are the minimum; S3-08…S3-13 can slip into Sprint 4 if

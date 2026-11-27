@@ -35,8 +35,13 @@ from ..schemas import (
     ProjectStats,
     ProjectUpdate,
 )
-from ..services.pipeline import enqueue_candidate_job, remove_engine_files
+from ..services.pipeline import (
+    engine_job_key,
+    enqueue_candidate_job,
+    feature_cache_key,
+)
 from ..services.storage import LocalStorage
+from ..services.storage_gc import flush_pending_deletions, record_deletions
 
 router = APIRouter(tags=["projects"])
 
@@ -116,12 +121,19 @@ def delete_project(
     job_ids = list(
         session.scalars(select(ProcessingJob.id).where(ProcessingJob.project_id == project_id))
     )
+    # Queue the bytes for removal in this transaction: the commit below is the
+    # point of no return, and a crash after it must still leave the cleanup
+    # findable.  The fast flush afterwards is only an optimisation.
+    keys = [*video_keys, *clip_keys, *export_keys]
+    record_deletions(session, keys=keys, reason="project")
+    tree_keys = [
+        *(engine_job_key(job_id) for job_id in job_ids),
+        *(feature_cache_key(video_id) for video_id in video_ids),
+    ]
+    record_deletions(session, keys=tree_keys, reason="project", is_tree=True)
     session.delete(project)
     session.commit()
-    for key in [*video_keys, *clip_keys, *export_keys]:
-        if key:
-            storage.delete(key)
-    remove_engine_files(storage, job_ids, video_ids)
+    flush_pending_deletions(session, storage, keys=[*keys, *tree_keys])
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -371,13 +383,17 @@ def delete_action(
     session.execute(delete(Candidate).where(candidate_filter))
     if job_ids:
         session.execute(delete(ProcessingJob).where(ProcessingJob.id.in_(job_ids)))
+    # Queue the removals in this transaction so a crash after the commit cannot
+    # strand clip files or work dirs with no row left to name them.
+    keys = list(filter(None, clip_keys))
+    record_deletions(session, keys=keys, reason="action")
+    tree_keys = [engine_job_key(job_id) for job_id in job_ids]
+    record_deletions(session, keys=tree_keys, reason="action", is_tree=True)
     session.delete(action)
     session.commit()
 
-    for key in clip_keys:
-        if key:
-            storage.delete(key)
-    remove_engine_files(storage, job_ids)  # features stay: other searches on the video use them
+    # Features stay: other searches on the video still use them.
+    flush_pending_deletions(session, storage, keys=[*keys, *tree_keys])
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

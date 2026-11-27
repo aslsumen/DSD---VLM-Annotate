@@ -126,7 +126,7 @@ The API accepts such jobs without the engine; a worker without it fails the job 
 
 ```powershell
 # Windows
-.\.venv\Scripts\python.exe -m pytest backend -q                 # 162 tests
+.\.venv\Scripts\python.exe -m pytest backend -q                 # 179 tests
 .\.venv\Scripts\python.exe -m ruff check backend\app backend\tests
 .\.venv\Scripts\python.exe scripts\smoke_e2e.py                 # real ffmpeg, 26/26 checks
 cd frontend; npm run build; npm test
@@ -183,11 +183,11 @@ backend/
     services/          storage, media (ffmpeg), pipeline (queue/export)
     adapters/          VLMAdapter boundary: mock, videojev (real), Qwen2.5-VL (stub)
   alembic/             database migrations (initial schema verified)
-  tests/               162 pytest tests (incl. search fan-out / status / scoping / listing / idempotency,
+  tests/               179 pytest tests (incl. search fan-out / status / scoping / listing / idempotency,
                        job-lifecycle sync on cancel / reaper / retry / video delete, review-filter combinations,
-                       concurrent search completion, dataset authorization on the shared legacy routes,
-                       job/SearchVideo/Search consistency and the reconcile sweep, video deletion atomicity,
-                       idempotency request scope and search-level cancel / restart)
+                       concurrent search completion and restart, dataset authorization on the shared legacy routes,
+                       job/SearchVideo/Search consistency and the reconcile sweep, video deletion atomicity and
+                       durable storage cleanup, idempotency request scope and search-level cancel / restart)
 frontend/              React + TypeScript + Vite UI
 video_grounding/       zero-shot grounding engine (VideoJev-4B), see video_grounding/README.md
 presentations/         versioned decks (PPTX + editable Markdown source)
@@ -230,7 +230,7 @@ See [MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md).
 
 Accounts, global roles, invitations, sessions, datasets, memberships, searches (fan-out, aggregated status,
 history, cancel and restart, idempotent creation) and dataset authorization on the shared legacy routes are
-implemented in the backend and covered by the suite (162 tests as of 2026-11-26); the frontend has not been cut
+implemented in the backend and covered by the suite (179 tests as of 2026-11-27); the frontend has not been cut
 over yet. OpenLABEL JSON export, dataset-scoped exports, membership revocation, rerunning a search for newly
 uploaded videos, signed media URLs (R-18) and the remaining account self-service (password reset, user
 deactivation) are still Sprint 3/4 scope.

@@ -22,13 +22,14 @@ Search/SearchVideo layer (models, migration, fan-out, worker sync and read endpo
 
 | Current (as-built / current code) | Target | Notes |
 |---|---|---|
-| `projects` | `datasets` | `datasets` exists **now** (`backend/app/models.py:456-470`): `id`, `name String(200)`, `description Text default ""`, `created_by_id FK users.id SET NULL`, timestamps. **`description` is still present** — the "name only / description removed" phrasing from Design v1.2 §4.3 is not yet reflected in code; `use_case` never existed in code. `created_by` is `created_by_id` (FK to `users.id`, nullable). The `projects` table itself remains untouched during the transition. |
-| `action_definitions` | `searches.prompt` (+ optional `searches.title`) | No more pre-defined actions. Each search carries its own free-text prompt; an optional `title` labels the search — per v1.2, `Search.title` is a *short automatic title generated for long prompts*. **Implemented** — `Search` (`backend/app/models.py:491-525`), migration `e5b9c3d7a2f1`; `title` is auto-derived (first ~60 chars, trimmed) when omitted (`backend/app/api/searches.py:_auto_title`). |
-| `processing_jobs` with `kind="candidate_proposal"` | split into parent **`searches`** + child **`search_videos`** | **Implemented.** 1 `searches` row per prompt run across a dataset; 1 `search_videos` row per video in that search, linking `search_id`, `video_id`, and `job_id -> processing_jobs.id` with `UniqueConstraint(search_id, video_id)` (`backend/app/models.py:528-551`, migration `e5b9c3d7a2f1`). Per-video `processing_jobs` rows remain the worker queue (kind `candidate_proposal`, `backend/app/models.py:100-102`); `SearchVideo.status` is synchronised by the worker and the parent `Search.status` is recomputed from those rows. |
-| `videos.project_id` | `videos.dataset_id` | **Implemented (nullable).** `Video.project_id` is now nullable and `Video.dataset_id` exists (`backend/app/models.py:198-204`, migration `e5b9c3d7a2f1`). A video belongs to exactly one dataset; both columns coexist during the transition. `ProcessingJob.project_id` was also relaxed to nullable so dataset search jobs can run with no project (migration `c9f0d3a1b2e4`). |
-| `candidates.job_id` | `candidates.search_id` | **Implemented (nullable).** `Candidate.search_id` is added alongside `job_id` (`backend/app/models.py:290-292`, migration `e5b9c3d7a2f1`); search fan-out sets it at candidate creation. `job_id` stays populated until cutover. |
-| — (new, **implemented**) | `dataset_memberships` | Actual table is **`dataset_memberships`** (`backend/app/models.py:473-488`), *not* `dataset_assignments`: `id`, `dataset_id FK datasets CASCADE`, `user_id FK users CASCADE`, `created_at`; `UniqueConstraint(dataset_id, user_id)` named `uq_dataset_membership`. **No `assigned_by` / `assigned_at` columns** — those fields were dropped in favour of the `users` table (`created_by_id` on `datasets` carries the ownership notion). |
-| — (new, **implemented**) | `users`, `user_sessions`, `invitations` | Full auth model is in place: `User` (`backend/app/models.py:396`, global `role`), `UserSession` (token-hash sessions), `Invitation` (email invitations). See §3. |
+| `projects` | `datasets` | `datasets` exists **now** (`backend/app/models.py:486-500`): `id`, `name String(200)`, `description Text default ""`, `created_by_id FK users.id SET NULL`, timestamps. **`description` is still present** — the "name only / description removed" phrasing from Design v1.2 §4.3 is not yet reflected in code; `use_case` never existed in code. `created_by` is `created_by_id` (FK to `users.id`, nullable). The `projects` table itself remains untouched during the transition. |
+| `action_definitions` | `searches.prompt` (+ optional `searches.title`) | No more pre-defined actions. Each search carries its own free-text prompt; an optional `title` labels the search — per v1.2, `Search.title` is a *short automatic title generated for long prompts*. **Implemented** — `Search` (`backend/app/models.py:521-555`), migration `e5b9c3d7a2f1`; `title` is auto-derived (first ~60 chars, trimmed) when omitted (`backend/app/api/searches.py:_auto_title`). |
+| `processing_jobs` with `kind="candidate_proposal"` | split into parent **`searches`** + child **`search_videos`** | **Implemented.** 1 `searches` row per prompt run across a dataset; 1 `search_videos` row per video in that search, linking `search_id`, `video_id`, and `job_id -> processing_jobs.id` with `UniqueConstraint(search_id, video_id)` (`backend/app/models.py:558-581`, migration `e5b9c3d7a2f1`). Per-video `processing_jobs` rows remain the worker queue (kind `candidate_proposal`, `backend/app/models.py:100-102`); `SearchVideo.status` is synchronised by the worker and the parent `Search.status` is recomputed from those rows. |
+| `videos.project_id` | `videos.dataset_id` | **Implemented (nullable).** `Video.project_id` is now nullable and `Video.dataset_id` exists (`backend/app/models.py:199-204`, migration `e5b9c3d7a2f1`). A video belongs to exactly one dataset; both columns coexist during the transition. `ProcessingJob.project_id` was also relaxed to nullable so dataset search jobs can run with no project (migration `c9f0d3a1b2e4`). |
+| `candidates.job_id` | `candidates.search_id` | **Implemented (nullable).** `Candidate.search_id` is added alongside `job_id` (`backend/app/models.py:297-299`, migration `e5b9c3d7a2f1`); search fan-out sets it at candidate creation. `job_id` stays populated until cutover. |
+| — (new, **implemented**) | `dataset_memberships` | Actual table is **`dataset_memberships`** (`backend/app/models.py:503-518`), *not* `dataset_assignments`: `id`, `dataset_id FK datasets CASCADE`, `user_id FK users CASCADE`, `created_at`; `UniqueConstraint(dataset_id, user_id)` named `uq_dataset_membership`. **No `assigned_by` / `assigned_at` columns** — those fields were dropped in favour of the `users` table (`created_by_id` on `datasets` carries the ownership notion). |
+| — (new, **implemented**) | `users`, `user_sessions`, `invitations` | Full auth model is in place: `User` (`backend/app/models.py:433`, global `role`), `UserSession` (token-hash sessions), `Invitation` (email invitations). See §3. |
+| — (new, **implemented**) | `pending_deletions` | Durable storage-cleanup queue (`backend/app/models.py:398-431`, migration `c4f7a1e9b2d5`): `storage_key String(512)`, `is_tree`, `reason`, `created_at`, `attempts`, `last_error`. Not a dataset-domain table — it exists so a delete that commits its rows cannot strand the bytes when the process dies before unlinking them. See `backend/app/services/storage_gc.py`. |
 
 Additional notes:
 
@@ -64,7 +65,7 @@ Additional notes:
 | `GET` | `/api/v1/datasets/{dataset_id}/searches` | `list_searches` (`backend/app/api/searches.py:373-399`) — **implemented**; `list[SearchOut]`, newest first, filters `status` (enum), `limit` (1…500, default 100) and `offset`; per-status counts come from one aggregate query. Used by the UI to restore the search list on reload. |
 | `GET` | `/api/v1/searches/{search_id}` | `get_search` (`backend/app/api/searches.py:401-409`) — **implemented**; returns `SearchDetailOut` with `status`, the five per-status counts and the `SearchVideo` list. |
 | `POST` | `/api/v1/datasets/{dataset_id}/searches/{search_id}/cancel` | `cancel_search` (`backend/app/api/searches.py:411-459`) — **implemented 2026-11-26**; `200`; `require_roles(administrator, dataset_admin)` + `_require_search_access`; cancels every queued/running video through `cancel_job`, so the per-video rows and the aggregate settle as usual; a search that is already settled is returned unchanged instead of failing (the frontend retries this on a flaky connection). |
-| `POST` | `/api/v1/datasets/{dataset_id}/searches/{search_id}/retry` | `retry_search` (`backend/app/api/searches.py:461-539`) — **implemented 2026-11-26**; `202`; same role/access guards; re-queues only the failed videos (fresh `ProcessingJob` per video, prompt/params/adapter replayed from the stored request scope); `409 SEARCH_NOT_RETRYABLE` when there is nothing failed to retry. |
+| `POST` | `/api/v1/datasets/{dataset_id}/searches/{search_id}/retry` | `retry_search` (`backend/app/api/searches.py:461-539`) — **implemented 2026-11-26, hardened 2026-11-27**; `202`; same role/access guards; re-queues only the failed videos (fresh `ProcessingJob` per video, prompt/params/adapter replayed from the stored request scope); `409 SEARCH_NOT_RETRYABLE` when no video failed. The link is swapped with a compare-and-swap on the current `SearchVideo.job_id`, so two concurrent restarts leave exactly one replacement job; the loser also answers `202` with the already-restarted search, and the superseded job is refused with `409 JOB_SUPERSEDED` by `POST /api/v1/jobs/{id}/retry`. |
 | `GET` | `/api/v1/searches/{search_id}/candidates` | `list_search_candidates` (`backend/app/api/searches.py:541-570`) — **implemented**; optional `review_state` / `verdict` / `limit` filters, combinable (`annotations` is joined at most once, so `review_state` + `verdict` together no longer errors). |
 
 **There is no `DELETE /datasets/{id}/members/{user_id}` and no `PUT /users/{user_id}/assignments`** — membership
@@ -83,8 +84,8 @@ is currently add/list only. Those are future work, not present.
 | `GET /api/v1/jobs/{job_id}` | `GET /api/v1/searches/{search_id}` | **Implemented** (`get_search`, searches.py:401). Status **aggregated across all `search_videos`**: `queued → running → done`, `failed` when every video failed, `partial` when some succeeded and some failed; per-video results are returned in the `videos` list. |
 | `GET /api/v1/jobs` (filtered list) | `GET /api/v1/datasets/{dataset_id}/searches` | **Implemented** (`list_searches`, searches.py:373). Filters `status` + `limit`/`offset` paging; returns `SearchOut[]` (counts, no per-video list). |
 | `POST /api/v1/jobs/{job_id}/cancel` (per job) | `POST /api/v1/datasets/{dataset_id}/searches/{search_id}/cancel` | **Implemented 2026-11-26** (`cancel_search`, searches.py:411). One call cancels every queued/running video of the search; the per-job route survives for legacy project work. Idempotent: a settled search is returned with `200` rather than an error. |
-| retry a failed job | `POST /api/v1/datasets/{dataset_id}/searches/{search_id}/retry` | **Implemented 2026-11-26** (`retry_search`, searches.py:461). `202`; re-queues only the failed videos with a fresh job per video, replaying the stored prompt/params/adapter; `409 SEARCH_NOT_RETRYABLE` when nothing failed. |
-| `POST/GET /api/v1/projects/{project_id}/exports` | `POST/GET /api/v1/datasets/{dataset_id}/exports` (and optionally `.../searches/{search_id}/exports`) | **Exports mapping (currently missing).** The `dataset_exports` table is still **project-scoped** (`project_id FK projects.id CASCADE`, `backend/app/models.py:367-393`) despite its name. Target model scopes exports to `dataset_id` + optional `search_id` — the "dataset" column is the migration gap, matching `videos.dataset_id`. See §4 item 4. |
+| retry a failed job | `POST /api/v1/datasets/{dataset_id}/searches/{search_id}/retry` | **Implemented 2026-11-26, hardened 2026-11-27** (`retry_search`, searches.py:461). `202`; re-queues only the failed videos with a fresh job per video, replaying the stored prompt/params/adapter; `409 SEARCH_NOT_RETRYABLE` when no video failed. Concurrent restarts are compare-and-swap safe (one replacement per video, both callers get `202`) and a replaced job is refused with `409 JOB_SUPERSEDED` on `POST /jobs/{id}/retry`. |
+| `POST/GET /api/v1/projects/{project_id}/exports` | `POST/GET /api/v1/datasets/{dataset_id}/exports` (and optionally `.../searches/{search_id}/exports`) | **Exports mapping (currently missing).** The `dataset_exports` table is still **project-scoped** (`project_id FK projects.id CASCADE`, `backend/app/models.py:374-396`) despite its name. Target model scopes exports to `dataset_id` + optional `search_id` — the "dataset" column is the migration gap, matching `videos.dataset_id`. See §4 item 4. |
 | `GET/DELETE /api/v1/exports/{export_id}`, `GET /api/v1/exports/{export_id}/download` | unchanged paths, but re-scoped to dataset access control | Export detail/download stay id-based; their *authorization* must become dataset-scoped (`_require_access`) rather than project-scoped. |
 
 Assignment endpoints (target, replacing the old header-based identity — see §3):
@@ -104,8 +105,10 @@ Assignment endpoints (target, replacing the old header-based identity — see §
   unchanged.** Nothing is renamed, dropped, or re-pointed until the team switches the frontend over.
 - **Additive schema only.** New tables (`users`, `invitations`, `user_sessions`, `datasets`, `dataset_memberships`,
   `searches`, `search_videos`) plus new nullable columns (`videos.dataset_id`, `candidates.search_id`) were added
-  alongside the old ones via migrations `d03f1c4ffd30`, `e5b9c3d7a2f1`, `c9f0d3a1b2e4` and
-  `f1a4b8c2d6e9` (the last one adds the nullable, unique `searches.idempotency_key`). Old columns
+  alongside the old ones via migrations `d03f1c4ffd30`, `e5b9c3d7a2f1`, `c9f0d3a1b2e4`,
+  `f1a4b8c2d6e9` (the last one adds the nullable, unique `searches.idempotency_key`) and `c4f7a1e9b2d5`
+  (`pending_deletions`, the durable storage-cleanup queue — not part of the dataset domain, but the first table
+  added since it). Old columns
   (`videos.project_id`, `candidates.job_id`, `candidates.action_id`) remain populated and valid until cutover.
 - **Job mechanics are reused, not replaced.** `processing_jobs` remains the worker queue: each search's per-video
   work is still one `processing_jobs` row (kind `candidate_proposal`) with the existing claim/retry/cancel/
@@ -142,9 +145,11 @@ The previous `X-User-Id` / `X-User-Role` header assumption is **obsolete**. Real
   `execute_job` fences the job's ownership before its first child write, every write path (`_finish`,
   `_record_failure`, `fail_job_now`, `retry_job`, `reap_stale_jobs`, `cancel_job`) commits the job row and its
   `SearchVideo` mirror in one transaction and only then derives the aggregate via `_settle_search_status`, and the
-  worker runs `reconcile_search_state` (`backend/app/services/pipeline.py:951`) every tick to repaint a drifted
-  `SearchVideo` from its job and settle any `Search` whose videos are all done. Four regression tests in section 7 of
-  `backend/tests/test_searches.py`.
+  worker runs `reconcile_search_state` (`backend/app/services/pipeline.py:1050`) every tick: it repaints a drifted
+  `SearchVideo` from its job with a conditional update that re-asserts the observation it read, settles any `Search`
+  whose videos are all done, and re-derives a terminal `done`/`failed` parent that still owns an in-flight video.
+  Three regression tests for the reconciliation seam and the stale terminal parent in section 7 of
+  `backend/tests/test_searches.py`, on top of the four earlier consistency tests.
 - **Video deletion is one transaction with its search settle (2026-11-25).** `DELETE /api/v1/videos/{id}` calls
   `refresh_searches_for_video(..., commit=False)`, deletes the `Video` row and commits, then converges the affected
   Searches through `settle_searches` (after the commit on purpose: the derivation must see a peer worker's row) and
@@ -174,24 +179,27 @@ tables, columns and routes. The `/api/v1` vs `/api/v2` question is settled: the 
    additively instead (the new dataset/auth/search routes are new paths; no frozen endpoint changes), and
    API_CONTRACTS.md §8/§9 were updated to record that. Superseded — no action needed.
 3. **`dataset_assignments` → `dataset_memberships`.** The plan's target table name is wrong: the merged code uses
-   `dataset_memberships` (`backend/app/models.py:473`) with no `assigned_by`/`assigned_at`; ownership is expressed
+   `dataset_memberships` (`backend/app/models.py:503`) with no `assigned_by`/`assigned_at`; ownership is expressed
    by `datasets.created_by_id`. The `assigned_by`/`assigned_at` audit fields were dropped.
-4. **Exports are still project-scoped.** `dataset_exports` keeps `project_id FK projects.id` (`backend/app/models.py:367-393`);
+4. **Exports are still project-scoped.** `dataset_exports` keeps `project_id FK projects.id` (`backend/app/models.py:374-396`);
    no dataset/search scoping exists in code or in `backend/app/api/exports.py`. The target is `dataset_id` +
    optional `search_id` — this is the one mapping row that was missing and is now documented in §2.
-5. **"Datasets are name-only" is not yet true in code.** `Dataset.description` exists (`backend/app/models.py:456`)
+5. **"Datasets are name-only" is not yet true in code.** `Dataset.description` exists (`backend/app/models.py:493`)
    and `DatasetCreate` accepts it (`backend/app/schemas.py:336`). Design v1.2 §4.3 removes `description`, but the
    merged code has not dropped it. `use_case` never existed in code. Flag this when the schema is next revised.
 6. **Search/SearchVideo are now implemented.** `Search`/`SearchVideo` models and tables exist
-   (`backend/app/models.py:491-551` plus `request_scope_json` at `:525`, migrations `e5b9c3d7a2f1`,
+   (`backend/app/models.py:521-581` plus `request_scope_json` at `:555`, migrations `e5b9c3d7a2f1`,
    `f1a4b8c2d6e9` and `b8d2e5a4c9f3`), with fan-out and read endpoints in `backend/app/api/searches.py` and
    worker synchronisation in `backend/app/services/pipeline.py`. Automated tests were added 2026-11-21,
-   extended 2026-11-24, 2026-11-25 and 2026-11-26 in `backend/tests/test_searches.py` (51 tests: fan-out,
+   extended 2026-11-24, 2026-11-25, 2026-11-26 and 2026-11-27 in `backend/tests/test_searches.py` (59 tests: fan-out,
    status aggregation, role + dataset scoping, dataset search listing, `Idempotency-Key`, job-lifecycle sync on
-   cancel / reaper / retry / video delete, concurrent completion, the job / `SearchVideo` / `Search` consistency
-   tests with the `reconcile_search_state` sweep, the video-deletion atomicity + job cascade tests, and the
-   idempotency request-scope + search cancel/restart tests), plus `backend/tests/test_review_filters.py`
-   (3 tests) for the `review_state` + `verdict` combination. Not done yet: the "re-run searches on newly added
+   cancel / reaper / retry / video delete, concurrent completion and concurrent restart, the job / `SearchVideo` /
+   `Search` consistency tests with the `reconcile_search_state` sweep (including the re-checked observation and the
+   stale terminal parent), the video-deletion atomicity + job cascade
+   tests, the idempotency request-scope + search cancel/restart tests, and a preflight adapter failure that must
+   not resurrect a canceled job), plus `backend/tests/test_review_filters.py`
+   (3 tests) for the `review_state` + `verdict` combination, and `backend/tests/test_storage_gc.py` (9 tests) for the
+   durable storage-cleanup queue. Not done yet: the "re-run searches on newly added
    videos" behaviour from v1.2 and dataset-scoped exports. Dataset authorization on the shared legacy routes is
    covered by
    `backend/tests/test_dataset_authz.py` (9 tests) — see §3.
@@ -202,6 +210,6 @@ tables, columns and routes. The `/api/v1` vs `/api/v2` question is settled: the 
    null the foreign key instead). Decide before Sprint 4 whether that history must be retained for auditing — if so,
    the cascade has to become an explicit soft delete, which is a migration, not an ORM option.
 8. **Identity default changed.** The old `annotations.reviewer` column still defaults to `"anonymous"`
-   (`backend/app/models.py:358`) and remains a plain `String(100)`, but all *new* tables use integer FKs to `users.id`.
+   (`backend/app/models.py:365`) and remains a plain `String(100)`, but all *new* tables use integer FKs to `users.id`.
    The two schemes coexist during transition; the `String(100)` reviewer column is legacy-only and should not be
    used as a pattern for new tables.

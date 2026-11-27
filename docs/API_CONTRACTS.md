@@ -150,12 +150,16 @@ auth and search routes are added **additively under `/api/v1`** rather than behi
 paths that change no frozen endpoint — §8's "decide in Sprint 3" is resolved in favour of extending `/api/v1`.
 
 Behavioural guarantees of that API (timestamps, unreviewed semantics, error envelope, range streaming) are
-tested by the pytest suite (162 tests on 2026-11-26) and are the part to carry into the new contract.
+tested by the pytest suite (179 tests on 2026-11-27) and are the part to carry into the new contract.
 
 **Job cancel and lost workers.** `POST /api/v1/jobs/{id}/cancel` works on `queued` and `running` jobs; a running
 worker stops at its next progress tick and its result is discarded. A running job whose worker stops
 heart-beating is requeued with `error_code=WORKER_LOST` (status `queued`, attempts kept), or set to `failed`
-with `error_code=WORKER_LOST` once `max_attempts` is exhausted.
+with `error_code=WORKER_LOST` once `max_attempts` is exhausted. Cancellation wins over everything the worker does
+afterwards: every write the worker makes (progress, result, failure) is fenced on
+`(id, status='running', attempts)`, including the pre-execution adapter lookup — a job canceled between the claim
+and that lookup stays `canceled`, and its `SearchVideo` keeps `failed` / "Job canceled" rather than the adapter
+error.
 
 **Batch jobs.** `POST /api/v1/projects/{project_id}/actions/{action_id}/jobs` with body
 `{"video_ids": [1, 2] | null, "adapter": "videojev" | null, "params": {}}` queues one job per video and returns
@@ -198,9 +202,19 @@ live video rows) with a logged warning.
 `running` video of the search and returns `200` with the settled search; it is idempotent, so a retry after a flaky
 connection returns the already-settled search unchanged instead of failing. `POST .../searches/{search_id}/retry`
 re-queues **only** the videos whose job failed, leaving the finished ones alone, and returns `202`; it answers
-`409 SEARCH_NOT_RETRYABLE` when there is nothing to restart. Both go through `cancel_job` /
+`409 SEARCH_NOT_RETRYABLE` when the search has no failed video at all. Both go through `cancel_job` /
 `enqueue_candidate_job` so there is still exactly one writer per state, and both require the `dataset_admin` role on
 a dataset the caller can access.
+
+Restart is idempotent under concurrency. Two retries released together both queue a replacement job, but each one
+installs it on the `SearchVideo` with a conditional update on the current link
+(`id = :row AND job_id = :old_job AND status = 'failed'`). Exactly one update matches; the loser deletes the job it
+just queued and still answers `202` with the current search, so a double click leaves one replacement per video
+instead of two. The superseded job keeps its `failed` status for history and can no longer be started:
+`POST /api/v1/jobs/{job_id}/retry` answers `409 JOB_SUPERSEDED` for a search job whose `SearchVideo` no longer points
+at it, and the worker refuses to run one. Enqueueing a replacement under a deterministic `Idempotency-Key` was
+considered and rejected: two concurrent inserts of the same key would collide on the unique constraint and poison
+the transaction, while the conditional update already guarantees a single survivor.
 
 **Search status aggregation.** A `Search` mirrors its `SearchVideo` rows: `queued` (all queued), `running` (any
 running, or a mix of queued with done/failed), `done` (all done — or no rows left, i.e. every video was deleted),
@@ -218,9 +232,19 @@ search concurrently cannot both write `running` and strand it.
 start of execution aborts with `JobInterrupted` and leaves the canceled row alone instead of resurrecting it.
 The worker additionally runs `reconcile_search_state` on every tick: it repaints any `SearchVideo` row that disagrees
 with its job (job is the source of truth), and re-derives any `Search` still `queued`/`running`/`partial` whose videos
-have all settled. It is idempotent and a no-op on a consistent database, so it repairs rows written by older builds or
-torn by a hard kill without masking a live write path. Its return value counts both kinds of repair — repainted
-`SearchVideo` rows and `Search` aggregates that actually moved — so `0` means the database was consistent.
+have all settled — plus any terminal `done`/`failed` `Search` that still has a `queued`/`running` video, which is what an
+interruption between the retry commit and the aggregate leaves behind. It is idempotent and a no-op on a consistent
+database, so it repairs rows written by older builds or torn by a hard kill without masking a live write path. Its
+return value counts both kinds of repair — repainted `SearchVideo` rows and `Search` aggregates that actually moved — so
+`0` means the database was consistent.
+
+Because the sweep reads a page and writes it later, the repaint is a conditional update that re-asserts **both** the job
+status and the `SearchVideo` status it observed: if a worker finished or requeued one of those videos while the sweep was
+paused, the write matches nothing, the sweep drops its stale view and the next tick observes the newer state. A
+finished video is therefore never dragged back from `done` to `running`, and the aggregate derived from it is never
+rewritten from the stale page. One residual window is accepted: an ABA on the job (`queued → running → queued` by the
+reaper between read and write) can let an old observation through; it is self-healing on the next tick and can never
+lose a newer *finished* result.
 
 **Video deletion is a single transaction.** `DELETE /api/v1/videos/{id}` detaches the video from its searches, drops the
 `Video` row (which cascades to its `processing_jobs` and `candidates`) and commits, and only then re-derives each affected
@@ -230,6 +254,21 @@ are removed only after the commit, so a rolled-back delete never orphans a survi
 job history of a deleted video disappears with it — that is intended, and it is why an in-flight job on the video is
 abandoned rather than stranded: a statement failure afterwards (`SQLAlchemyError`) rolls the session back, re-reads the
 job and, if the row is gone or was taken over, simply returns instead of raising `PendingRollbackError`.
+
+**Storage cleanup survives the commit.** Unlinking the bytes after the delete commits leaves a window where a crash
+would strand them with no row left to name them, so the delete does not unlink directly: in the *same* transaction as
+the row delete it inserts `pending_deletions` intent rows (`storage_key`, `is_tree`, `reason`), and only drains them
+afterwards. The `pending_deletions` queue is therefore the record of what still has to go, and a process that dies
+between the commit and the unlink leaves the work queued rather than lost. The worker drains it on every tick
+(`purge_storage`, before claiming a job, inside a `try/except` so a locked file can never stop job processing) and each
+delete call also flushes the keys it just queued. The same sweep additionally collects the two places a late writer can
+create an unreferenced key: a preview clip extracted for a video that was deleted meanwhile, and an `engine/` scratch
+directory whose job or video no longer exists. Both are keyed by ownership, not by age alone — a file younger than
+`VLM_STORAGE_GC_GRACE_SECONDS` (default 300 s) is assumed to belong to a running writer and an `engine/` directory is
+kept while its job is `queued`/`running` or its video still exists (the next search reuses the feature cache) — so the
+sweep never races a live extraction. A key that `path_for` rejects is dropped from the queue instead of retried forever.
+The preview-clip loop itself now fences *before* writing the clip and re-checks that its candidate row still exists
+afterwards, so the common case never produces the orphan at all.
 
 **Candidate list filters.** `GET /api/v1/projects/{id}/candidates` and `GET /api/v1/searches/{id}/candidates`
 accept `review_state` (`reviewed` / `unreviewed`) and `verdict` (`true_positive` / `false_positive`) together.
@@ -263,4 +302,4 @@ events is a successful job with an empty candidate list (the action does not occ
 adapters keep the cap (earliest 12 by start time) and fail a job that yields no candidates.
 
 Behavioural guarantees of that API (timestamps, unreviewed semantics, error envelope, range streaming) are
-tested by the pytest suite (162 tests on 2026-11-26) and are the part to carry into the new contract.
+tested by the pytest suite (179 tests on 2026-11-27) and are the part to carry into the new contract.

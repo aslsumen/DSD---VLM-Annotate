@@ -7,7 +7,7 @@ import logging
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, Query, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -472,7 +472,15 @@ def retry_search(
     session: Session = Depends(get_db),
     settings: Settings = Depends(settings_dep),
 ) -> SearchDetailOut:
-    """Re-queue the failed videos of a search, leaving the finished ones alone."""
+    """Re-queue the failed videos of a search, leaving the finished ones alone.
+
+    The restart of each video is a compare-and-swap on the row that was read:
+    the ``SearchVideo`` only moves to the replacement job while it still points
+    at the failed job this request saw.  Two retries released together therefore
+    queue one replacement per video, and the loser of the race answers 202 with
+    the restarted search instead of failing -- the caller asked for "make this
+    run again", which is true.
+    """
     search = _search_or_404(session, search_id)
     if search.dataset_id != dataset_id:
         raise ApiError(404, "SEARCH_NOT_FOUND", f"search {search_id} does not exist")
@@ -483,11 +491,14 @@ def retry_search(
     fallback_adapter = scope.get("adapter_name")
 
     retried = 0
+    was_failed = False
     rows = list(
         session.scalars(select(SearchVideo).where(SearchVideo.search_id == search_id))
     )
     for row in rows:
         job = session.get(ProcessingJob, row.job_id) if row.job_id else None
+        if row.status == SearchVideoStatus.failed:
+            was_failed = True
         if job is not None and job.status not in (JobStatus.failed,):
             continue
         if job is None and row.status != SearchVideoStatus.failed:
@@ -508,6 +519,10 @@ def retry_search(
             params = json.loads(job.params_json)
         else:
             params = fallback_params
+        # No idempotency key here: a deterministic key would make the loser of a
+        # race reuse the winner's job, but two concurrent inserts of the same key
+        # fail the unique constraint at flush time and poison the transaction.
+        # The compare-and-swap below already guarantees one surviving job.
         new_job = enqueue_candidate_job(
             session,
             video=video,
@@ -517,12 +532,37 @@ def retry_search(
             idempotency_key=None,
             max_attempts=settings.worker_max_attempts,
         )
-        row.job_id = new_job.id
-        row.status = SearchVideoStatus.queued
-        row.error_message = None
+        # Compare-and-swap: only the request that still sees the failed job this
+        # row pointed at when it was read may install the replacement.
+        claimed = session.execute(
+            update(SearchVideo)
+            .where(
+                SearchVideo.id == row.id,
+                SearchVideo.job_id == row.job_id,
+                SearchVideo.status == SearchVideoStatus.failed,
+            )
+            .values(
+                job_id=new_job.id,
+                status=SearchVideoStatus.queued,
+                error_message=None,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if claimed.rowcount != 1:
+            # A concurrent retry already replaced this video, so the job this
+            # request queued is orphaned.  Delete it -- but only if nothing
+            # points at it, so a future change to the enqueue key cannot make
+            # this cleanup break the winner's link.
+            referenced = session.scalar(
+                select(SearchVideo.id).where(SearchVideo.job_id == new_job.id)
+            )
+            if referenced is None:
+                session.delete(new_job)
+            session.expire(row)
+            continue
         retried += 1
 
-    if retried == 0:
+    if retried == 0 and not was_failed:
         session.rollback()
         raise ApiError(
             409,
@@ -530,11 +570,17 @@ def retry_search(
             "this search has no failed videos to retry",
         )
 
+    # Everything that was failed has been restarted -- by this request or by a
+    # concurrent one that won every swap.  Losing the race is not an error: the
+    # caller asked for "make this run again", which is true, so both cases answer
+    # 202 with the search as it is now.
     session.commit()
-    # The row statuses moved above, so the aggregate has to be derived again --
-    # after the commit, so it sees the same rows a peer worker would.
+    # Derive the aggregate from the committed rows: the row statuses moved, and
+    # in the lost-race case the sibling may not have settled the search yet, so
+    # the stored column would still say ``partial``.
     settle_searches(session, [search_id])
-    session.refresh(search)
+    session.expire_all()
+    search = _search_or_404(session, search_id)
     return _detail(session, search)
 
 

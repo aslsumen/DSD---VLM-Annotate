@@ -3,8 +3,8 @@
 **Status:** living document (2027-01-17 static deliverable will freeze this)
 **Verified environment:** Windows 11 · Python 3.14.4 · Node 24.22 · ffmpeg bundled via `imageio-ffmpeg`
 **Verified on:** 2026-11-16 with a clean `git clone` followed by the steps below (80 backend tests, 21 UI tests,
-26/26 smoke checks, API and worker running). The backend suite has grown since — as of 2026-11-26 it reports
-**162 passed** (see the test command below). macOS/Linux use the same steps with `.venv/bin/python` instead of
+26/26 smoke checks, API and worker running). The backend suite has grown since — as of 2026-11-27 it reports
+**179 passed** (see the test command below). macOS/Linux use the same steps with `.venv/bin/python` instead of
 `.venv\Scripts\python.exe`.
 **GPU engine:** `video_grounding/` is optional, Linux/WSL2 only, and documented separately — it is **not**
 needed to run the web app.
@@ -192,7 +192,7 @@ python scripts/smoke_videojev.py --base-url http://127.0.0.1:8000 --action "pers
 
 ```powershell
 # automated checks
-.\.venv\Scripts\python.exe -m pytest backend -q            # expect 162 passed
+.\.venv\Scripts\python.exe -m pytest backend -q            # expect 179 passed
 .\.venv\Scripts\python.exe scripts\smoke_e2e.py            # expect 26/26 checks
 
 # ffmpeg diagnostics

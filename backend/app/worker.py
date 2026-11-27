@@ -35,6 +35,7 @@ from .services.pipeline import (
     reconcile_search_state,
 )
 from .services.storage import LocalStorage
+from .services.storage_gc import purge_storage
 
 logger = logging.getLogger("vlm_annotate.worker")
 
@@ -60,6 +61,19 @@ class JobWorker:
             # Repair any SearchVideo/Search row an older write path (or a hard
             # kill) left out of step with its job before picking up new work.
             reconcile_search_state(session)
+            # Drain storage cleanup a killed process left queued, and collect the
+            # two directory kinds a late writer can repopulate after its row died.
+            # Never fatal: a locked file must not stop job processing.
+            try:
+                purge_storage(
+                    session,
+                    self.storage,
+                    grace_seconds=self.settings.storage_gc_grace_seconds,
+                    batch_size=self.settings.storage_gc_batch_size,
+                )
+            except Exception:
+                logger.warning("storage sweep failed", exc_info=True)
+                session.rollback()
             job = claim_next_job(session)
             if job is None:
                 return False
