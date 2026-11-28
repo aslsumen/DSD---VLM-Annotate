@@ -29,6 +29,7 @@ annotation must not create the annotation row.
 from __future__ import annotations
 
 from app import db
+from app.api import datasets
 from app.models import Annotation, Candidate, ProcessingJob, SearchVideo, Video
 from sqlalchemy import select, update
 from tests.conftest import (
@@ -62,6 +63,25 @@ def _upload_dataset_video(client, dataset_id: int, token: str, filename: str = "
     )
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def test_upload_uses_resolved_dataset_for_storage_and_owner(auth_client, monkeypatch) -> None:
+    token = bootstrap_admin(auth_client)["access_token"]
+    requested = _create_dataset(auth_client, token, "Requested")["id"]
+    resolved = _create_dataset(auth_client, token, "Resolved")["id"]
+    lookup = datasets._get_dataset_or_404
+
+    # Distinguish the route input from the record returned by the lookup.
+    def resolve_dataset(session, dataset_id):
+        assert dataset_id == requested
+        return lookup(session, resolved)
+
+    monkeypatch.setattr(datasets, "_get_dataset_or_404", resolve_dataset)
+    uploaded = _upload_dataset_video(auth_client, requested, token)
+    video = _video_row(uploaded["id"])
+    assert video is not None
+    assert video.dataset_id == resolved
+    assert video.storage_key.split("/")[:-1] == ["videos", f"dataset-{resolved}"]
 
 
 def _launch_search(client, dataset_id: int, token: str, prompt: str = "a person waves") -> dict:

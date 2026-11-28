@@ -205,9 +205,9 @@ async def upload_dataset_video(
     _require_access(session, principal, dataset)
     return await ingest_video(
         file,
-        subdir=f"videos/dataset-{dataset_id}",
+        subdir=f"videos/dataset-{dataset.id}",
         project_id=None,
-        dataset_id=dataset_id,
+        dataset_id=dataset.id,
         session=session,
         storage=storage,
         probe=probe,
