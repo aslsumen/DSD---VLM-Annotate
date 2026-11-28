@@ -3,20 +3,26 @@
  * NFR-11, NFR-14; Design Description v1.2, 5.2).
  */
 import type { FormEvent, ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Brand } from "../components/Shell";
-import { Frame, Icon } from "../components/ui";
+import { ErrorNotice, Frame, Icon } from "../components/ui";
 import { toApiError } from "../lib/api";
 import { navigate } from "../lib/router";
 import { useSession } from "../lib/session";
 
 function AuthLayout({ children }: { children: ReactNode }) {
+  const { hasRetainedToken, signOut } = useSession();
   return (
     <div className="auth-screen">
       <div className="auth-card">
         <Brand large />
-        <Frame className="auth-frame">{children}</Frame>
+        <Frame className="auth-frame">
+          {children}
+          {hasRetainedToken && (
+            <button className="btn btn-secondary" onClick={() => void signOut()}>Sign out</button>
+          )}
+        </Frame>
       </div>
     </div>
   );
@@ -48,8 +54,15 @@ function signInMessage(code: string, fallback: string): string {
   }
 }
 
+function useAccountRequest() {
+  const request = useRef<AbortController | null>(null);
+  useEffect(() => () => request.current?.abort(), []);
+  return request;
+}
+
 export function SignInPage() {
   const session = useSession();
+  const request = useAccountRequest();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -57,16 +70,20 @@ export function SignInPage() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (request.current) return;
     setError("");
+    const controller = new AbortController();
+    request.current = controller;
     setBusy(true);
     try {
-      await session.signIn(email.trim(), password);
-      navigate("/");
+      await session.signIn(email.trim(), password, controller.signal);
     } catch (failure) {
+      if (controller.signal.aborted) return;
       const apiError = toApiError(failure);
       setError(signInMessage(apiError.code, apiError.message));
     } finally {
-      setBusy(false);
+      request.current = null;
+      if (!controller.signal.aborted) setBusy(false);
     }
   }
 
@@ -74,6 +91,7 @@ export function SignInPage() {
     <AuthLayout>
       <form className="stack" onSubmit={(event) => void submit(event)}>
         <h2>Sign in</h2>
+        {session.notice ? <p className="muted" role="status">{session.notice}</p> : null}
         <div className="field">
           <label htmlFor="signin-email">Email</label>
           <input
@@ -116,6 +134,27 @@ export function SignInPage() {
   );
 }
 
+export function SessionUnavailablePage() {
+  const { error, retrySession, signOut } = useSession();
+  return (
+    <AuthLayout>
+      <div className="stack">
+        <h2>Authentication unavailable</h2>
+        {error ? (
+          <ErrorNotice
+            error={error}
+            title={error.status === 403 ? "Access denied" : "Could not verify access"}
+            onRetry={retrySession}
+          />
+        ) : null}
+        <a className="btn btn-ghost align-start" href="#/signin" onClick={() => void signOut("signin")}>
+          Go to sign in
+        </a>
+      </div>
+    </AuthLayout>
+  );
+}
+
 /** USR-6 is a Should requirement: the email service is not chosen yet (TBD). */
 export function ForgotPasswordPage() {
   return (
@@ -136,6 +175,7 @@ export function ForgotPasswordPage() {
 
 export function AcceptInvitePage({ token }: { token: string }) {
   const session = useSession();
+  const request = useAccountRequest();
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -145,6 +185,7 @@ export function AcceptInvitePage({ token }: { token: string }) {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (request.current) return;
     setError("");
     if (password.length < 8) {
       setError("The password must have at least 8 characters.");
@@ -154,18 +195,23 @@ export function AcceptInvitePage({ token }: { token: string }) {
       setError("The two passwords are different.");
       return;
     }
+    const controller = new AbortController();
+    request.current = controller;
     setBusy(true);
     try {
-      await session.acceptInvitation(token, fullName.trim(), password);
+      await session.acceptInvitation(token, fullName.trim(), password, controller.signal);
+      controller.signal.throwIfAborted();
       navigate("/");
     } catch (failure) {
+      if (controller.signal.aborted) return;
       const apiError = toApiError(failure);
       if (apiError.code === "INVITATION_EXPIRED") setInvalid("expired");
       else if (apiError.code === "INVITATION_ALREADY_USED") setInvalid("used");
       else if (apiError.code === "INVITATION_INVALID") setInvalid("invalid");
       else setError(apiError.message);
     } finally {
-      setBusy(false);
+      request.current = null;
+      if (!controller.signal.aborted) setBusy(false);
     }
   }
 

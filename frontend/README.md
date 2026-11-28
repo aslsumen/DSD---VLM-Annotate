@@ -59,18 +59,35 @@ app falls back to the system sans-serif.
 
 ## Accounts and sign-in
 
-At start-up the app decides between three modes:
+At start-up the app verifies the session or anonymously checks access to `GET /api/v1/datasets`:
 
 | Mode | When | What the user sees |
 | --- | --- | --- |
+| Checking access | An access check or retry is in progress | Loading status while the workspace stays closed |
 | Signed in | A session token is stored and `GET /auth/me` accepts it | Sidebar with the user's name and global role; pages filtered by role |
-| Development | The backend does not require sign-in (`VLM_AUTH_REQUIRED` unset) | Full access as an administrator, a "Development mode" label and a **Sign in** link |
-| Signed out | `VLM_AUTH_REQUIRED=true` and no valid session | The sign-in page only |
+| Development | The anonymous dataset request returns HTTP 200 with a valid dataset list | Development mode, with the demo controls and a **Sign in** link |
+| Signed out | The backend returns 401 for anonymous access, or an active session ends | Sign-in and public account pages |
+| Authentication unavailable | The access check is forbidden (403), fails to reach the server, or returns a server error or unexpected response | An access error with **Try again**. Dataset pages stay gated |
 
 - **Sign in** (`POST /auth/login`) stores the session token in `localStorage`
   (`vlm-annotate.api-token`) and sends it as `Authorization: Bearer <token>`.
   Wrong credentials always show the same message (NFR-14).
-- **Sign out** is on every page and revokes the session on the server (NFR-12).
+- **Session checks.** The browser checks `/auth/me` 30 seconds after the previous check settles.
+  Checks time out after 10 seconds of active browser time. A verified role change updates the route
+  guards. A current authenticated 401 ends the session and stops protected requests and polling.
+  A 403, timeout, server or transport error from the session check closes the workspace and keeps
+  the token for retry. The app retries a stored session at the next check or when **Try again** is
+  selected. A resource-level 403 denies that request and leaves the session in place.
+- **Review after reauthentication.** Protected URLs stay in the address bar. Unsaved time and note
+  edits remain in memory and can be recovered on the same page by the same user. Changing accounts,
+  explicitly signing out in that tab or reloading the document clears those drafts.
+- **Sign out** is available in the workspace sidebar. It closes the workspace locally, aborts pending
+  client work and attempts revocation with the outgoing bearer token. A failed logout reports that
+  server revocation could not be confirmed. A confirmed logout in the initiating tab returns to
+  Development mode only after a successful anonymous check.
+- **Tabs.** A tab closes its workspace when the shared token is removed. A new token opens a
+  workspace after successful verification. Other tabs show sign-in after a shared sign-out,
+  including in development. Refreshing without a stored token repeats the anonymous access check.
 - **Invitations** (Users page): no mail transport exists yet, so the invitation
   link is shown once to the inviter. `#/invite/:token` creates the account
   (full name + password, at least 8 characters); used or expired links show an
@@ -179,5 +196,9 @@ frontend/src/
 - The JSON export follows the Design 4.3 proposal; the OpenLABEL-based schema is
   still to be agreed.
 - With sign-in required, the legacy project/video/job routes do not check roles
-  on the server yet, and `<video>` requests cannot send the bearer token
-  (signed media links, R-18).
+  or enforce Dataset membership. Review writes still use the legacy annotation routes.
+  `<video>` requests cannot send the bearer header (protected media, R-18).
+- Session tokens use the existing browser storage and have an absolute server expiry. The backend
+  has no inactivity-based expiry, token refresh or password-reset endpoint. The forgot-password
+  screen remains informational. Closing a browser request cannot undo writes already accepted by
+  the API.

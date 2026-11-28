@@ -13,7 +13,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ErrorNotice, Frame, Icon, Loading, Notice, PageHeader } from "../components/ui";
 import { api, downloadExportFile, toApiError, type ApiError } from "../lib/api";
 import { formatBytes, formatDateTime } from "../lib/format";
-import { useApiData } from "../lib/hooks";
+import { useApiData, useStatusPolling } from "../lib/hooks";
 import { buildExportDocument, countReview, summarizeSearch } from "../lib/search";
 import type { DatasetExport } from "../types";
 
@@ -75,11 +75,7 @@ export function ExportPage({ initialDatasetId }: { initialDatasetId: number | nu
 
   const hasRunningExport = dataset.data?.exports.some((item) => item.status === "queued" || item.status === "running");
   const reload = dataset.reload;
-  useEffect(() => {
-    if (!hasRunningExport) return undefined;
-    const timer = window.setInterval(reload, 2500);
-    return () => window.clearInterval(timer);
-  }, [hasRunningExport, reload]);
+  useStatusPolling(dataset, hasRunningExport ?? false, 2500);
 
   const rows = useMemo(() => {
     if (!dataset.data) return [];

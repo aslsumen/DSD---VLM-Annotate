@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ApiError } from "./api";
 import { toApiError } from "./api";
 import { schedulePoll } from "./polling";
-import { useSession } from "./session";
 
 export interface ApiDataState<T> {
   data: T | null;
@@ -69,21 +68,15 @@ export function useApiData<T>(
   return { data, error, loading, reload };
 }
 
-export function useSearchPolling(
+export function useStatusPolling(
   { error, loading, reload }: ApiDataState<unknown>,
   active: boolean,
   delay: number,
 ): void {
-  const { mode, sessionExpired } = useSession();
   const status = error?.status;
   useEffect(
-    () => schedulePoll(
-      { active, loading, status },
-      delay,
-      reload,
-      mode === "signed-in" ? sessionExpired : undefined,
-    ),
-    [active, delay, loading, mode, reload, sessionExpired, status],
+    () => schedulePoll({ active, loading, status }, delay, reload),
+    [active, delay, loading, reload, status],
   );
 }
 

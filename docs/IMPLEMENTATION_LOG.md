@@ -928,6 +928,81 @@ report the elapsed job time for each video and prompt.
 **Open items:** driving recall and absent-prompt false candidates (PB-71); `min_event_score` sweep (PB-72);
 product-footage validation.
 
+## 2026-11-25 — Phase 3A: frontend session hardening
+
+**Base** `a3fa00c` (includes PR #52) · Local branch `feat/ui-auth-session` · USR-1, USR-2,
+USR-5, NFR-12, NFR-13.
+
+On the baseline, a network error, 403 or 5xx could open Development mode during bootstrap. A
+malformed 200 could also mount protected UI. The frontend now grants anonymous access after a
+validated HTTP 200 from the real Dataset list. Without credentials, a 401 shows sign-in. A stored
+bearer token is verified with `GET /api/v1/auth/me`; a 401 clears it and requires sign-in. Other
+failures gate the workspace and let the user retry.
+
+One session check at a time runs at 30-second intervals after completion. On a failed check, the
+workspace closes until the server confirms the retained token. A successful check refreshes the
+role. Storage changes from other tabs invalidate earlier work, and cancelled or superseded responses
+cannot reopen the workspace. A closed workspace cancels its fetches, uploads and scheduled
+refreshes. Logout attempts server revocation with the previous bearer token and reports if that
+could not be confirmed. Sign-in resumes protected hash routes and unsaved review times and notes
+are restored in memory for the same user after reauthentication.
+
+| Check | Baseline | Phase 3A |
+| --- | --- | --- |
+| Frontend Vitest | 42 passed | 80 passed |
+| TypeScript and Vite production build | Passed | Passed |
+| Backend pytest (macOS) | 98 passed, one failed | 98 passed, same failure ([#55](https://github.com/aslsumen/DSD---VLM-Annotate/issues/55)) |
+| Focused auth and Dataset API pytest | 10 passed | 10 passed |
+| Ruff lint / format check | Lint passed, 10 files flagged by format check | Same |
+| Fresh SQLite Alembic upgrade/current/check | `d03f1c4ffd30` head, no pending operations | Same |
+| FFmpeg + mock smoke | 26/26 | 26/26 |
+
+The Chrome evidence and Playwright reproductions for the local review are stored outside the Git
+diff. The browser checks use isolated SQLite databases, synthetic accounts and generated video.
+Auth ON covers fail-closed bootstrap, route guards, late responses, revocation and review recovery.
+Auth OFF exercises the Alpha flow including the lost enqueue response and serialized polling from
+PR #52, full-video playback, a corrected annotation and JSON download.
+
+**Backend dependencies:** Legacy Project, Action, Job, media and annotation endpoints still require
+their own authorization and Dataset membership enforcement. The implemented session has server-side
+absolute expiry, while the v1.2 inactivity policy remains pending. Browser cancellation cannot undo
+already committed writes. The tests use Chromium on macOS, SQLite and the mock detector. Phase 3B
+is the independent review gate.
+
+## 2026-11-26 — Phase 3C session review corrections
+
+The independent review rejected candidate `543ac661` on NFR-13 and NFR-12.
+On Chrome and WebKit, an End field restored to 1.8 s persisted 2.264 s,
+and an unavailable identity check left a retained login without a Sign out control.
+
+- The review draft owns the displayed text. Accept and Reject parse both fields
+  at submission, preserve the API's millisecond precision and reject invalid
+  or out-of-range input. The submitting candidate's draft fields lock until
+  the PUT settles. A late success consumes only that draft and preserves a
+  new selection. The historic concurrent-note problem on main has a separate
+  local issue draft in the Phase 3C review package.
+- Session recovery offers retry, local logout and fresh authentication.
+  Logout cancels verification, closes the workspace and clears the stored
+  credential before attempting revocation. A failed revocation has a separate
+  status message. A late acknowledgement cannot replace a newer login.
+- An explicit logout generation clears in-memory drafts across tabs, including
+  for a returning user. Expiry and temporary unavailability preserve drafts for
+  the same verified user. A different verified user clears the previous drafts.
+  Visibility and resume notifications request the existing serialized check.
+
+Local comparison of main `a3fa00cc`, the reviewed candidate and this change:
+42/80/100 Vitest tests passed, TypeScript and Vite passed on all three. Backend
+pytest reported 98 passed and the same macOS storage case (#55) on each.
+Ruff lint passed, Ruff format listed the same ten files, Alembic reported no
+drift, and FFmpeg/mock smoke passed 26/26 in each checkout. The Chrome/WebKit
+timestamp case now sends and persists 1.8 s. A separate real SQLite/ZIP check
+matches both edited bounds (0.125 s and 1.801 s). Both engines passed the
+production UI recovery regression and Vite development Strict Mode.
+
+The local review package contains the Alpha replay, evidence by engine,
+unchanged independent scripts, the full comparison and a SHA-256 manifest.
+Phase 3D is the independent review gate.
+
 ## Template for the next entry
 
 ```markdown
