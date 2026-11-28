@@ -1,0 +1,6 @@
+Validation evidence — 2026-11-19 — export-schema.json vs export-example.json
+
+CHECK 1 PASS: example valid against schema
+CHECK 2 PASS: invalid review_status rejected -> [{'name': 'prompt', 'val': 'Find the tiger head movement'}, {'name': 'review_status', 'val': 'accepted'}, {'name': 'revi
+CHECK 3 PASS: unreviewed detection without reviewer/reviewed_at is valid
+CHECK 4 PASS: missing required num field rejected -> [{'name': 'action_id', 'val': 3}, {'name': 't_start_s', 'val': 0.497}, {'name': 't_end_s', 'val': 3.903}, {'name': 'orig
