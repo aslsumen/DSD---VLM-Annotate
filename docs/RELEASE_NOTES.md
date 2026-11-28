@@ -1,5 +1,51 @@
 # Release Notes
 
+## Unreleased — `feat/datasets-searches` (2026-11-26)
+
+Development snapshot; not a course release. The dataset/search domain and session authentication are implemented
+in the backend alongside the untouched project/action slice. The UI has **not** been cut over yet.
+
+### Added
+
+- **Accounts and access** — `users`, `user_sessions`, `invitations`, global roles (`administrator`,
+  `dataset_admin`, `annotator`), email/password sign-in, sign-out, lockout after repeated failures, and
+  `VLM_AUTH_REQUIRED` enforcement (migration `d03f1c4ffd30`).
+- **Datasets** — `datasets` and `dataset_memberships`; create/list/get, member list and add, and dataset-scoped
+  video upload and listing (`POST/GET /api/v1/datasets/{id}/videos`).
+- **Searches** — one free-text prompt run over a dataset, fanned out to one job per ready video
+  (`searches`, `search_videos`; migrations `e5b9c3d7a2f1`, `c9f0d3a1b2e4`), aggregated status including
+  `partial`, dataset-scoped listing with paging and a `status` filter, and search-level cancel / restart.
+- **Idempotent search creation** — an optional `Idempotency-Key` header, stored uniquely on
+  `searches.idempotency_key` (migration `f1a4b8c2d6e9`); the request is snapshotted in
+  `searches.request_scope_json` (migration `b8d2e5a4c9f3`) so a replay is compared against what was asked for
+  rather than against live rows, and a different request with the same key returns `409 IDEMPOTENCY_KEY_REUSED`
+  with `details.mismatched_fields`.
+- **Dataset authorization on the shared legacy routes** — `GET`/`DELETE /videos/{id}`,
+  `GET /videos/{id}/stream`, `POST /videos/{id}/jobs`, the `/jobs` family and the `/candidates` family now resolve
+  the owning dataset and answer `401` for anonymous callers, `404` for non-members and `403` for members who lack
+  the required role, while project-owned rows keep their previous behaviour.
+
+### Changed
+
+- Job and `SearchVideo` writes are committed in **one transaction** on every path (success, failure, cancel,
+  retry, reaper), so a crash can no longer leave a `succeeded` job next to a `running` video row; a per-tick
+  `reconcile_search_state` sweep repairs rows written by older builds.
+- Deleting a video settles the affected searches in the same transaction and removes the stored files only after
+  that commit succeeds; `Video.jobs` now declares `passive_deletes=True`, so the database cascade removes the
+  video's jobs (and their candidates) instead of nulling the foreign key and stranding a running job.
+- A `SQLAlchemyError` inside a job now rolls back and fails the job cleanly instead of leaving it `running` behind
+  a poisoned session (`PendingRollbackError`).
+
+### Known limitations
+
+- OpenLABEL JSON export and dataset-scoped exports are not implemented (`dataset_exports` is still project-scoped).
+- A dataset membership cannot be revoked (no `DELETE /datasets/{id}/members`) and the `PATCH` route in the target
+  contract does not exist.
+- Rerunning an existing search for newly uploaded videos is not implemented.
+- Password reset and user deactivation are not implemented.
+- Protected media playback still needs signed URLs (R-18): a browser `<video>` element cannot send a bearer token.
+- The frontend still drives projects and action definitions.
+
 ## Unreleased — `backend` branch (2026-11-16)
 
 Development snapshot after v0.2.0-dev; not a course release.

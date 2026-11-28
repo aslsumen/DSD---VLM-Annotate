@@ -8,10 +8,13 @@ from fastapi import APIRouter, Depends, File, Header, Request, Response, UploadF
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..access import DATASET_WRITE_ROLES, enforce_video_access
 from ..adapters.registry import get_adapter
 from ..config import Settings
 from ..deps import (
+    Principal,
     get_db,
+    get_optional_principal,
     get_project_or_404,
     get_video_or_404,
     probe_dep,
@@ -22,8 +25,15 @@ from ..errors import ApiError
 from ..models import ActionDefinition, Candidate, ProcessingJob, Video, VideoStatus
 from ..schemas import JobCreate, JobOut, VideoOut
 from ..services.media import MediaError, MediaProbe
-from ..services.pipeline import enqueue_candidate_job, remove_engine_files
+from ..services.pipeline import (
+    engine_job_key,
+    enqueue_candidate_job,
+    feature_cache_key,
+    refresh_searches_for_video,
+    settle_searches,
+)
 from ..services.storage import LocalStorage, StorageError
+from ..services.storage_gc import flush_pending_deletions, record_deletions
 from .files import range_file_response
 
 router = APIRouter(tags=["videos"])
@@ -55,7 +65,30 @@ async def upload_video(
     settings: Settings = Depends(settings_dep),
 ) -> Video:
     get_project_or_404(session, project_id)
+    return await ingest_video(
+        file,
+        subdir=f"videos/{project_id}",
+        project_id=project_id,
+        dataset_id=None,
+        session=session,
+        storage=storage,
+        probe=probe,
+        settings=settings,
+    )
 
+
+async def ingest_video(
+    file: UploadFile,
+    *,
+    subdir: str,
+    project_id: int | None,
+    dataset_id: int | None,
+    session: Session,
+    storage: LocalStorage,
+    probe: MediaProbe,
+    settings: Settings,
+) -> Video:
+    """Validate, store and probe one upload; attach it to a project or a dataset."""
     original_name = Path(file.filename or "upload").name
     extension = Path(original_name).suffix.lower()
     if extension not in settings.allowed_video_extensions:
@@ -93,7 +126,7 @@ async def upload_video(
     try:
         stored = storage.save_stream(
             file.file,
-            subdir=f"videos/{project_id}",
+            subdir=subdir,
             suffix=extension,
             max_bytes=settings.max_upload_bytes,
         )
@@ -135,6 +168,7 @@ async def upload_video(
 
     video = Video(
         project_id=project_id,
+        dataset_id=dataset_id,
         original_filename=original_name,
         storage_key=stored.key,
         content_type=file.content_type or "video/mp4",
@@ -167,17 +201,27 @@ def list_videos(project_id: int, session: Session = Depends(get_db)) -> list[Vid
 
 
 @router.get("/videos/{video_id}", response_model=VideoOut)
-def get_video(video_id: int, session: Session = Depends(get_db)) -> Video:
-    return get_video_or_404(session, video_id)
+def get_video(
+    video_id: int,
+    principal: Principal = Depends(get_optional_principal),
+    session: Session = Depends(get_db),
+) -> Video:
+    video = get_video_or_404(session, video_id)
+    enforce_video_access(session, principal, video)
+    return video
 
 
 @router.delete("/videos/{video_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_video(
     video_id: int,
+    principal: Principal = Depends(get_optional_principal),
     session: Session = Depends(get_db),
     storage: LocalStorage = Depends(storage_dep),
 ) -> Response:
     video = get_video_or_404(session, video_id)
+    # Authorize before anything is touched: a denied delete must leave the row,
+    # the stored file and the derived engine artefacts in place.
+    enforce_video_access(session, principal, video, allowed_roles=DATASET_WRITE_ROLES)
     clip_keys = list(
         session.scalars(
             select(Candidate.clip_storage_key).where(
@@ -187,13 +231,30 @@ def delete_video(
     )
     job_ids = list(session.scalars(select(ProcessingJob.id).where(ProcessingJob.video_id == video_id)))
     storage_key = video.storage_key
+    # One transaction for the whole deletion: detach the video from its searches,
+    # queue the storage cleanup, drop the Video row (which cascades to its jobs and
+    # candidates), and settle each affected Search only after that commit.  Deriving
+    # inside the same transaction would let a crash leave the video alive while its
+    # search already claims to be finished with zero videos.
+    #
+    # The cleanup keys are queued *inside* that transaction on purpose.  Unlinking
+    # after the commit leaves a window where a crash strands bytes that no row can
+    # name again; queueing them first makes "the row is gone" imply "the cleanup is
+    # still queued" for the next sweep.
+    search_ids = refresh_searches_for_video(session, video_id, commit=False)
+    keys = [storage_key, *filter(None, clip_keys)]
+    record_deletions(session, keys=keys, reason="video")
+    tree_keys = [*(engine_job_key(job_id) for job_id in job_ids), feature_cache_key(video_id)]
+    record_deletions(session, keys=tree_keys, reason="video", is_tree=True)
     session.delete(video)
     session.commit()
-    storage.delete(storage_key)
-    for key in clip_keys:
-        if key:
-            storage.delete(key)
-    remove_engine_files(storage, job_ids, [video_id])
+    # Converge afterwards: a peer worker may be finishing another video of the
+    # same search right now, and only a post-commit snapshot sees its row.
+    settle_searches(session, search_ids)
+    # Fast path: usually everything is already unreferenced, so the sweep that the
+    # worker would do later is unnecessary.  A crash before this line is what the
+    # queue exists for.
+    flush_pending_deletions(session, storage, keys=[*keys, *tree_keys])
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -201,10 +262,12 @@ def delete_video(
 def stream_video(
     video_id: int,
     request: Request,
+    principal: Principal = Depends(get_optional_principal),
     session: Session = Depends(get_db),
     storage: LocalStorage = Depends(storage_dep),
 ) -> Response:
     video = get_video_or_404(session, video_id)
+    enforce_video_access(session, principal, video)
     return range_file_response(
         storage.path_for(video.storage_key),
         request,
@@ -221,11 +284,22 @@ def stream_video(
 def create_processing_job(
     video_id: int,
     payload: JobCreate,
+    principal: Principal = Depends(get_optional_principal),
     session: Session = Depends(get_db),
     settings: Settings = Depends(settings_dep),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=100),
 ) -> ProcessingJob:
     video = get_video_or_404(session, video_id)
+    enforce_video_access(session, principal, video, allowed_roles=DATASET_WRITE_ROLES)
+    if video.dataset_id is not None:
+        # Dataset work is launched through POST /datasets/{id}/searches, which
+        # carries the free-text prompt.  Actions belong to projects, so there is
+        # no action a dataset video could legally run.
+        raise ApiError(
+            409,
+            "PROJECT_MISMATCH",
+            "dataset videos are processed through a dataset search, not a project action",
+        )
     action = session.get(ActionDefinition, payload.action_id)
     if action is None:
         raise ApiError(404, "ACTION_NOT_FOUND", f"action {payload.action_id} does not exist")

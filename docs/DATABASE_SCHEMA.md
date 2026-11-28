@@ -90,6 +90,11 @@ erDiagram
 | assigned_at | timestamptz | not null |
 | — | — | **PK (user_id, dataset_id)** |
 
+> **Note (2026-11-26).** §2.4 and §2.5 are the *design* schema from Design Description v1.1/v1.2 and are already
+> behind the code in two ways: Design v1.2 §4.3 drops `use_case`, so a dataset is created with a name only; and the
+> implemented membership table is `dataset_memberships` (surrogate `id`, unique `(dataset_id, user_id)`, no
+> `assigned_by`/`assigned_at`), not `dataset_assignments`. §6 lists what actually exists.
+
 ### 2.6 `videos`
 
 | Column | Type | Constraints |
@@ -175,55 +180,87 @@ Index: `(search_id, review_status)` for the review list; `(video_id)`.
 | role | administrator, annotator, dataset_admin |
 | user status | active, deactivated |
 | video status | uploaded, ready, failed |
-| search status / export status | queued, running, done, failed |
+| search status | queued, running, done, **partial**, failed (as implemented — `partial` means some videos finished and some failed) |
+| export status | queued, running, done, failed |
 | review status | pending, accepted, rejected |
 | provider type | api, self_hosted |
 
 ## 4. Constraints and indexes
 
 - Unique: `users.email`, `invitations.token_hash`, `sessions.refresh_token_hash`, `videos.storage_key`.
-- Composite PK: `dataset_assignments(user_id, dataset_id)`.
+- Composite PK: `dataset_memberships(user_id, dataset_id)` (the design draft said `dataset_assignments`; the
+  implemented table has a surrogate `id` plus a unique `(dataset_id, user_id)` instead).
 - Checks: candidate `start_s < end_s`, `0 ≤ start_s`, `duration_s > 0`, `progress BETWEEN 0 AND 1`.
 - Indexes: `videos(dataset_id)`, `searches(dataset_id, status)`, `candidates(search_id, review_status)`,
   `candidates(video_id)`, `exports(dataset_id, created_at)`.
-- Cascades: deleting a dataset deletes videos/searches/candidates/assignments/exports; users are deactivated,
+- Cascades: deleting a dataset deletes videos/searches/candidates/memberships/exports; users are deactivated,
   never deleted (review history preserved).
+- **As implemented (see §6 for the authoritative list):** unique `videos.storage_key`, `users.email`,
+  `invitations.token_hash`, `user_sessions.token_hash`, `dataset_memberships(dataset_id, user_id)`,
+  `searches.idempotency_key`, `search_videos(search_id, video_id)`; indexes `ix_searches_dataset_status`,
+  `ix_jobs_claim(status, available_at)`, `ix_search_videos_search_id`, `ix_search_videos_video_id`,
+  `ix_candidates_search_id`, `ix_videos_dataset_id`. Deleting a *video* also deletes its `processing_jobs` rows
+  (`Video.jobs` declares `passive_deletes`), which takes their candidates with them.
 
 ## 5. Migration path from the current schema
 
 | Current table | Target |
 |---|---|
-| projects | datasets (+ created_by, use_case) |
+| projects | datasets (+ created_by; `use_case` was **dropped** in Design v1.2 §4.3 — a dataset is named only) |
 | action_definitions | searches (prompt per search) |
 | videos | videos (dataset_id, storage_key, checksum kept) |
 | processing_jobs | removed as a user-facing concept; job state moves into `searches` + internal job journal; Celery/queue replaces the DB queue if adopted |
 | candidates | candidates (+ engine_event_id, flags, reviewer fields, final/raw times) |
 | annotations | merged into candidates (`review_status`, reviewer, times) or retained as an audit table |
 | dataset_exports | exports (JSON artifact instead of ZIP manifest) |
-| — | new: users, invitations, sessions, dataset_assignments, model_configs |
+| — | new: users, invitations, sessions, dataset_memberships (not `dataset_assignments`), model_configs |
 
 Alembic migrations must be additive first (create new tables), then a data migration for existing rows, then
 drop the old tables. No destructive migration before the team agrees.
 
-## 6. Current implemented schema (verified 2026-11-19)
+## 6. Current implemented schema (verified 2026-11-26)
 
-SQLite `data/vlm_annotate.db`, migrations `0001_initial_schema.py` and `d03f1c4ffd30_auth_and_datasets.py`:
+SQLite `data/vlm_annotate.db`, migrations `0001_initial_schema.py`, `d03f1c4ffd30_auth_and_datasets.py`,
+`e5b9c3d7a2f1_search_and_search_video.py`, `c9f0d3a1b2e4_nullable_processing_job_project.py`,
+`f1a4b8c2d6e9_search_idempotency_key.py` and `b8d2e5a4c9f3_search_request_scope.py`:
 
 | Table | Purpose |
 |---|---|
 | projects | project container (≈ dataset) |
 | action_definitions | natural-language prompt per project |
-| videos | uploaded source, storage key, checksum, duration, resolution, status |
-| processing_jobs | DB queue + provenance (`queued/running/succeeded/failed/canceled`, attempts, idempotency) |
-| candidates | proposal + preview + clip status + score |
+| videos | uploaded source, storage key, checksum, duration, resolution, status; `project_id` now nullable, `dataset_id` nullable FK |
+| processing_jobs | DB queue + provenance (`queued/running/succeeded/failed/canceled`, attempts, idempotency); `project_id` now nullable for dataset searches |
+| candidates | proposal + preview + clip status + score; `search_id` nullable FK |
 | annotations | human decision (`true_positive`/`false_positive`), corrections, reviewer, note |
-| dataset_exports | async ZIP exports |
+| dataset_exports | async ZIP exports (still project-scoped) |
 | users | global role (`administrator`/`dataset_admin`/`annotator`), password hash, lockout state |
 | invitations | single-use email invitation; only the token hash is stored |
 | user_sessions | opaque bearer session; token hash, expiry and revocation |
 | datasets | dataset container for the Sprint 3 access model |
 | dataset_memberships | which user may see/annotate a dataset (roles stay global) |
+| searches | one free-text prompt run over a dataset; `status` (`queued`/`running`/`done`/`partial`/`failed`), auto `title`, optional unique `idempotency_key`, and `request_scope_json` — the canonical snapshot of the request (prompt, params, adapter, requested video ids) that an `Idempotency-Key` replay is compared against |
+| search_videos | one row per (search, video): `search_id`, `video_id`, nullable `job_id -> processing_jobs.id`, per-video `status` |
+| pending_deletions | durable storage-cleanup queue: `storage_key` (+ `is_tree`), `reason`, `attempts`, `last_error`; written in the same transaction as the row delete, drained by the worker sweep |
 
-Migration `0002` was verified on a fresh SQLite file with `alembic upgrade head` and `alembic check` (no pending
-operations); the API was exercised against that migrated schema without `create_all` (bootstrap → login → create
-dataset). 12 tables total. The schema is portable to PostgreSQL but has not been tested there (R-09).
+Migrations `0002` (`d03f1c4ffd30`) and `0003` (`e5b9c3d7a2f1`) were verified on a fresh SQLite file with
+`alembic upgrade head` and `alembic check` (no pending operations); the API was exercised against that migrated
+schema without `create_all` (bootstrap → login → create dataset). **15 tables total**, migration head is
+`c4f7a1e9b2d5` (migration `0006`/`b8d2e5a4c9f3` adds `searches.request_scope_json`, a NOT NULL `Text` column whose
+server default is `{}` so existing rows keep working; migration `0007`/`c4f7a1e9b2d5` adds `pending_deletions`, the
+durable storage-cleanup queue; run `alembic upgrade head` to apply them). The schema is
+portable to PostgreSQL but has not been tested there (R-09).
+
+`search_videos` is the join that replaced the "one job per video" view: a `Search` aggregates the status of its
+`SearchVideo` rows, while each row keeps pointing at the underlying `processing_jobs` job that the worker executes.
+Automated tests for this layer live in `backend/tests/test_searches.py` (**59 tests as of 2026-11-27**: fan-out,
+status aggregation, role + dataset scoping, dataset search listing, `Idempotency-Key` replay and request scope,
+job-lifecycle sync on cancel / reaper / retry / video delete, concurrent completion, concurrent search restart,
+the job / `SearchVideo` / `Search` consistency tests with the `reconcile_search_state` sweep — including the
+conditional repaint and the stale terminal parent — video-deletion atomicity and the job cascade,
+a preflight adapter failure that must not resurrect a canceled job, and search-level cancel / restart). The
+durable-cleanup queue (`pending_deletions`) is covered by
+`backend/tests/test_storage_gc.py` (9 tests: an interrupted delete after the commit, the worker sweep, a
+post-delete preview clip, the grace period, engine directories kept by ownership rather than age, and a rolled-back
+delete). The migration head `c4f7a1e9b2d5` is covered
+by the suite only indirectly — the fixtures build the schema with `Base.metadata.create_all` — so applying it to a
+database that predates it remains an explicit `alembic upgrade head`.

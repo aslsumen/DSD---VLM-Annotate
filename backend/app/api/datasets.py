@@ -2,20 +2,33 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..deps import Principal, get_current_principal, get_db, require_roles
+from ..config import Settings
+from ..deps import (
+    Principal,
+    get_current_principal,
+    get_db,
+    probe_dep,
+    require_roles,
+    settings_dep,
+    storage_dep,
+)
 from ..errors import ApiError
-from ..models import Dataset, DatasetMembership, User, UserRole
+from ..models import Dataset, DatasetMembership, User, UserRole, Video
 from ..schemas import (
     DatasetCreate,
     DatasetMemberAdd,
     DatasetMemberOut,
     DatasetOut,
+    VideoOut,
 )
+from ..services.media import MediaProbe
+from ..services.storage import LocalStorage
 from .auth import normalise_email
+from .videos import ingest_video
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
@@ -169,4 +182,49 @@ def add_member(
         full_name=user.full_name,
         role=user.role,
         created_at=membership.created_at,
+    )
+
+
+@router.post(
+    "/{dataset_id}/videos",
+    response_model=VideoOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_dataset_video(
+    dataset_id: int,
+    file: UploadFile = File(..., description="Single-view RGB video (mp4/mov/m4v/webm/mkv)"),
+    principal: Principal = Depends(
+        require_roles(UserRole.administrator, UserRole.dataset_admin)
+    ),
+    session: Session = Depends(get_db),
+    storage: LocalStorage = Depends(storage_dep),
+    probe: MediaProbe = Depends(probe_dep),
+    settings: Settings = Depends(settings_dep),
+) -> Video:
+    dataset = _get_dataset_or_404(session, dataset_id)
+    _require_access(session, principal, dataset)
+    return await ingest_video(
+        file,
+        subdir=f"videos/dataset-{dataset.id}",
+        project_id=None,
+        dataset_id=dataset.id,
+        session=session,
+        storage=storage,
+        probe=probe,
+        settings=settings,
+    )
+
+
+@router.get("/{dataset_id}/videos", response_model=list[VideoOut])
+def list_dataset_videos(
+    dataset_id: int,
+    principal: Principal = Depends(get_current_principal),
+    session: Session = Depends(get_db),
+) -> list[Video]:
+    dataset = _get_dataset_or_404(session, dataset_id)
+    _require_access(session, principal, dataset)
+    return list(
+        session.scalars(
+            select(Video).where(Video.dataset_id == dataset_id).order_by(Video.id.desc())
+        )
     )

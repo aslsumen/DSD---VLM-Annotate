@@ -133,6 +133,21 @@ class UserRole(enum.StrEnum):
     annotator = "annotator"
 
 
+class SearchStatus(enum.StrEnum):
+    queued = "queued"
+    running = "running"
+    done = "done"
+    partial = "partial"
+    failed = "failed"
+
+
+class SearchVideoStatus(enum.StrEnum):
+    queued = "queued"
+    running = "running"
+    done = "done"
+    failed = "failed"
+
+
 # --------------------------------------------------------------------------- #
 # Entities
 # --------------------------------------------------------------------------- #
@@ -181,8 +196,11 @@ class Video(Base):
     __tablename__ = "videos"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    project_id: Mapped[int] = mapped_column(
-        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    project_id: Mapped[int | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    dataset_id: Mapped[int | None] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"), nullable=True, index=True
     )
     original_filename: Mapped[str] = mapped_column(String(512), nullable=False)
     storage_key: Mapped[str] = mapped_column(String(512), nullable=False, unique=True)
@@ -200,7 +218,14 @@ class Video(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, nullable=False)
 
     project: Mapped[Project] = relationship(back_populates="videos")
-    jobs: Mapped[list[ProcessingJob]] = relationship(back_populates="video")
+    # ``passive_deletes`` so the database CASCADE in ``processing_jobs.video_id``
+    # does the deleting.  Without it SQLAlchemy loads the children and NULLs the
+    # foreign key instead, leaving an ownerless job that a running worker then
+    # fails to persist candidates for (``PendingRollbackError``) and that no
+    # dataset mapping can resolve.
+    jobs: Mapped[list[ProcessingJob]] = relationship(
+        back_populates="video", passive_deletes=True
+    )
 
     __table_args__ = (CheckConstraint("size_bytes >= 0", name="ck_video_size_non_negative"),)
 
@@ -217,8 +242,8 @@ class ProcessingJob(Base):
     status: Mapped[JobStatus] = mapped_column(
         _enum(JobStatus, "job_status"), nullable=False, default=JobStatus.queued
     )
-    project_id: Mapped[int] = mapped_column(
-        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    project_id: Mapped[int | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
     )
     video_id: Mapped[int | None] = mapped_column(
         ForeignKey("videos.id", ondelete="CASCADE"), nullable=True, index=True
@@ -268,6 +293,9 @@ class Candidate(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     job_id: Mapped[int] = mapped_column(
         ForeignKey("processing_jobs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    search_id: Mapped[int | None] = mapped_column(
+        ForeignKey("searches.id", ondelete="CASCADE"), nullable=True, index=True
     )
     video_id: Mapped[int] = mapped_column(
         ForeignKey("videos.id", ondelete="CASCADE"), nullable=False, index=True
@@ -367,6 +395,36 @@ class DatasetExport(Base):
     job: Mapped[ProcessingJob | None] = relationship(back_populates="export", uselist=False)
 
 
+class PendingDeletion(Base):
+    """A storage key that must be removed once its row was committed away.
+
+    Deleting a video (or a project, action, export) commits the row removal first
+    and only then unlinks the bytes.  A process that dies in that window leaves
+    files no row can find again, because the only record of them was the row just
+    deleted.  Each delete writes these intent rows in the *same* transaction as
+    the row it removes, so "the row is gone" always implies "the cleanup is still
+    queued"; a sweep drains the table.
+
+    There is deliberately no unique constraint on ``storage_key``: the same key
+    can be queued twice (a racing delete, a re-run sweep) and removing a missing
+    file is a no-op, so duplicates are harmless while a unique constraint would
+    force a savepoint to survive an ``IntegrityError``.
+    """
+
+    __tablename__ = "pending_deletions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    # Engine work dirs and feature caches are directories, not files.
+    is_tree: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    reason: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (Index("ix_pending_deletions_created_at", "created_at"),)
+
+
 # --------------------------------------------------------------------------- #
 # Identity and access (Sprint 3)
 # --------------------------------------------------------------------------- #
@@ -458,3 +516,66 @@ class DatasetMembership(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, nullable=False)
+
+
+class Search(Base):
+    """A prompt run against a dataset, split into one SearchVideo per video."""
+
+    __tablename__ = "searches"
+    __table_args__ = (
+        Index("ix_searches_dataset_status", "dataset_id", "status"),
+        UniqueConstraint("idempotency_key", name="uq_search_idempotency_key"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dataset_id: Mapped[int] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    status: Mapped[SearchStatus] = mapped_column(
+        _enum(SearchStatus, "search_status"), nullable=False, default=SearchStatus.queued
+    )
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Client-supplied Idempotency-Key, so a double click cannot launch the same
+    # search twice.  Unlike processing_jobs this is not suffixed per video: the
+    # Search row is the unit of de-duplication.
+    idempotency_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Canonical snapshot of the request that created this search, so an
+    # Idempotency-Key replay is compared against what was asked for rather than
+    # against mutable state.  Comparing against ``search_videos`` (as an earlier
+    # build did) meant deleting one selected video made the original request
+    # stop matching itself.  Plain text JSON: the column is small and
+    # write-once, and SQLite has no JSON type.
+    request_scope_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+
+
+class SearchVideo(Base):
+    """One video's slice of a :class:`Search`, tying it to a processing job."""
+
+    __tablename__ = "search_videos"
+    __table_args__ = (
+        UniqueConstraint("search_id", "video_id", name="uq_search_video"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    search_id: Mapped[int] = mapped_column(
+        ForeignKey("searches.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    video_id: Mapped[int] = mapped_column(
+        ForeignKey("videos.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("processing_jobs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    status: Mapped[SearchVideoStatus] = mapped_column(
+        _enum(SearchVideoStatus, "search_video_status"),
+        nullable=False,
+        default=SearchVideoStatus.queued,
+    )
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

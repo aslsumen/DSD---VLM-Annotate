@@ -1,6 +1,6 @@
 # Product Backlog
 
-**Type:** living artifact · **Owner:** Product Owner (role placeholder) · **Last updated:** 2026-11-16
+**Type:** living artifact · **Owner:** Product Owner (role placeholder) · **Last updated:** 2026-11-26
 **Access:** versioned in Git. Supervisor read access is **NOT yet configured** — see `R-12`.
 
 Priority: **M**ust / **S**hould / **C**ould. Estimates are **provisional story points** for relative sizing,
@@ -19,8 +19,8 @@ not person-hours. Team velocity is unknown until Sprint 2 closes, so all sizing 
 | E7 Hardening & operations | Security, retention, observability, packaging | Partial |
 | E8 Course delivery | Backlogs, burndown, decks, reports, acceptance | In progress |
 | E9 Optional | Multi-model, comparison UI, active learning, tracking | Deferred |
-| E10 Accounts and access | Users, **global roles**, invitations, sessions, sign-out, lockout | Not started — MVP Must |
-| E11 Dataset and search domain | Dataset entity, assignments, search = one prompt over all videos | Not started — MVP Must |
+| E10 Accounts and access | Users, **global roles**, invitations, sessions, sign-out, lockout | In progress — MVP Must (users, global roles, invitations, sessions, sign-out and lockout implemented in the API; UI and password reset/deactivation pending) |
+| E11 Dataset and search domain | Dataset entity, assignments, search = one prompt over all videos | In progress — MVP Must (datasets, memberships, searches, per-video fan-out and status aggregation implemented; UI pending) |
 | E12 JSON export (OpenLABEL) | Multi-interval JSON, reviewer provenance, optional negatives | Not started — MVP Must |
 | E13 Detection engine | Windowed grounding, fusion, flags, clips, VideoJev-4B backend, optional Gemini verify | In progress — MVP Must (engine + `videojev` adapter integrated; real-model smoke and product-footage validation pending) |
 
@@ -70,16 +70,16 @@ not person-hours. Team velocity is unknown until Sprint 2 closes, so all sizing 
 | PB-40 | E9 | Tracking / identity, multi-camera, audio | C | 34 | Deferred | — | Out of scope |
 | PB-41 | E7 | Media authentication for token deployments (signed URLs/cookies) | S | 5 | Not started | 4 | `R-18` — blocks protected deployment |
 | PB-42 | E7 | Commit the browser E2E as a repeatable Playwright test | S | 5 | Not started | 4 | Evidence currently not reproducible in CI |
-| PB-43 | E10 | User accounts + email/password authentication (hashed) | M | 8 | Not started | 3 | USR-1, NFR-11; CE-2: email-only |
-| PB-44 | E10 | Global roles and RBAC middleware (admin / dataset_admin / annotator) | M | 8 | Not started | 3 | USR-2, permissions table |
-| PB-45 | E10 | Invitations by email: single-use token, 48 h, acceptance page; Admin **and Dataset Admin** | M | 8 | Not started | 3 | USR-4/USR-5, NFR-11, CE-2 |
-| PB-46 | E10 | Sessions: sign-out, 2 h inactivity expiry, 5-failure/15-min lockout | M | 5 | Not started | 3 | NFR-12…NFR-14 |
+| PB-43 | E10 | User accounts + email/password authentication (hashed) | M | 8 | Done (API) 2026-11-19 | 3 | USR-1, NFR-11; CE-2: email-only |
+| PB-44 | E10 | Global roles and RBAC middleware (admin / dataset_admin / annotator) | M | 8 | Done (API) 2026-11-19/25 | 3 | USR-2, permissions table |
+| PB-45 | E10 | Invitations by email: single-use token, 48 h, acceptance page; Admin **and Dataset Admin** | M | 8 | Done (API) 2026-11-19 | 3 | USR-4/USR-5, NFR-11, CE-2; **no mail transport** — the token is returned to the caller |
+| PB-46 | E10 | Sessions: sign-out, 2 h inactivity expiry, 5-failure/15-min lockout | M | 5 | Done (API) 2026-11-19 | 3 | NFR-12…NFR-14; expiry is absolute `VLM_AUTH_SESSION_HOURS` (12 h default), not 2 h inactivity |
 | PB-47 | E10 | Password reset by email | S | 3 | Not started | 4 | USR-6 |
 | PB-48 | E10 | User deactivation | S | 2 | Not started | 4 | USR-7 |
-| PB-49 | E11 | Dataset entity replacing Project (name, use_case, created_by) | M | 5 | Not started | 3 | DS-1/DS-2 |
-| PB-50 | E11 | Dataset assignments (user ↔ dataset) and scoped access checks | M | 5 | Not started | 3 | USR-3/USR-4 |
-| PB-51 | E11 | Search entity: one prompt over all videos, per-video fan-out, status aggregation | M | 8 | Not started | 3 | PR-1, DET-3 |
-| PB-52 | E11 | Search history and prompt reuse | C | 3 | Not started | 5 | PR-2 |
+| PB-49 | E11 | Dataset entity replacing Project (name, use_case, created_by) | M | 5 | Done (API) 2026-11-19 | 3 | DS-1/DS-2; Design v1.2 drops `use_case`, so a dataset is named only |
+| PB-50 | E11 | Dataset assignments (user ↔ dataset) and scoped access checks | M | 5 | Done (API) 2026-11-19/25 | 3 | USR-3/USR-4; assignment is `POST /datasets/{id}/members` (a `DELETE` to revoke a membership does not exist yet) |
+| PB-51 | E11 | Search entity: one prompt over all videos, per-video fan-out, status aggregation | M | 8 | Done (API) 2026-11-20/26 | 3 | PR-1, DET-3; includes listing, cancel and restart, and idempotent creation (`request_scope_json`) |
+| PB-52 | E11 | Search history and prompt reuse | C | 3 | Partial (API) 2026-11-24 | 5 | PR-2; a search stores its prompt and the list endpoint returns history, but rerunning a search for newly uploaded videos is not implemented |
 | PB-53 | E12 | OpenLABEL-based JSON export with multiple intervals per action | M | 8 | Not started | 4 | EXP-1; schema proposal due 2026-11-17 |
 | PB-54 | E12 | Optional rejected-as-negatives export | C | 2 | Not started | 5 | EXP-2 |
 | PB-55 | E12 | Reviewer attribution in export (pending customer answer) | M | 2 | Not started | 4 | EXP-1, REV-3, Q2 |
@@ -121,6 +121,12 @@ not person-hours. Team velocity is unknown until Sprint 2 closes, so all sizing 
 - **Scope pivot:** the customer's latest answers (CE-2) plus Requirements v1.1 make accounts, global roles,
   datasets, searches and OpenLABEL JSON **MVP Must**. The existing project/action slice is a technical
   prototype; PB-43…PB-66 are the real path to the MVP.
+- **Progress (2026-11-26):** PB-43, PB-44, PB-45, PB-49, PB-50 and PB-51 are done in the API (migrations
+  `d03f1c4ffd30` … `b8d2e5a4c9f3`), with RBAC enforced on the auth/dataset/search routes and on the shared legacy
+  video/job/candidate routes, and the suite green at 162 tests. Still open from that block: PB-46's 2 h inactivity
+  window (expiry is absolute `VLM_AUTH_SESSION_HOURS`, 12 h default), PB-52 (rerunning a search for newly uploaded
+  videos), PB-53 (OpenLABEL JSON export), plus membership revocation, dataset-scoped exports (`dataset_exports` is
+  still project-scoped) and the frontend cutover.
 - **Order of work:** authentication and dataset domain first (PB-43…PB-51), then JSON export and the Gemini
   detector (PB-53, PB-57), then the self-hosted engine and KPIs (PB-58…PB-65).
 - **Blocking external inputs:** privacy approval for Gemini (R-20), OpenLABEL example (R-25), 12 GB laptop

@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-import contextlib
 import csv
 import io
 import json
 import logging
-import shutil
 import tempfile
 import zipfile
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import and_, delete, func, inspect, or_, select, update
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ..adapters import (
@@ -38,12 +38,17 @@ from ..models import (
     JobStatus,
     ProcessingJob,
     Project,
+    Search,
+    SearchStatus,
+    SearchVideo,
+    SearchVideoStatus,
     Video,
     VideoStatus,
 )
 from ..validation import clamp_to_duration, preview_window
 from .media import ClipExtractor, MediaError, MediaProbe
 from .storage import LocalStorage, StorageError
+from .storage_gc import flush_pending_deletions, record_deletions
 
 logger = logging.getLogger(__name__)
 
@@ -63,16 +68,6 @@ def feature_cache_key(video_id: int) -> str:
     return f"engine/features/video-{video_id}"
 
 
-def remove_engine_files(
-    storage: LocalStorage, job_ids: Iterable[int] = (), video_ids: Iterable[int] = ()
-) -> None:
-    """Remove engine work dirs (per job) and visual-feature dirs (per video); missing is fine."""
-    keys = [*map(engine_job_key, job_ids), *map(feature_cache_key, video_ids)]
-    for key in keys:
-        with contextlib.suppress(StorageError, OSError):
-            shutil.rmtree(storage.path_for(key), ignore_errors=True)
-
-
 def _now() -> datetime:
     return datetime.now(UTC)
 
@@ -81,13 +76,13 @@ def enqueue_candidate_job(
     session: Session,
     *,
     video: Video,
-    action: ActionDefinition,
+    action: ActionDefinition | None,
     adapter_name: str,
     params: dict[str, Any],
     idempotency_key: str | None,
     max_attempts: int,
 ) -> ProcessingJob:
-    if video.project_id != action.project_id:
+    if action is not None and video.project_id != action.project_id:
         raise ApiError(409, "PROJECT_MISMATCH", "video and action belong to different projects")
     if video.status != VideoStatus.ready or not video.duration_seconds:
         raise ApiError(
@@ -106,7 +101,7 @@ def enqueue_candidate_job(
         status=JobStatus.queued,
         project_id=video.project_id,
         video_id=video.id,
-        action_id=action.id,
+        action_id=action.id if action is not None else None,
         adapter_name=adapter_name,
         params_json=json.dumps(params, sort_keys=True),
         max_attempts=max_attempts,
@@ -207,10 +202,12 @@ def claim_next_job(session: Session, now: datetime | None = None) -> ProcessingJ
             attempts=ProcessingJob.attempts + 1,
         )
     )
+    job = session.get(ProcessingJob, job_id) if result.rowcount == 1 else None
+    if job is not None:
+        # ORM refresh/rollback must never turn this worker into a later claimant.
+        inspect(job).info["worker_claim"] = (job.id, job.attempts, moment)
     session.commit()
-    if result.rowcount != 1:
-        return None
-    return session.get(ProcessingJob, job_id)
+    return job
 
 
 # --------------------------------------------------------------------------- #
@@ -229,11 +226,15 @@ def _owned(job_id: int, attempts: int) -> tuple[Any, ...]:
     )
 
 
-def heartbeat(session: Session, job_id: int, attempts: int) -> bool:
+def heartbeat(
+    session: Session, job_id: int, attempts: int, *, started_at: datetime | None = None
+) -> bool:
     """Touch updated_at if this worker still owns the job.  False means it no longer does."""
+    guard = update(ProcessingJob).where(*_owned(job_id, attempts))
+    if started_at is not None:
+        guard = guard.where(ProcessingJob.started_at == started_at)
     result = session.execute(
-        update(ProcessingJob)
-        .where(*_owned(job_id, attempts))
+        guard
         .values(updated_at=_now())
         .execution_options(synchronize_session=False)
     )
@@ -247,13 +248,13 @@ def _fence(session: Session, job: ProcessingJob) -> None:
     Deliberately does not commit: the caller's ORM writes and commit share this transaction,
     so the ownership check and the writes are atomic (SQLite write lock, Postgres row lock).
     """
-    # Read the identity before anything else: once the row is gone (job canceled,
-    # reclaimed, or deleted with its action/video) the rollback expires the ORM
-    # object and reading job.id afterwards would raise ObjectDeletedError.
-    job_id, attempts = job.id, job.attempts
+    claim = inspect(job).info.get("worker_claim")
+    if claim is None:
+        claim = (job.id, job.attempts, job.started_at)
+    job_id, attempts, started_at = claim
     result = session.execute(
         update(ProcessingJob)
-        .where(*_owned(job_id, attempts))
+        .where(*_owned(job_id, attempts), ProcessingJob.started_at == started_at)
         .values(updated_at=_now())
         .execution_options(synchronize_session=False)
     )
@@ -306,9 +307,29 @@ def reap_stale_jobs(
         if result.rowcount == 1:
             if exhausted and job.kind == JobKind.dataset_export:
                 _fail_export(session, job.export_id, message)
+            # The bulk UPDATE ran with synchronize_session=False, so the ORM
+            # instance is stale. Paint the new state in memory, then mirror it on
+            # the SearchVideo row (a requeued job goes back to queued, not failed).
+            job.status = JobStatus.failed if exhausted else JobStatus.queued
+            job.error_message = message
+            sv = _search_video_for_job(session, job)
+            search_id = None
+            if sv is not None:
+                sv.status = (
+                    SearchVideoStatus.failed if exhausted else SearchVideoStatus.queued
+                )
+                sv.error_message = message if exhausted else None
+                search_id = sv.search_id
             reaped += 1
             logger.warning("job %s: %s", job.id, message)
+        else:
+            search_id = None
         session.commit()
+        if search_id is not None:
+            # Commit first, then derive: a worker may be finishing another video
+            # of the same search right now, and an in-transaction derivation would
+            # not see that row.
+            _settle_search_status(session, search_id)
     return reaped
 
 
@@ -330,6 +351,31 @@ def execute_job(
     job = session.get(ProcessingJob, job_id)
     if job is None:
         raise ApiError(404, "JOB_NOT_FOUND", "job disappeared before execution")
+    # Fence *before* the first child write.  A job canceled or reclaimed between
+    # the claim and this point already had its SearchVideo settled by the
+    # canceller or the reaper; painting "running" here without checking ownership
+    # would resurrect that row and hang its search in ``running`` for good.
+    try:
+        _fence(session, job)
+        search_video = _search_video_for_job(session, job)
+        search_id = None
+        if search_video is not None:
+            search_video.status = SearchVideoStatus.running
+            search_video.error_message = None
+            search_id = search_video.search_id
+        session.commit()
+        if search_id is not None:
+            # Derive after the commit so a peer finishing another video of the
+            # same search is visible here.
+            _settle_search_status(session, search_id)
+    except JobInterrupted:
+        session.rollback()
+        logger.info(
+            "job %s no longer owned by this worker (canceled or reclaimed); not started",
+            job_id,
+        )
+        return job
+    attempts, started_at = job.attempts, job.started_at
     try:
         try:
             if job.kind == JobKind.candidate_proposal:
@@ -348,7 +394,18 @@ def execute_job(
                 _run_export_job(session, job, storage=storage, settings=settings)
             else:  # pragma: no cover - enum guard
                 raise ApiError(500, "UNKNOWN_JOB_KIND", f"unknown job kind {job.kind}")
-            _finish(session, job, JobStatus.succeeded)
+            # Job and child row land in the SAME transaction: a crash between the
+            # two would otherwise leave a succeeded job whose SearchVideo is still
+            # "running", i.e. a search that never finishes.
+            _finish(session, job, JobStatus.succeeded, commit=False)
+            search_video = _search_video_for_job(session, job)
+            if search_video is not None:
+                search_video.status = SearchVideoStatus.done
+                search_video.error_message = None
+            session.commit()
+            if search_video is not None:
+                # Derive the aggregate only now that this row is visible to peers.
+                _settle_search_status(session, search_video.search_id)
         except JobInterrupted:
             raise  # must not reach the generic handler below
         except (AdapterError, MediaError, StorageError) as exc:
@@ -359,12 +416,51 @@ def execute_job(
                 exc,
                 settings=settings,
                 retryable=getattr(exc, "retryable", True),
+                commit=False,
             )
+            _commit_with_search_video(session, job)
         except ApiError as exc:
-            _record_failure(session, job, exc.code, exc, settings=settings, retryable=False)
+            _record_failure(
+                session, job, exc.code, exc, settings=settings, retryable=False, commit=False
+            )
+            _commit_with_search_video(session, job)
+        except SQLAlchemyError as exc:
+            # A statement failure (foreign key, constraint, disk) leaves the
+            # session unusable: every later statement raises PendingRollbackError,
+            # so the job kept its "running" status and the search never settled.
+            # Roll back first, then re-read the row to see whether we still own it.
+            logger.warning(
+                "job %s hit a database error; rolling back and failing it",
+                job_id,
+                exc_info=exc,
+            )
+            session.rollback()
+            current = session.get(ProcessingJob, job_id)
+            if (
+                current is None
+                or current.status != JobStatus.running
+                or current.attempts != attempts
+                or current.started_at != started_at
+            ):
+                # Deleted (its video went away) or taken over by another worker.
+                return current if current is not None else job
+            _record_failure(
+                session,
+                current,
+                "JOB_FAILED",
+                exc,
+                settings=settings,
+                retryable=True,
+                commit=False,
+            )
+            _commit_with_search_video(session, current)
+            return current
         except Exception as exc:
             logger.exception("unexpected job failure", extra={"job_id": job_id})
-            _record_failure(session, job, "JOB_FAILED", exc, settings=settings, retryable=True)
+            _record_failure(
+                session, job, "JOB_FAILED", exc, settings=settings, retryable=True, commit=False
+            )
+            _commit_with_search_video(session, job)
     except JobInterrupted:
         # Also reached from inside _record_failure.  Leave the row to its new owner/canceler.
         session.rollback()
@@ -394,8 +490,28 @@ def _run_candidate_job(
 ) -> None:
     video = session.get(Video, job.video_id) if job.video_id else None
     action = session.get(ActionDefinition, job.action_id) if job.action_id else None
-    if video is None or action is None:
-        raise ApiError(409, "JOB_PRECONDITION_FAILED", "video or action no longer exists")
+    if video is None:
+        raise ApiError(409, "JOB_PRECONDITION_FAILED", "video no longer exists")
+    # Search-driven jobs (action is None) carry their prompt on the parent Search
+    # linked through SearchVideo.job_id.
+    search_video: SearchVideo | None = None
+    search: Search | None = None
+    if action is None:
+        search_video = session.scalar(
+            select(SearchVideo).where(SearchVideo.job_id == job.id)
+        )
+        search = (
+            session.get(Search, search_video.search_id)
+            if search_video is not None
+            else None
+        )
+        if search is None:
+            raise ApiError(
+                409, "JOB_PRECONDITION_FAILED", "search no longer exists for this job"
+            )
+        action_text = search.prompt
+    else:
+        action_text = action.description
     if not video.duration_seconds:
         metadata = probe.probe(storage.path_for(video.storage_key))
         video.duration_seconds = metadata.duration_seconds
@@ -412,7 +528,7 @@ def _run_candidate_job(
     request = ProposalRequest(
         video_path=storage.path_for(video.storage_key),
         duration_seconds=duration,
-        action_text=action.description,
+        action_text=action_text,
         max_candidates=settings.max_candidates_per_job,
         min_duration_seconds=settings.candidate_min_duration_seconds,
         max_duration_seconds=settings.candidate_max_duration_seconds,
@@ -424,10 +540,18 @@ def _run_candidate_job(
     )
     try:
         proposals = adapter.propose(request)
-    finally:
-        # A running adapter can write files after the API has removed the video and its directories.
-        if not request.video_path.is_file():
-            remove_engine_files(storage, [job_id], [video_id])
+    except Exception:
+        if request.video_path.is_file():
+            raise
+        proposals = []
+    if not request.video_path.is_file():
+        # A late adapter can recreate these paths after the video delete committed.
+        session.rollback()
+        keys = [engine_job_key(job_id), feature_cache_key(video_id)]
+        record_deletions(session, keys=keys, reason="video", is_tree=True)
+        session.commit()
+        flush_pending_deletions(session, storage, keys=keys)
+        raise JobInterrupted("source video deleted during inference")
     # Exhaustive adapters report every occurrence they find; none means "does not occur".
     exhaustive = getattr(adapter, "exhaustive", False)
     if not proposals and not exhaustive:
@@ -468,8 +592,9 @@ def _run_candidate_job(
             preview_start, preview_end = start, end
         candidate = Candidate(
             job_id=job.id,
+            search_id=search.id if search is not None else None,
             video_id=video.id,
-            action_id=action.id,
+            action_id=action.id if action is not None else None,
             start_seconds=start,
             end_seconds=end,
             preview_start_seconds=preview_start,
@@ -486,8 +611,13 @@ def _run_candidate_job(
 
     failures = 0
     for index, candidate in enumerate(created, start=1):
-        clip_key = f"clips/{candidate.id}-{round(candidate.preview_start_seconds, 3)}-{round(candidate.preview_end_seconds, 3)}.mp4"
-        clip_key = clip_key.replace(":", "")
+        # Fence *before* writing the clip.  The old order extracted first and
+        # fenced only at the bottom of the loop, so a job whose video was deleted
+        # while the extractor was paused still wrote its file — a file no row
+        # referenced, because the delete had already collected the candidates.
+        _set_progress(session, job, 0.55 + 0.4 * (index - 1) / len(created))
+        candidate_id, created_at = candidate.id, candidate.created_at
+        clip_key = f"clips/{candidate_id}-{uuid4().hex}.mp4"
         try:
             destination = storage.path_for(clip_key)
             extractor.extract(
@@ -496,6 +626,23 @@ def _run_candidate_job(
                 candidate.preview_start_seconds,
                 candidate.preview_end_seconds,
             )
+            try:
+                _fence(session, job)
+            except JobInterrupted:
+                storage.delete(clip_key)
+                raise
+            still_ours = session.scalar(
+                select(func.count(Candidate.id)).where(
+                    Candidate.id == candidate_id, Candidate.created_at == created_at
+                )
+            )
+            if not still_ours:
+                # The video went away while the extractor ran: drop the bytes it
+                # just wrote instead of leaving an unreferenced clip behind.
+                storage.delete(clip_key)
+                raise JobInterrupted(
+                    "the video was deleted while its preview clip was extracted"
+                )
             candidate.clip_storage_key = clip_key
             candidate.clip_status = ClipStatus.ready
         except (MediaError, StorageError) as exc:
@@ -707,7 +854,9 @@ def _export_readme(project: Project, items: list[dict[str, Any]]) -> str:
     )
 
 
-def _finish(session: Session, job: ProcessingJob, status: JobStatus) -> None:
+def _finish(
+    session: Session, job: ProcessingJob, status: JobStatus, *, commit: bool = True
+) -> None:
     _fence(session, job)
     job.status = status
     job.progress = 1.0
@@ -715,7 +864,383 @@ def _finish(session: Session, job: ProcessingJob, status: JobStatus) -> None:
     job.updated_at = _now()
     if status == JobStatus.succeeded and job.kind == JobKind.candidate_proposal:
         job.error_code = job.error_code or None
+    if commit:
+        session.commit()
+
+
+# --------------------------------------------------------------------------- #
+# SearchVideo status synchronization and Search aggregation
+# --------------------------------------------------------------------------- #
+
+
+def _search_video_for_job(session: Session, job: ProcessingJob) -> SearchVideo | None:
+    return session.scalar(select(SearchVideo).where(SearchVideo.job_id == job.id))
+
+
+def _recompute_search_status(session: Session, search_id: int) -> Search | None:
+    """Derive a Search's aggregated status from its SearchVideo rows.
+
+    Rules (per the S3-06 plan):
+    * queued  — every SearchVideo is queued
+    * running — any SearchVideo is running, OR a mix of queued and done/failed
+    * done    — every SearchVideo is done, or no rows remain -> finished_at set
+    * failed  — every SearchVideo is failed        -> finished_at set
+    * partial — none queued/running, >=1 done, >=1 failed -> finished_at set
+
+    A Search with no SearchVideo rows has nothing left to wait for, so it is
+    settled as ``done`` (this is the "every video of the search was deleted"
+    case, which must not leave the search stuck in queued/running).
+
+    This derives from whatever the session currently sees.  Callers that share
+    a run with other workers must go through :func:`_settle_search_status`,
+    which re-derives after committing so a concurrent completion cannot be
+    missed.
+    """
+    search = session.get(Search, search_id)
+    if search is None:
+        return None
+    rows = list(
+        session.scalars(select(SearchVideo).where(SearchVideo.search_id == search_id))
+    )
+    if not rows:
+        search.status = SearchStatus.done
+        search.finished_at = search.finished_at or _now()
+        search.error_message = None
+        return search
+    statuses = {row.status for row in rows}
+
+    all_queued = all(row.status == SearchVideoStatus.queued for row in rows)
+    any_running = SearchVideoStatus.running in statuses
+    all_done = all(row.status == SearchVideoStatus.done for row in rows)
+    all_failed = all(row.status == SearchVideoStatus.failed for row in rows)
+    none_pending = (
+        SearchVideoStatus.queued not in statuses
+        and SearchVideoStatus.running not in statuses
+    )
+    has_done = SearchVideoStatus.done in statuses
+    has_failed = SearchVideoStatus.failed in statuses
+
+    if all_done:
+        search.status, finished = SearchStatus.done, True
+    elif all_failed:
+        search.status, finished = SearchStatus.failed, True
+    elif none_pending and has_done and has_failed:
+        search.status, finished = SearchStatus.partial, True
+    elif any_running:
+        search.status, finished = SearchStatus.running, False
+    elif all_queued:
+        search.status, finished = SearchStatus.queued, False
+    else:
+        # mix of queued and done/failed with no running row
+        search.status, finished = SearchStatus.running, False
+    # Only stamp finished_at on the way into a terminal state; re-deriving an
+    # already-finished search must not keep bumping the timestamp.
+    if finished:
+        search.finished_at = search.finished_at or _now()
+    else:
+        search.finished_at = None
+    if search.status == SearchStatus.failed:
+        search.error_message = next(
+            (
+                row.error_message
+                for row in rows
+                if row.status == SearchVideoStatus.failed and row.error_message
+            ),
+            None,
+        )
+    else:
+        search.error_message = None
+    return search
+
+
+def _settle_search_status(
+    session: Session, search_id: int, *, max_rounds: int = 3, commit: bool = True
+) -> Search | None:
+    """Persist the pending row change, then derive the Search status atomically.
+
+    Two workers can finish the last two videos of the same search at the same
+    time.  Each derives the aggregate from what *its own* transaction can see,
+    so a worker that read the rows before its peer committed would compute
+    ``running`` and could then overwrite the peer's ``done`` — leaving the
+    search stuck in ``running`` forever, because nobody derives it again.
+
+    The cure is to commit the SearchVideo row first and only then derive, and to
+    keep re-deriving (dropping the stale snapshot with ``expire_all``) until the
+    derived status stops changing.  Whoever commits last therefore always reads
+    the rows the other worker already committed and settles on the terminal
+    state.  See ``test_searches.py::test_concurrent_completion_settles_the_search``.
+
+    ``commit=False`` is for callers that must keep the row change and the
+    aggregate inside their *own* transaction (``DELETE /videos/{id}``): the
+    search is then derived in place, without committing or expiring, so a
+    failure rolls the delete and the derived status back together.
+    """
+    if not commit:
+        return _recompute_search_status(session, search_id)
     session.commit()
+    previous: SearchStatus | None = None
+    search: Search | None = None
+    for _ in range(max_rounds):
+        session.expire_all()
+        search = _recompute_search_status(session, search_id)
+        if search is None:
+            return None
+        derived = search.status
+        session.commit()
+        if derived == previous:
+            break
+        previous = derived
+    return search
+
+
+def refresh_searches_for_video(
+    session: Session, video_id: int, *, commit: bool = True
+) -> list[int]:
+    """Detach a video from its searches and re-derive each affected Search.
+
+    Call this *before* deleting the Video row: it owns the SearchVideo rows that
+    reference the video (the DB cascade would otherwise remove them silently and
+    leave the parent Search stuck).  Returns the affected search ids.
+
+    ``commit=False`` keeps the row removals and the derived statuses in the
+    caller's transaction, so ``DELETE /videos/{id}`` can drop the video, its
+    searches' rows and the settle in one commit — a crash in between must not
+    leave the video alive while its search already claims to be finished.
+    """
+    rows = list(
+        session.scalars(select(SearchVideo).where(SearchVideo.video_id == video_id))
+    )
+    search_ids = sorted({row.search_id for row in rows})
+    for row in rows:
+        session.delete(row)
+    session.flush()
+    for search_id in search_ids:
+        # Commit the row removals, then derive — a worker may be finishing
+        # another video of the same search right now.  With commit=False the
+        # caller owns both steps and the aggregate is derived in place.
+        _settle_search_status(session, search_id, commit=commit)
+    return search_ids
+
+
+def settle_searches(session: Session, search_ids: Iterable[int]) -> None:
+    """Derive each Search from a snapshot that includes a peer's committed rows.
+
+    Split out for callers that had to keep their own write atomic first — notably
+    ``DELETE /videos/{id}``, which drops the video and its SearchVideo rows in one
+    transaction and can only converge the aggregate afterwards.
+    """
+    for search_id in sorted(set(search_ids)):
+        _settle_search_status(session, search_id)
+
+
+def _repair_drifted_search_video(
+    session: Session,
+    *,
+    row_id: int,
+    row_status: SearchVideoStatus,
+    job_id: int,
+    job_status: JobStatus,
+    wanted: SearchVideoStatus,
+    message: str | None,
+) -> bool:
+    """Repaint one SearchVideo from its job, but only if both still look as read.
+
+    The sweep reads a page of rows and writes them later, in one transaction, so a
+    worker can finish one of those videos in between.  Applying the observation
+    taken before the pause would put a ``done`` row — and, through the aggregate,
+    a ``done`` Search — back to ``running``.  Re-asserting both observations
+    inside the UPDATE closes that window: either the row is still the one we read
+    and its job still holds the status that justified the repair, or the write
+    does nothing and the next tick observes the newer state.
+
+    Returns ``True`` when the repair was applied.
+    """
+    current_job_status = (
+        select(ProcessingJob.status)
+        .where(ProcessingJob.id == job_id)
+        .scalar_subquery()
+    )
+    applied = session.execute(
+        update(SearchVideo)
+        .where(
+            SearchVideo.id == row_id,
+            SearchVideo.status == row_status,
+            SearchVideo.job_id == job_id,
+            current_job_status == job_status,
+        )
+        .values(status=wanted, error_message=message)
+        .execution_options(synchronize_session=False)
+    )
+    return applied.rowcount == 1
+
+
+def reconcile_search_state(session: Session) -> int:
+    """Repair SearchVideo / Search rows that a crash left out of step with their job.
+
+    Every write path now commits the job and its SearchVideo mirror together, so a
+    mismatch should not arise going forward; this sweep exists for the rows written
+    by older code and for anything a hard kill can still tear apart.  It is
+    idempotent and cheap when there is nothing to repair, so the worker calls it on
+    every tick alongside :func:`reap_stale_jobs`.
+
+    Four classes of drift are repaired:
+
+    * a SearchVideo whose job already finished (``succeeded``/``failed``/
+      ``canceled``) or was requeued, but whose row still says something else — the
+      row is repainted from the job, which is the source of truth;
+    * a job that is still ``queued``/``running`` while its row claims a terminal
+      state — the row is put back to ``queued``/``running``;
+    * a Search left in ``queued``/``running`` although all of its videos already
+      settled — the aggregate is re-derived;
+    * a terminal Search (``done``/``failed``/``partial``) that still has a ``queued``/
+      ``running`` video — the aggregate is re-derived, because a terminal parent
+      contradicts a child that is in flight.
+
+    The repaint is a conditional UPDATE that re-asserts the job status and the row
+    status observed before the sweep wrote, so a video that finished or was
+    requeued while the sweep was paused is left for the next tick instead of being
+    dragged back to the state this sweep read.  One residual window is accepted: an
+    ABA on the job (``queued -> running -> queued`` by the reaper between read and
+    write) can let the old observation through.  That is self-healing — the next
+    tick sees the disagreement and repaints — and it can never lose a newer
+    *finished* result, which is the failure this guard exists to prevent.
+
+    Returns the number of rows changed — the SearchVideo rows repainted plus the
+    Search rows whose aggregate actually moved — so 0 means the sweep found
+    nothing to do.  A sweep that only settles a stale aggregate must not report
+    0, or a caller would take a torn database for a clean one.
+    """
+    repaired = 0
+    settled_searches: set[int] = set()
+
+    expected = {
+        JobStatus.succeeded: SearchVideoStatus.done,
+        JobStatus.failed: SearchVideoStatus.failed,
+        JobStatus.canceled: SearchVideoStatus.failed,
+        JobStatus.running: SearchVideoStatus.running,
+        JobStatus.queued: SearchVideoStatus.queued,
+    }
+    # Select only rows that already disagree, so an idle tick stays cheap.
+    drift = or_(
+        *[
+            and_(ProcessingJob.status == job_status, SearchVideo.status != row_status)
+            for job_status, row_status in expected.items()
+        ]
+    )
+    rows = session.execute(
+        select(SearchVideo, ProcessingJob)
+        .join(ProcessingJob, SearchVideo.job_id == ProcessingJob.id)
+        .where(SearchVideo.job_id.is_not(None), drift)
+        .limit(200)
+    ).all()
+    for search_video, job in rows:
+        wanted = expected[job.status]
+        message = None
+        if wanted == SearchVideoStatus.failed:
+            message = job.error_message if job.status == JobStatus.failed else "Job canceled"
+        # Capture scalars before writing: the ORM instances stay usable after the
+        # bulk UPDATE (``expire_on_commit=False``) and must not be written again
+        # from this stale read.
+        row_id = search_video.id
+        row_status = search_video.status
+        job_id = job.id
+        job_status = job.status
+        search_id = search_video.search_id
+        applied = _repair_drifted_search_video(
+            session,
+            row_id=row_id,
+            row_status=row_status,
+            job_id=job_id,
+            job_status=job_status,
+            wanted=wanted,
+            message=message,
+        )
+        if not applied:
+            # The job or the row moved on while this sweep was paused: the newer
+            # state wins, so leave it alone and let the next tick re-observe.
+            continue
+        logger.warning(
+            "reconciled search video %s: job %s is %s, row was %s",
+            row_id,
+            job_id,
+            job_status.value,
+            row_status.value,
+        )
+        settled_searches.add(search_id)
+        repaired += 1
+
+    # A Search is only "in progress" while one of its videos is.  Derive only the
+    # searches whose rows have all settled but whose own status has not: deriving
+    # genuinely running searches on every tick would churn the row for nothing.
+    terminal_rows = session.execute(
+        select(SearchVideo.search_id)
+        .where(SearchVideo.status.in_((SearchVideoStatus.queued, SearchVideoStatus.running)))
+        .distinct()
+    ).all()
+    still_busy = {row[0] for row in terminal_rows}
+    unfinished = session.scalars(
+        select(Search.id).where(
+            Search.status.in_(
+                (SearchStatus.queued, SearchStatus.running, SearchStatus.partial)
+            )
+        )
+    ).all()
+    for search_id in unfinished:
+        if search_id not in still_busy:
+            settled_searches.add(search_id)
+
+    # The reverse contradiction: a terminal Search with a queued/running video.
+    # ``retry_search`` commits the replacement job and the row before it settles the
+    # aggregate, so a kill in between leaves ``failed`` on a search whose only video
+    # is queued again -- and the loop above never looks at a terminal parent, so
+    # without this the sweep would report 0 and the parent would stay failed.
+    if still_busy:
+        stale_terminal = session.scalars(
+            select(Search.id).where(
+                Search.status.in_((SearchStatus.done, SearchStatus.failed, SearchStatus.partial)),
+                Search.id.in_(list(still_busy)),
+            )
+        ).all()
+        settled_searches.update(stale_terminal)
+
+    if not settled_searches:
+        return repaired
+    # Remember what each aggregate said before deriving: only a real change counts
+    # as a repair, so a sweep that finds nothing still returns 0.
+    before = {
+        search.id: search.status
+        for search in session.scalars(
+            select(Search).where(Search.id.in_(list(settled_searches)))
+        )
+    }
+    session.commit()
+    for search_id in sorted(settled_searches):
+        settled = _settle_search_status(session, search_id)
+        if settled is not None and before.get(search_id) != settled.status:
+            repaired += 1
+    return repaired
+
+
+def _commit_with_search_video(session: Session, job: ProcessingJob) -> None:
+    """Commit the job's new state together with its SearchVideo mirror, then settle.
+
+    The failure paths must not commit the job alone: a crash in between would
+    leave a failed job whose SearchVideo still says "running", and nothing would
+    ever recompute that search again.  Writing both rows in one transaction and
+    only then deriving the aggregate keeps the three levels consistent.
+    """
+    job_id = job.id
+    failed = job.status == JobStatus.failed
+    sv = _search_video_for_job(session, job)
+    search_id = None
+    if sv is not None:
+        sv.status = SearchVideoStatus.failed if failed else SearchVideoStatus.queued
+        sv.error_message = job.error_message if failed else None
+        search_id = sv.search_id
+    session.commit()
+    if search_id is not None:
+        _settle_search_status(session, search_id)
+    logger.debug("job %s mirrored onto search video %s", job_id, search_id)
 
 
 def _record_failure(
@@ -726,6 +1251,7 @@ def _record_failure(
     *,
     settings: Settings,
     retryable: bool,
+    commit: bool = True,
 ) -> None:
     _fence(session, job)
     job.error_code = code
@@ -742,11 +1268,27 @@ def _record_failure(
         job.finished_at = _now()
         if job.kind == JobKind.dataset_export:
             _fail_export(session, job.export_id, str(exc))
-    session.commit()
+    if commit:
+        session.commit()
 
 
 def fail_job_now(session: Session, job: ProcessingJob, code: str, message: str) -> ProcessingJob:
-    """Non-retryable failure decided before execution starts (e.g. adapter missing)."""
+    """Non-retryable failure decided before execution starts (e.g. adapter missing).
+
+    Fences first, like ``execute_job``: this runs *before* the job's first write,
+    so a job canceled (or reclaimed) between the claim and this point must keep
+    the state its canceller gave it.  Without the fence the preflight failure
+    happily overwrote ``canceled`` with ``failed`` and mirrored that onto the
+    SearchVideo, resurrecting a cancellation that had already settled the search
+    as ``failed`` with reason "Job canceled".
+    """
+    job_id = inspect(job).identity[0]
+    try:
+        _fence(session, job)
+    except JobInterrupted:
+        session.rollback()
+        logger.info("job %s no longer owned by this worker; not failing it", job_id)
+        return job
     job.status = JobStatus.failed
     job.error_code = code
     job.error_message = message[:4000]
@@ -754,11 +1296,25 @@ def fail_job_now(session: Session, job: ProcessingJob, code: str, message: str) 
     job.updated_at = _now()
     if job.kind == JobKind.dataset_export:
         _fail_export(session, job.export_id, message)
-    session.commit()
+    # Job row and SearchVideo mirror commit together, then the search is settled.
+    _commit_with_search_video(session, job)
     return job
 
 
 def retry_job(session: Session, job: ProcessingJob) -> ProcessingJob:
+    # A search job (``action_id`` is NULL: it was enqueued by a search, not by an
+    # action) is only runnable while its SearchVideo still points at it.  Once a
+    # search retry has linked a replacement job, or the video/SearchVideo row is
+    # gone, re-queueing this one could only ever produce a guaranteed failure --
+    # ``_run_candidate_job`` would raise "search no longer exists for this job".
+    if job.kind == JobKind.candidate_proposal and job.action_id is None:
+        linked = session.scalar(select(SearchVideo.id).where(SearchVideo.job_id == job.id))
+        if linked is None:
+            raise ApiError(
+                409,
+                "JOB_SUPERSEDED",
+                "this job was replaced by a newer run of its search",
+            )
     if job.status not in (JobStatus.failed,):
         raise ApiError(409, "JOB_NOT_RETRYABLE", "only failed jobs can be retried")
     job.status = JobStatus.queued
@@ -774,7 +1330,10 @@ def retry_job(session: Session, job: ProcessingJob) -> ProcessingJob:
         if export is not None:
             export.status = ExportStatus.queued
             export.error_message = None
-    session.commit()
+    # The SearchVideo mirrors the job: back to queued, and the parent Search
+    # leaves its terminal state (finished_at is cleared by the recompute).  Both
+    # rows move in one transaction so a crash cannot split them.
+    _commit_with_search_video(session, job)
     return job
 
 
@@ -793,6 +1352,17 @@ def cancel_job(session: Session, job: ProcessingJob) -> ProcessingJob:
     if result.rowcount != 1:
         session.rollback()
         raise ApiError(409, "JOB_NOT_CANCELABLE", "only queued or running jobs can be canceled")
+    # The UPDATE used synchronize_session=False, so the ORM instance still holds
+    # the pre-cancel state; mirror the new status in memory before syncing the
+    # SearchVideo row in this same transaction.
+    job.status = JobStatus.canceled
+    job.finished_at = moment
+    sv = _search_video_for_job(session, job)
+    search_id = None
+    if sv is not None:
+        sv.status = SearchVideoStatus.failed
+        sv.error_message = "Job canceled"
+        search_id = sv.search_id
     if job.export_id:
         session.execute(
             update(DatasetExport)
@@ -804,6 +1374,9 @@ def cancel_job(session: Session, job: ProcessingJob) -> ProcessingJob:
             .execution_options(synchronize_session=False)
         )
     session.commit()
+    if search_id is not None:
+        # Derive only now: the SearchVideo row must be visible to peers first.
+        _settle_search_status(session, search_id)
     session.refresh(job)
     return job
 
@@ -817,5 +1390,8 @@ __all__ = [
     "fail_job_now",
     "heartbeat",
     "reap_stale_jobs",
+    "reconcile_search_state",
+    "refresh_searches_for_video",
     "retry_job",
+    "settle_searches",
 ]

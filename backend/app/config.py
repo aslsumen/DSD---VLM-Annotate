@@ -95,6 +95,14 @@ class Settings(BaseSettings):
     worker_heartbeat_seconds: float = 30.0
     ffmpeg_binary: str | None = None
 
+    # --- storage cleanup ----------------------------------------------
+    # An unreferenced file younger than this is assumed to belong to a writer
+    # that is still running (a clip extraction, a fresh engine dir) and is left
+    # alone.  Five minutes is far longer than any clip extraction and far
+    # shorter than a human would notice a leak.
+    storage_gc_grace_seconds: float = 300.0
+    storage_gc_batch_size: int = 200
+
     @field_validator("data_dir", mode="before")
     @classmethod
     def _expand_data_dir(cls, value: str | Path) -> Path:

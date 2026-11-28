@@ -1,7 +1,8 @@
 # API Contracts — v1.2 target
 
-**Date:** 2026-11-12 · **Base URL:** `/api` (target) · **Auth:** session/JWT (decision pending)
-**Implemented API today:** `/api/v1` with a different domain (see §9). The target below is what the MVP needs.
+**Date:** 2026-11-12 (target) · **Base URL:** `/api` (target) · **Auth:** opaque bearer session tokens (implemented; no JWT, no refresh rotation)
+**Implemented API today:** `/api/v1`. Since 2026-11-19/26 it carries the session-auth, dataset and search domain **in
+addition to** the legacy project/action one, so §9 is a superset rather than "a different domain".
 
 > **As-built detail for the implemented prototype:** [docs/as-built/IMPLEMENTED_BASELINE_2026-11-05.md](as-built/IMPLEMENTED_BASELINE_2026-11-05.md).
 
@@ -39,13 +40,18 @@
 
 ## 3. Datasets and videos
 
+> **Note (2026-11-26).** This table is the *target* contract from the design documents. Design Description v1.2
+> §4.3 drops `use_case`, so `POST /api/datasets` should take `{name}` (a free-text name) and `PATCH` should not
+> accept it. For what is implemented **today** see §9 — including `POST/GET /api/v1/datasets/{id}/videos` and the
+> fact that a dataset video lives under `videos.dataset_id` while the legacy project routes stay open.
+
 | Method | Endpoint | Body | Success |
 |---|---|---|---|
-| POST | `/api/datasets` | `{name, use_case}` | 201 `Dataset` |
+| POST | `/api/datasets` | `{name}` | 201 `Dataset` |
 | GET | `/api/datasets` | `?page=` | 200 paginated (assigned only) |
 | GET | `/api/datasets/{id}` | — | 200 `{dataset, videos[], searches[]}` |
-| PATCH | `/api/datasets/{id}` | `{name?, use_case?, assigned_user_ids?}` | 200 |
-| DELETE | `/api/datasets/{id}` | — | 204 (cascade videos/searches/candidates/assignments) |
+| PATCH | `/api/datasets/{id}` | `{name?, assigned_user_ids?}` | 200 (today membership is `POST /datasets/{id}/members`; there is no `PATCH` and no way to revoke a membership yet) |
+| DELETE | `/api/datasets/{id}` | — | 204 (cascade videos/searches/candidates/memberships) |
 | POST | `/api/datasets/{id}/videos` | multipart `file` (MP4, 720p/1080p, ≤5 min MVP / ≤30 min Should) | 201 `Video(status=ready)` after probe |
 | GET | `/api/datasets/{id}/videos` | `?page=` | 200 paginated |
 | GET | `/api/videos/{id}/playback-url` | — | 200 `{url, expires_at}` signed, short-lived |
@@ -106,8 +112,11 @@ Not called by the browser. Worker → engine:
 
 ## 8. Compatibility and versioning
 
-- Target paths are `/api/...`; the implemented API is `/api/v1/...`. During migration, `/api/v1` is frozen and
-  the new contract is added behind `/api/v2` or directly under `/api` with a version header. Decide in Sprint 3.
+- Target paths are `/api/...`; the implemented API is `/api/v1/...`. During migration, `/api/v1` was intended to be
+  frozen with the new contract behind `/api/v2` (or under `/api` with a version header).
+  **Resolved 2026-11-20:** the team extends `/api/v1` additively instead — the new dataset/auth/search routes are
+  new paths, so no frozen endpoint changes. Existing `/api/v1` responses keep their shape; deprecated legacy
+  routes will be removed at cutover, not versioned away.
 - Additive fields are allowed; enum changes require a version bump; OpenAPI is generated from Pydantic models.
 
 ## 9. Implemented API today (frozen reference)
@@ -120,7 +129,8 @@ Not called by the browser. Worker → engine:
 | Review | `GET /api/v1/projects/{id}/candidates`, `GET /api/v1/candidates/{id}`, `PUT/DELETE /api/v1/candidates/{id}/annotation`, `GET /api/v1/candidates/{id}/clip` |
 | Export | `POST/GET /api/v1/projects/{id}/exports`, `GET/DELETE /api/v1/exports/{id}`, `GET /api/v1/exports/{id}/download` |
 | Auth (Sprint 3) | `POST /api/v1/auth/bootstrap` (`X-Bootstrap-Token`, first admin only), `POST /api/v1/auth/login`, `POST /api/v1/auth/accept-invitation`, `GET /api/v1/auth/me`, `POST /api/v1/auth/logout`, `POST /api/v1/auth/invitations`, `GET /api/v1/auth/users` |
-| Datasets (Sprint 3) | `POST/GET /api/v1/datasets`, `GET /api/v1/datasets/{id}`, `GET/POST /api/v1/datasets/{id}/members` |
+| Datasets (Sprint 3) | `POST/GET /api/v1/datasets`, `GET /api/v1/datasets/{id}`, `GET/POST /api/v1/datasets/{id}/members`, `POST/GET /api/v1/datasets/{id}/videos` |
+| Searches (Sprint 3) | `POST /api/v1/datasets/{id}/searches` (202, fan-out, optional `Idempotency-Key`), `GET /api/v1/datasets/{id}/searches` (list, filters `status`, `limit`, `offset`), `GET /api/v1/searches/{id}` (aggregated status + per-video results), `POST /api/v1/datasets/{id}/searches/{search_id}/cancel` (200, idempotent once settled), `POST /api/v1/datasets/{id}/searches/{search_id}/retry` (202, re-queues only the failed videos; `409 SEARCH_NOT_RETRYABLE` when none), `GET /api/v1/searches/{id}/candidates` |
 | System | `GET /api/v1/health`, `/api/v1/adapters`, `/api/v1/system/media`, `/api/docs` |
 
 **Session authentication (implemented).** The target contract in §2 uses `/api/auth`; the implementation is
@@ -128,18 +138,28 @@ mounted at `/api/v1/auth`. Passwords are PBKDF2-HMAC-SHA256 with a per-user salt
 and invitation tokens are stored. Sessions expire after `VLM_AUTH_SESSION_HOURS`; invitations are single-use and
 expire after `VLM_AUTH_INVITATION_HOURS`; `VLM_AUTH_MAX_FAILED_LOGINS` failures lock the account for
 `VLM_AUTH_LOCKOUT_MINUTES`. Enforcement is behind `VLM_AUTH_REQUIRED` (default `false`, so the current demo
-remains open): when enabled, the auth and dataset routes reject anonymous calls with `401 UNAUTHENTICATED`.
-The existing project/video/job routes still use `VLM_API_TOKEN`; migrating them to sessions and signed media URLs
-is the next step (R-18). Refresh tokens, password reset and pagination are not implemented yet. Dataset
-assignment uses `dataset_memberships`; videos still belong to a project until the dataset migration.
+remains open): when enabled, the **auth, dataset and search** routes reject anonymous calls with
+`401 UNAUTHENTICATED`.
+The existing project/video/job routes still accept `VLM_API_TOKEN` for anonymous legacy work, but since 2026-11-25
+they also resolve a session principal and enforce the dataset boundary (see "Dataset authorization on the shared
+routes" below); fully migrating them to sessions and signed media URLs is the remaining step (R-18). Refresh
+tokens, password reset and pagination are not implemented yet. Dataset
+assignment uses `dataset_memberships`. Dataset videos are uploaded through `POST /api/v1/datasets/{id}/videos`;
+the legacy `/projects/{id}/videos` route remains for existing projects. **Decided (2026-11-20):** the new dataset,
+auth and search routes are added **additively under `/api/v1`** rather than behind `/api/v2`, because they are new
+paths that change no frozen endpoint — §8's "decide in Sprint 3" is resolved in favour of extending `/api/v1`.
 
 Behavioural guarantees of that API (timestamps, unreviewed semantics, error envelope, range streaming) are
-tested by the pytest suite (90 tests on 2026-11-19) and are the part to carry into the new contract.
+tested by the pytest suite (179 tests on 2026-11-27) and are the part to carry into the new contract.
 
 **Job cancel and lost workers.** `POST /api/v1/jobs/{id}/cancel` works on `queued` and `running` jobs; a running
 worker stops at its next progress tick and its result is discarded. A running job whose worker stops
 heart-beating is requeued with `error_code=WORKER_LOST` (status `queued`, attempts kept), or set to `failed`
-with `error_code=WORKER_LOST` once `max_attempts` is exhausted.
+with `error_code=WORKER_LOST` once `max_attempts` is exhausted. Cancellation wins over everything the worker does
+afterwards: every write the worker makes (progress, result, failure) is fenced on
+`(id, status='running', attempts)`, including the pre-execution adapter lookup — a job canceled between the claim
+and that lookup stays `canceled`, and its `SearchVideo` keeps `failed` / "Job canceled" rather than the adapter
+error.
 
 **Batch jobs.** `POST /api/v1/projects/{project_id}/actions/{action_id}/jobs` with body
 `{"video_ids": [1, 2] | null, "adapter": "videojev" | null, "params": {}}` queues one job per video and returns
@@ -149,10 +169,138 @@ project), `409 VIDEO_NOT_READY` (a listed video is not ready). An optional `Idem
 per video as `<key>:<video_id>`, so repeating the request returns the same jobs. Keys longer than 100
 characters are rejected with `422` on both job endpoints (the column is 128 wide).
 
+**Search idempotency.** `POST /api/v1/datasets/{dataset_id}/searches` accepts an optional `Idempotency-Key`
+header (≤100 characters). Unlike the batch job route, the key is stored **on the `searches` row itself**
+(`searches.idempotency_key`, globally unique) rather than suffixed per video: the search is the unit of
+de-duplication, so a repeated request returns `202` with the existing search and its current per-video state
+instead of fanning out a second time.
+
+The request itself is recorded too, in `searches.request_scope_json`: a canonical JSON snapshot of `dataset_id`,
+`prompt`, `params`, `adapter_name` and the requested `video_ids` (`null` when the caller omitted them). A replay
+is compared against that snapshot, never against the live rows, so deleting a video the search was created for
+does not make the original request stop matching itself. Equal requests store equal text (`sort_keys`, compact
+separators) and the comparison is a set comparison for `video_ids`, so video order and duplicate ids are not a
+different request.
+
+| Field | Part of the match | Note |
+|---|---|---|
+| `dataset_id` | yes | a key is scoped to one dataset |
+| `prompt` | yes | whitespace-stripped by the schema first |
+| `params` | yes | exact canonical equality of the dict, no tolerance |
+| `video_ids` | yes | treated as a set; `null` (= every ready video) is distinct from any explicit subset |
+| `adapter_name` | yes | stored resolved, so omitting it equals naming the configured default |
+| `title` | no | presentation only |
+| resolved video set | no | derived at creation, and later uploads/deletions must not change the request identity |
+
+Reusing a key for a different request is rejected with `409 IDEMPOTENCY_KEY_REUSED` and
+`details.mismatched_fields` naming every field that differs. When `video_ids` was omitted the original request
+meant "every ready video", so a video uploaded later does not turn a legitimate replay into a conflict. Rows
+written before the column existed store `{}`; those fall back to the older dataset + prompt comparison (and the
+live video rows) with a logged warning.
+
+**Search cancel and restart.** `POST /api/v1/datasets/{id}/searches/{search_id}/cancel` cancels every `queued` or
+`running` video of the search and returns `200` with the settled search; it is idempotent, so a retry after a flaky
+connection returns the already-settled search unchanged instead of failing. `POST .../searches/{search_id}/retry`
+re-queues **only** the videos whose job failed, leaving the finished ones alone, and returns `202`; it answers
+`409 SEARCH_NOT_RETRYABLE` when no video is eligible, including a search whose jobs were all canceled. Both go through `cancel_job` /
+`enqueue_candidate_job` so there is still exactly one writer per state, and both require the `dataset_admin` role on
+a dataset the caller can access.
+
+Restart is idempotent under concurrency. Two retries released together both queue a replacement job, but each one
+installs it on the `SearchVideo` with a conditional update on the current link
+(`id = :row AND job_id = :old_job AND status = 'failed'`). Exactly one update matches; the loser deletes the job it
+just queued and still answers `202` with the current search, so a double click leaves one replacement per video
+instead of two. The superseded job keeps its `failed` status for history and can no longer be started:
+`POST /api/v1/jobs/{job_id}/retry` answers `409 JOB_SUPERSEDED` for a search job whose `SearchVideo` no longer points
+at it, and the worker refuses to run one. Enqueueing a replacement under a deterministic `Idempotency-Key` was
+considered and rejected: two concurrent inserts of the same key would collide on the unique constraint and poison
+the transaction, while the conditional update already guarantees a single survivor.
+
+**Search status aggregation.** A `Search` mirrors its `SearchVideo` rows: `queued` (all queued), `running` (any
+running, or a mix of queued with done/failed), `done` (all done — or no rows left, i.e. every video was deleted),
+`failed` (all failed), `partial` (no queued/running left, at least one done and one failed). `finished_at` is
+stamped once on entering a terminal state and is not bumped by later re-derivations; `error_message` carries the
+first failed video's reason when the search is `failed`. The aggregate is always derived **after** the
+`SearchVideo` row is committed, and re-derived until stable, so two workers finishing the last two videos of one
+search concurrently cannot both write `running` and strand it.
+
+**Job / SearchVideo / Search write atomicity.** Every write path commits the job row and its `SearchVideo` mirror in
+**one transaction** and only then derives the aggregate — success (`_finish` + `done`), failure (`_record_failure` +
+`failed`/`queued`), pre-execution failure (`fail_job_now`), retry (`retry_job`), the stale-worker reaper
+(`reap_stale_jobs`) and cancel (`cancel_job`). The first child write, which paints the `SearchVideo` `running` in
+`execute_job`, is fenced against the job's ownership first: a cancel or reclaim landing between the claim and the
+start of execution aborts with `JobInterrupted` and leaves the canceled row alone instead of resurrecting it.
+The worker additionally runs `reconcile_search_state` on every tick: it repaints any `SearchVideo` row that disagrees
+with its job (job is the source of truth), and re-derives any `Search` still `queued`/`running`/`partial` whose videos
+have all settled — plus any terminal `done`, `failed`, or `partial` Search that still has a `queued`/`running` video, which is what an
+interruption between the retry commit and the aggregate leaves behind. It is idempotent and a no-op on a consistent
+database, so it repairs rows written by older builds or torn by a hard kill without masking a live write path. Its
+return value counts both kinds of repair — repainted `SearchVideo` rows and `Search` aggregates that actually moved — so
+`0` means the database was consistent.
+
+Because the sweep reads a page and writes it later, the repaint is a conditional update that re-asserts **both** the job
+status and the `SearchVideo` status it observed: if a worker finished or requeued one of those videos while the sweep was
+paused, the write matches nothing, the sweep drops its stale view and the next tick observes the newer state. A
+finished video is therefore never dragged back from `done` to `running`, and the aggregate derived from it is never
+rewritten from the stale page. One residual window is accepted: an ABA on the job (`queued → running → queued` by the
+reaper between read and write) can let an old observation through; it is self-healing on the next tick and can never
+lose a newer *finished* result.
+
+**Video deletion is a single transaction.** `DELETE /api/v1/videos/{id}` detaches the video from its searches, drops the
+`Video` row (which cascades to its `processing_jobs` and `candidates`) and commits, and only then re-derives each affected
+`Search`. The settle cannot join the same transaction because it has to see a peer worker's committed row; deriving it
+inside would let a crash leave the video alive while its search already reported `done` with zero videos. Stored files
+are removed only after the commit, so a rolled-back delete never orphans a surviving row. Because the DDL cascades, the
+job history of a deleted video disappears with it — that is intended, and it is why an in-flight job on the video is
+abandoned rather than stranded: a statement failure afterwards (`SQLAlchemyError`) rolls the session back, re-reads the
+job and, if the row is gone or was taken over, simply returns instead of raising `PendingRollbackError`.
+
+**Storage cleanup survives the commit.** Unlinking the bytes after the delete commits leaves a window where a crash
+would strand them with no row left to name them, so the delete does not unlink directly: in the *same* transaction as
+the row delete it inserts `pending_deletions` intent rows (`storage_key`, `is_tree`, `reason`), and only drains them
+afterwards. The `pending_deletions` queue is therefore the record of what still has to go, and a process that dies
+between the commit and the unlink leaves the work queued rather than lost. The worker drains it on every tick
+(`purge_storage`, before claiming a job, inside a `try/except` so a locked file can never stop job processing) and each
+delete call also flushes the keys it just queued. The same sweep additionally collects the two places a late writer can
+create an unreferenced key: a preview clip extracted for a video that was deleted meanwhile, and an `engine/` scratch
+directory whose job or video no longer exists. Both are keyed by ownership, not by age alone — a file younger than
+`VLM_STORAGE_GC_GRACE_SECONDS` (default 300 s) is assumed to belong to a running writer and an `engine/` directory is
+kept while its job is queued, running or retryable after failure, or its video still exists (the next search reuses the feature cache) — so the
+sweep never races a live extraction. A key that `path_for` rejects is dropped from the queue instead of retried forever.
+A queued deletion checks the current owner before unlinking, including after SQLite reuses an ID.
+A temporary directory-removal error retains the intent. Each preview extraction writes to a unique
+key. A pending candidate with a running job protects its output through publication, even past the grace period.
+
+**Candidate list filters.** `GET /api/v1/projects/{id}/candidates` and `GET /api/v1/searches/{id}/candidates`
+accept `review_state` (`reviewed` / `unreviewed`) and `verdict` (`true_positive` / `false_positive`) together.
+`unreviewed` means "no annotation row", so `review_state=unreviewed&verdict=…` is an empty list, never an error.
+
+**Dataset authorization on the shared routes.** The by-id routes inherited from the single-project API
+(`GET/DELETE /api/v1/videos/{id}`, `GET /api/v1/videos/{id}/stream`, `GET /api/v1/jobs`, `GET /api/v1/jobs/{id}`,
+`POST /api/v1/jobs/{id}/retry`, `POST /api/v1/jobs/{id}/cancel`, `GET /api/v1/jobs/{id}/candidates`,
+`GET/PUT/DELETE /api/v1/candidates/{id}*`) serve both project-owned and dataset-owned rows. Ownership is resolved
+from the row (`video.dataset_id`, else the job's video, its `search_videos` row or a candidate it produced) and
+checked with the same rules as the dataset routes, inside the handler so that membership is decided before the
+role:
+
+| Caller | Dataset-owned row | Project-owned row |
+|---|---|---|
+| Administrator | allowed | allowed |
+| Member with the needed role (`dataset_admin` for video delete, job retry/cancel) | allowed | allowed |
+| Member without it (e.g. annotator deleting a video) | `403 FORBIDDEN` with `details.required_roles` | unchanged |
+| Signed-in non-member, whatever their global role | `404` (`VIDEO_NOT_FOUND` / `JOB_NOT_FOUND` / `CANDIDATE_NOT_FOUND`) | unchanged |
+| Anonymous, authentication enforced | `401 UNAUTHENTICATED` | unchanged (legacy stays open) |
+
+`GET /api/v1/jobs` filters instead of refusing: dataset jobs the caller is not a member of are omitted, legacy
+project jobs are always returned. A search job whose video was deleted has neither `project_id` nor `video_id`;
+it is visible to administrators only and `404` to everyone else. Annotating needs membership, not a write role —
+it is the annotator's job. Note that lazily created annotations (`PUT /candidates/{id}/annotation`) still take
+`reviewer` from the payload; the session identity is not yet written there.
+
 **Exhaustive adapters.** An adapter that reports `exhaustive` (currently `videojev`) returns every event it
 finds: the `max_candidates_per_job` cap does not apply, candidates are ranked by score descending, and zero
 events is a successful job with an empty candidate list (the action does not occur in that video). Other
 adapters keep the cap (earliest 12 by start time) and fail a job that yields no candidates.
 
 Behavioural guarantees of that API (timestamps, unreviewed semantics, error envelope, range streaming) are
-tested by the pytest suite (90 tests on 2026-11-19) and are the part to carry into the new contract.
+tested by the pytest suite (179 tests on 2026-11-27) and are the part to carry into the new contract.

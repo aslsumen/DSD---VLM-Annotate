@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__, db
-from .api import auth, candidates, datasets, exports, health, jobs, projects, videos
+from .api import auth, candidates, datasets, exports, health, jobs, projects, searches, videos
 from .config import REPO_ROOT, Settings, get_settings
 from .deps import require_token
 from .errors import error_body, register_error_handlers
@@ -100,6 +100,7 @@ def create_app(
     protected.include_router(auth.router)
     protected.include_router(datasets.router)
     protected.include_router(projects.router)
+    protected.include_router(searches.router)
     protected.include_router(videos.router)
     protected.include_router(jobs.router)
     protected.include_router(candidates.router)

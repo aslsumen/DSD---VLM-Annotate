@@ -1,6 +1,14 @@
 # User Manual
 
 **Applies to:** Sprint 2 vertical slice (2026-11-05) · **UI:** desktop and mobile browser
+**API status:** updated 2026-11-26 — the dataset/search API and accounts exist behind this UI (see the vocabulary
+note below).
+
+> **Vocabulary note (2026-11-26).** Datasets and searches — a *search* being one prompt run over every video of a
+> dataset — are implemented in the API (`/api/v1/datasets…`, `/api/v1/searches/…`) with global roles and dataset
+> membership enforced. **The UI in this build still drives projects and action definitions**, so the walkthrough
+> below says "project" and "action". After the frontend cutover, read "project" as "dataset" and "action" as
+> "search prompt".
 
 > **Current limitation — read before demoing.** By default, candidate intervals are produced by the **mock
 > adapter**: a deterministic generator that does *not* look at the video pixels. The UI shows a MOCK banner on
@@ -14,7 +22,7 @@
 
 ## 1. What you can do
 
-1. Organise work into **projects**.
+1. Organise work into **projects** (datasets, from the v1.2 vocabulary — see the note above).
 2. Describe the action you are looking for in **natural language**.
 3. Upload a long single-view RGB **video**.
 4. Start **asynchronous** processing and watch its progress.
@@ -118,9 +126,9 @@ include unreviewed items.
 | Mock candidate generation (default adapter) | Intervals are plausible but arbitrary | Use the `videojev` adapter on a GPU worker; the real-model web smoke passed on a public clip. Product footage still needs validation |
 | Real detector quality | Held-out long videos (2026-11-22): recall 0.86 cooking and 0.47 driving vs the 0.85 target; on driving, turns are found but lane moves, overtakes and most stops are missed; a prompt for something not in the video still returns about 3.5 candidates per cooking video and 8.4 per driving video | Human review of every candidate; validation on product footage |
 | Single worker | One long job delays others | Parallel workers with PostgreSQL (later) |
-| No multi-user accounts | One shared optional token | Deferred (OPT-06) |
+| No multi-user accounts **in the UI** | One shared optional token | Accounts, global roles, invitations and sessions exist in the API (2026-11-19/25); the sign-in screens are Sprint 3 work |
 | No bulk review | One label at a time | Deferred (OPT-05) |
-| Cancel only while queued | A running ffmpeg/model call finishes | Documented trade-off |
+| Cancel semantics | A running ffmpeg/model call finishes; its result is then dropped | The search settles `failed` with reason "Job canceled" even if the worker is mid-run (2026-11-25), and a whole search can be canceled with `POST /datasets/{id}/searches/{id}/cancel` |
 | English UI | — | Acceptable for the course |
 
 ## 11. Getting help

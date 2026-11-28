@@ -1,6 +1,6 @@
 # Risk Register
 
-**Type:** living artifact · **Last updated:** 2026-11-16 · **Owner:** Scrum Master (role placeholder)
+**Type:** living artifact · **Last updated:** 2026-11-26 · **Owner:** Scrum Master (role placeholder)
 Score = probability (1–5) × impact (1–5). Reassess at every sprint review.
 
 ## 1. Open risks
@@ -25,7 +25,7 @@ Score = probability (1–5) × impact (1–5). Reassess at every sprint review.
 | **R-16** | Export of large clips exceeds memory/disk or times out | 2 | 3 | **6** | Backend | Streaming ZIP, `max_export_bytes`, async export; test with a larger dataset in Sprint 4 | **OPEN** |
 | **R-17** | Course calendar changes (new announcement) invalidates the plan | 2 | 4 | **8** | Scrum Master | Weekly check of the course page; calendar doc has a "last verified" date | **OPEN** |
 | **R-18** | Token-protected deployment breaks video review: `<video src>` cannot send the bearer header, so stream/clip return 401 | 4 | 3 | **12** | Backend/Frontend | Implement short-lived signed media URLs or a session cookie (PB-41); until then document "do not set `VLM_API_TOKEN` for demos that need playback" | **OPEN** |
-| **R-19** | **Scope pivot (2026-11-09):** the new MVP requires users, global roles, invitations, datasets, searches and OpenLABEL JSON, while the working slice uses projects/actions and a shared token | 5 | 5 | **25** | Product Owner / Architect | Treat the current slice as a reusable technical prototype; plan the domain/auth rework in Sprint 3; re-baseline the MVP gate with the supervisor | **OPEN — top risk** |
+| **R-19** | **Scope pivot (2026-11-09):** the new MVP requires users, global roles, invitations, datasets, searches and OpenLABEL JSON, while the working slice uses projects/actions and a shared token | 5 | 5 | **25** | Product Owner / Architect | Treat the current slice as a reusable technical prototype; plan the domain/auth rework in Sprint 3; re-baseline the MVP gate with the supervisor. **2026-11-26 progress:** accounts, global roles, invitations, sessions, datasets, memberships, searches (fan-out + aggregated status + list/cancel/retry) and dataset authorization on the shared routes are implemented in the API and green in the suite (179 tests as of 2026-11-27). Still missing: OpenLABEL JSON export, the frontend cutover, signed media URLs (R-18) and revocation of a dataset membership | **OPEN — mitigating** |
 | **R-20** | No written approval to send face-containing videos to the Gemini API (NFR-8) | 5 | 5 | **25** | Product Owner | Ask the customer on 2026-11-13; use only public/team footage for API experiments until approval | **OPEN — blocking** |
 | **R-21** | Gemini key expired before redemption or leaked; free-tier quota insufficient | 3 | 4 | **12** | Backend | Check redemption now; request a new key via the secure channel; store only in environment; add quota guard/backoff | **OPEN** |
 | **R-22** | Timeline: USR-1…USR-7 are **Must** in v1.1 but Sprint 2 ends 2026-11-15 | 5 | 5 | **25** | Scrum Master | Declare the Sprint 2 gate a technical prototype (per course wording "prototype growing in fidelity"); move the new MVP scope to Sprint 3–4; inform supervisor | **OPEN** |

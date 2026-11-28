@@ -16,6 +16,7 @@ import logging
 import signal
 import sys
 import threading
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import ObjectDeletedError
@@ -32,8 +33,10 @@ from .services.pipeline import (
     fail_job_now,
     heartbeat,
     reap_stale_jobs,
+    reconcile_search_state,
 )
 from .services.storage import LocalStorage
+from .services.storage_gc import purge_storage
 
 logger = logging.getLogger("vlm_annotate.worker")
 
@@ -56,13 +59,29 @@ class JobWorker:
         with SessionLocal() as session:
             # Stale = 3 missed beats; a requeued job is then claimed like any other.
             reap_stale_jobs(session, 3 * self.settings.worker_heartbeat_seconds)
+            # Repair any SearchVideo/Search row an older write path (or a hard
+            # kill) left out of step with its job before picking up new work.
+            reconcile_search_state(session)
+            # Drain storage cleanup a killed process left queued, and collect the
+            # two directory kinds a late writer can repopulate after its row died.
+            # Never fatal: a locked file must not stop job processing.
+            try:
+                purge_storage(
+                    session,
+                    self.storage,
+                    grace_seconds=self.settings.storage_gc_grace_seconds,
+                    batch_size=self.settings.storage_gc_batch_size,
+                )
+            except Exception:
+                logger.warning("storage sweep failed", exc_info=True)
+                session.rollback()
             job = claim_next_job(session)
             if job is None:
                 return False
             stop_beat = threading.Event()
             beat = threading.Thread(
                 target=self._beat,
-                args=(job.id, job.attempts, stop_beat),
+                args=(job.id, job.attempts, job.started_at, stop_beat),
                 name=f"heartbeat-job-{job.id}",
                 daemon=True,
             )
@@ -99,12 +118,12 @@ class JobWorker:
             status = "deleted"
         logger.info("job %s (%s) finished with status=%s", job_id, kind.value, status)
 
-    def _beat(self, job_id: int, attempts: int, stop: threading.Event) -> None:
+    def _beat(self, job_id: int, attempts: int, started_at: datetime, stop: threading.Event) -> None:
         """Touch the job every interval so a long silent adapter step is not reaped."""
         while not stop.wait(self.settings.worker_heartbeat_seconds):
             try:
                 with SessionLocal() as session:
-                    if not heartbeat(session, job_id, attempts):
+                    if not heartbeat(session, job_id, attempts, started_at=started_at):
                         return  # lost ownership; the main thread learns at its next fence
             except Exception:
                 # e.g. SQLite locked: harmless, only 3 missed beats in a row matter.

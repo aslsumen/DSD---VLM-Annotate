@@ -89,7 +89,9 @@ flowchart LR
 - Known limit: `updated_at` is stamped with worker clocks, so several worker hosts need synchronized clocks.
 - SQLite with WAL; Alembic migration verified. PostgreSQL-compatible models but untested.
 - Local storage behind a `StorageBackend` protocol; generated keys, traversal guard.
-- Optional single bearer token enforced in middleware; **no users/roles/datasets**.
+- Optional single bearer token enforced in middleware; session auth, global roles, datasets, memberships and
+  searches exist in the API (2026-11-19 → 2026-11-26), and the shared legacy routes enforce the dataset boundary
+  through `app/access.py` (anonymous → 401, non-member → 404, wrong role → 403). The UI still drives projects.
 - Adapters: `mock` (CI default), `videojev` (real detector, the `video_grounding/` engine with VideoJev-4B, run
   in the worker process only; [ADR-0007](decisions/ADR-0007-videojev-zero-shot-grounding-adapter.md)), and a
   registered `qwen2.5-vl` stub. The `videojev` adapter is *exhaustive* (all events kept, zero events is
@@ -137,7 +139,7 @@ and evicts the least recently used entries.
 a search keeps the video's features (other searches use them). Deleting the whole features directory is always
 safe: it only costs speed.
 
-**Tests:** 98 backend (pytest; on macOS the Windows-path case `test_path_for_rejects_traversal[..\\escape.mp4]` fails, as it does on main), 21 UI (vitest), real-ffmpeg smoke 26/26; adapter tests use a fake engine (`backend/tests/test_videojev.py`), the engine has its own tests (`video_grounding/tests`). The real model ran through the API and worker on the RTX 3070 laptop on 2026-11-22: two videos, two prompts each, with video and project deletes clearing the feature cache (`video_grounding/docs/PERFORMANCE.md`).
+**Tests:** 179 backend (pytest; this count is current as of 2026-11-27 and on Windows all 179 pass; on macOS the Windows-path case `test_path_for_rejects_traversal[..\\escape.mp4]` fails, as it does on main), 21 UI (vitest), real-ffmpeg smoke 26/26; adapter tests use a fake engine (`backend/tests/test_videojev.py`), the engine has its own tests (`video_grounding/tests`). The real model ran through the API and worker on the RTX 3070 laptop on 2026-11-22: two videos, two prompts each, with video and project deletes clearing the feature cache (`video_grounding/docs/PERFORMANCE.md`).
 
 ## 4. Gap and migration plan
 
@@ -146,8 +148,8 @@ safe: it only costs speed.
 | PostgreSQL | SQLite | Keep models portable; add Compose service; run migrations; test |
 | Redis + Celery | DB queue | Introduce Celery only if throughput/parallelism demands it; otherwise keep DB queue as a documented simplification (decide Sprint 3) |
 | Object storage | Local FS | Implement `StorageBackend` for S3/MinIO; signed URL issuance belongs to the API |
-| Users/roles/invitations | Bearer token | New auth module, tables and screens; RBAC middleware; dataset scoping |
-| Dataset/Search domain | Project/Action | Rename + new entities; data migration for existing rows; adapt UI |
+| Users/roles/invitations | Bearer token | **Partly done (2026-11-19/25):** `users`, `user_sessions`, `invitations`, global roles and the RBAC guards exist; the shared legacy routes enforce the dataset boundary. Remaining: frontend sign-in screens, password reset and user deactivation (R-18 for signed media) |
+| Dataset/Search domain | Project/Action | **Partly done (2026-11-20/26):** `datasets`, `dataset_memberships`, `searches` and `search_videos` exist alongside the untouched `projects`/`action_definitions`/`processing_jobs`; videos carry a nullable `dataset_id`, candidates a nullable `search_id`. Remaining: the data migration for existing rows, dataset-scoped exports, and the frontend cutover |
 | Detection engine | `videojev` adapter in the worker (in-process) | Separate engine service + Gemini backend only if GPU hosting must be split from the worker |
 | JSON export | ZIP/CSV | New async export job writing the schema in Design §9 |
 | Signed media URLs | Token or open | Time-limited signed URLs/cookies so `<video>` works (also fixes R-18) |
